@@ -15,6 +15,8 @@ import {
   TooltipProps,
   Area,
   CartesianGrid,
+  Sector,
+  SectorProps
 } from 'recharts'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card.jsx'
 import {
@@ -28,7 +30,7 @@ import {
   Sliders,
 } from 'lucide-react'
 
-import { Bar as ChartJSBar} from 'react-chartjs-2';
+import { Bar as ChartJSBar, Pie as ChartJSPie} from 'react-chartjs-2';
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -37,15 +39,20 @@ import {
   Title,
   Tooltip as ChartJSTooltip,
   Legend,
+  ArcElement
 } from 'chart.js';
 // Register the components to be used by Chart.js
-ChartJS.register(CategoryScale, LinearScale, BarElement, Title, ChartJSTooltip, Legend);
+ChartJS.register(CategoryScale, LinearScale, BarElement, Title, ChartJSTooltip, Legend, ArcElement);
 
 
 // Define the type for your API data
 interface SignupData {
   month: string | null // allow null in case the API returns null values
   count: number
+}
+// Define a custom type that extends SectorProps to include the payload property
+interface CustomSectorProps extends SectorProps {
+  payload: { name: string; value: number }; // Adjust the type of payload as needed
 }
 
 export default function UserAnalyticsDashboard() {
@@ -240,6 +247,38 @@ export default function UserAnalyticsDashboard() {
       { name: 'Retained', value: 75 },
       { name: 'Churned', value: 25 },
     ])
+    const pieChartData = {
+      labels: userRetentionData.map((item) => item.name),
+      datasets: [
+        {
+          data: userRetentionData.map((item) => item.value),
+          backgroundColor: ['#6549b9', '#FF8C42'], // Colors for each section
+          borderWidth: 0, // Remove white borders
+        },
+      ],
+    };
+    
+    const pieChartOptions = {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: {
+          labels: {
+            color: '#d1d5db', // Legend text color
+          },
+        },
+        tooltip: {
+          backgroundColor: '#1f2937',
+          borderColor: '#374151',
+          borderWidth: 1,
+        },
+      },
+      cutout:'70%',
+      animation: {
+        animateScale: true, // Enables scaling animation
+      },
+    };
+    
 
   const COLORS = ['#6549b9', '#FF8C42 '] // Greyish colors
 
@@ -249,7 +288,8 @@ export default function UserAnalyticsDashboard() {
     { feature: 'Settings', usage: 2000 },
     { feature: 'Notifications', usage: 2780 },
   ])
-  const CustomTooltip: React.FC<TooltipProps<number, string>> = ({ active, payload, label }) => {
+  const CustomTooltip: React.FC<TooltipProps<number, string>> = (props) => {
+    const { active, payload, label } = props;  
     if (active && payload && payload.length) {
       return (
         <div className="p-2 bg-gray-800 text-white border border-gray-600 rounded-md shadow-md">
@@ -366,7 +406,7 @@ export default function UserAnalyticsDashboard() {
                     New User Signups (Static Data)
                   </CardTitle>
                 </CardHeader>
-                <CardContent>
+                <CardContent className='flex justify-center items-center'>
                   {/* Wrap the chart in a container to define its dimensions */}
                   <div style={{ width: '500px', height: '300px' }}>
                     <ChartJSBar data={data} options={options} />
@@ -377,35 +417,21 @@ export default function UserAnalyticsDashboard() {
 
             {/* Bottom Section: User Retention & Feature Usage */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+              {/*Pie chart*/}
               <Card className="bg-gray-900 border border-[#5a31b0]">
                 <CardHeader>
                   <CardTitle className="text-gray-400">User Retention</CardTitle>
                 </CardHeader>
-                <CardContent className="flex justify-center">
-                  <PieChart width={300} height={300}>
-                    <Pie
-                      data={userRetentionData}
-                      cx="50%"
-                      cy="50%"
-                      labelLine={false}
-                      outerRadius={100}
-                      innerRadius={75}
-                      dataKey="value"
-                    >
-                      {userRetentionData.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                      ))}
-                    </Pie>
-                    {/* <Tooltip
-                      contentStyle={{
-                        backgroundColor: '#1f2937',
-                        border: '1px solid #374151',
-                      }}
-                    /> */}
-                    <Tooltip content={<CustomTooltip/>} />
-                  </PieChart>
+                {/* Add flex and height to ensure vertical centering */}
+                <CardContent className="flex justify-center items-center">
+                  <div className="w-[300px] h-[300px]">
+                    <ChartJSPie data={pieChartData} options={pieChartOptions} />
+                  </div>
                 </CardContent>
+
               </Card>
+
+
 
               <Card className="lg:col-span-2 bg-gray-900 border border-[#5a31b0]">
                 <CardHeader>
