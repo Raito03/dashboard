@@ -75,6 +75,29 @@ def get_active_user_count():
         connection.close()
 
 
+@app.route('/api/approval-rate', methods= ['GET'])
+def get_approval_rate():
+    try:
+        connection = get_db_connection()
+        with connection.cursor() as cursor:
+            #execute sql query
+            sql = """
+            select round(sum(case 
+                            when approved_at is null
+                             then 0 
+                            else 1 
+                        end)/count(*) * 100,2) 
+            as Approval_Rate from lifeapp.la_mission_completes;
+
+            """
+            cursor.execute(sql)
+            result = cursor.fetchall()
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        connection.close()
+
 
 if __name__ == '__main__':
     app.run(debug=True)

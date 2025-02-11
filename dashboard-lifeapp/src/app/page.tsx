@@ -28,6 +28,20 @@ import {
   Sliders,
 } from 'lucide-react'
 
+import { Bar as ChartJSBar} from 'react-chartjs-2';
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  BarElement,
+  Title,
+  Tooltip as ChartJSTooltip,
+  Legend,
+} from 'chart.js';
+// Register the components to be used by Chart.js
+ChartJS.register(CategoryScale, LinearScale, BarElement, Title, ChartJSTooltip, Legend);
+
+
 // Define the type for your API data
 interface SignupData {
   month: string | null // allow null in case the API returns null values
@@ -137,6 +151,29 @@ export default function UserAnalyticsDashboard() {
     fetchActiveUserCount();
   }, [])
   
+
+  // Add this state variable with your existing state declarations
+  const [approvalRate, setApprovalRate] = useState<number>(0);
+  // Add this useEffect block with your existing useEffect hooks
+  useEffect(() => {
+    async function fetchActiveUserCount() {
+      try {
+        const res = await fetch('http://127.0.0.1:5000/api/approval-rate');
+        const data = await res.json();
+        // Add a check to ensure data exists and has a valid count
+        if (data && data.length > 0 && data[0].Approval_Rate !== undefined) {
+          setApprovalRate(data[0].Approval_Rate);
+        } else {
+          setApprovalRate(0);
+        }
+      } catch (error) {
+        console.error('Error fetching user count:', error);
+        setApprovalRate(0);
+      }
+    }
+    fetchActiveUserCount();
+  }, [])
+
   // Static data for other charts (unchanged)
   const [userData] = useState([
     { month: 'Jan', activeUsers: 4000, newUsers: 1200 },
@@ -147,13 +184,64 @@ export default function UserAnalyticsDashboard() {
     { month: 'Jun', activeUsers: 2390, newUsers: 1100 },
     { month: 'Jul', activeUsers: 3490, newUsers: 1300 },
   ])
+  
+    // Prepare data for Chart.js
+  const data = {
+    labels: userData.map((item) => item.month),
+    datasets: [
+      {
+        label: 'New Users',
+        data: userData.map((item) => item.newUsers),
+        backgroundColor: '#6549b9',
+        // Adding border radius to each bar
+        borderRadius: 15,
+        borderSkipped: false,
+      },
+    ],
+  };
+  
+  // Chart options including styling for tooltip and axes
+  const options = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      ChartJSTooltip: {
+        backgroundColor: '#1f2937',
+        borderColor: '#374151',
+        borderWidth: 1,
+      },
+      legend: {
+        labels: {
+          color: '#d1d5db',
+        },
+      },
+    },
+    scales: {
+      x: {
+        ticks: {
+          color: '#d1d5db',
+        },
+        grid: {
+          color: 'rgba(209, 213, 219, 0.1)',
+        },
+      },
+      y: {
+        ticks: {
+          color: '#d1d5db',
+        },
+        grid: {
+          color: 'rgba(209, 213, 219, 0.1)',
+        },
+      },
+    },
+  };
 
-  const [userRetentionData] = useState([
-    { name: 'Retained', value: 75 },
-    { name: 'Churned', value: 25 },
-  ])
+    const [userRetentionData] = useState([
+      { name: 'Retained', value: 75 },
+      { name: 'Churned', value: 25 },
+    ])
 
-  const COLORS = ['#6b7280', '#374151'] // Greyish colors
+  const COLORS = ['#6549b9', '#FF8C42 '] // Greyish colors
 
   const [featureUsageData] = useState([
     { feature: 'Search', usage: 4000 },
@@ -211,9 +299,9 @@ export default function UserAnalyticsDashboard() {
             { title: 'Total Users', value: totalUsers.toLocaleString() },
             { title: 'Active Users', value: activeUsers.toString() },
             { title: 'New Signups', value: '1,230' },
-            { title: 'Retention Rate', value: '75%' },
+            { title: 'Retention Rate', value: `${approvalRate.toString()}%` },
           ].map((metric, index) => (
-            <Card key={index} className=" border border-[#8046FC]">
+            <Card key={index} className=" border border-[#5a31b0]">
               <CardHeader>
                 <CardTitle className="text-gray-400">{metric.title}</CardTitle>
               </CardHeader>
@@ -229,7 +317,7 @@ export default function UserAnalyticsDashboard() {
           <>
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
               {/* Line Chart for SQL Fetched Data with Year Dropdown */}
-              <Card className="bg-gray-900 border border-[#8046FC]">
+              <Card className="bg-gray-900 border border-[#5a31b0]">
                 <CardHeader className="flex justify-between items-center">
                   <CardTitle className="text-gray-400">
                     User Signups (Month-Year)
@@ -272,31 +360,24 @@ export default function UserAnalyticsDashboard() {
               </Card> 
 
               {/* Bar Chart (using static data) */}
-              <Card className="bg-gray-900 border border-[#8046FC]">
+              <Card className="bg-gray-900 border border-[#5a31b0]">
                 <CardHeader>
                   <CardTitle className="text-gray-400">
                     New User Signups (Static Data)
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <BarChart width={500} height={300} data={userData}>
-                    <XAxis dataKey="month" stroke="#d1d5db" />
-                    <YAxis stroke="#d1d5db" />
-                    <Tooltip
-                      contentStyle={{
-                        backgroundColor: '#1f2937',
-                        border: '1px solid #374151',
-                      }}
-                    />
-                    <Bar dataKey="newUsers" fill="#6b7280" />
-                  </BarChart>
+                  {/* Wrap the chart in a container to define its dimensions */}
+                  <div style={{ width: '500px', height: '300px' }}>
+                    <ChartJSBar data={data} options={options} />
+                  </div>
                 </CardContent>
               </Card>
             </div>
 
             {/* Bottom Section: User Retention & Feature Usage */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-              <Card className="bg-gray-900 border border-[#8046FC]">
+              <Card className="bg-gray-900 border border-[#5a31b0]">
                 <CardHeader>
                   <CardTitle className="text-gray-400">User Retention</CardTitle>
                 </CardHeader>
@@ -308,23 +389,25 @@ export default function UserAnalyticsDashboard() {
                       cy="50%"
                       labelLine={false}
                       outerRadius={100}
+                      innerRadius={75}
                       dataKey="value"
                     >
                       {userRetentionData.map((entry, index) => (
                         <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                       ))}
                     </Pie>
-                    <Tooltip
+                    {/* <Tooltip
                       contentStyle={{
                         backgroundColor: '#1f2937',
                         border: '1px solid #374151',
                       }}
-                    />
+                    /> */}
+                    <Tooltip content={<CustomTooltip/>} />
                   </PieChart>
                 </CardContent>
               </Card>
 
-              <Card className="lg:col-span-2 bg-gray-900 border border-[#8046FC]">
+              <Card className="lg:col-span-2 bg-gray-900 border border-[#5a31b0]">
                 <CardHeader>
                   <CardTitle className="text-gray-400">Feature Usage</CardTitle>
                 </CardHeader>
@@ -348,4 +431,4 @@ export default function UserAnalyticsDashboard() {
       </div>
     </div>
   )
-}
+} 
