@@ -99,5 +99,59 @@ def get_approval_rate():
         connection.close()
 
 
+@app.route('/api/count-school-state', methods= ['GET'])
+def get_count_school_rate():
+    try:
+        connection = get_db_connection()
+        with connection.cursor() as cursor:
+            #execute sql query
+            sql = """
+            select state, count(*) as count_state from lifeapp.schools 
+            where state != 'null' and state != '2' group by state order by count_state desc limit 5;
+            """
+            cursor.execute(sql)
+            result = cursor.fetchall()
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        connection.close()
+
+@app.route('/api/teacher-assign-count', methods= ['GET'])
+def get_teacher_assign_count():
+    try:
+        connection = get_db_connection()
+        with connection.cursor() as cursor:
+            #execute sql query
+            sql = """
+            select teacher_id, count(*) as assign_count from lifeapp.la_mission_assigns group by teacher_id;
+            """
+            cursor.execute(sql)
+            result = cursor.fetchall()
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        connection.close()
+
+@app.route('/api/coupons-used-count', methods=['GET'])
+def get_coupons_used_count():
+    try:
+        connection = get_db_connection()
+        with connection.cursor() as cursor:
+            sql = """
+            select -amount as amount, count(*) as coupon_count from lifeapp.coin_transactions group by coinable_type,amount having amount < 0 order by amount asc ;
+            """
+            cursor.execute(sql)
+            result = cursor.fetchall()
+            print("Query Result:", result)  # Debugging statement
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        connection.close()
+
+
+
 if __name__ == '__main__':
     app.run(debug=True)

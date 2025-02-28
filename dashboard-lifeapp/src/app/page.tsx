@@ -254,12 +254,37 @@ export default function UserAnalyticsDashboard() {
       { name: 'Retained', value: 75 },
       { name: 'Churned', value: 25 },
     ])
+
+    // Add this state variable with your existing state declarations
+  const [couponRedeemCount, setCouponRedeemCount] = useState<Array<{ amount: string; coupon_count: number }>>([]);
+
+  // Add this useEffect block with your existing useEffect hooks
+  useEffect(() => {
+    async function fetchCouponRedeemCount() {
+      try {
+        const res = await fetch('http://127.0.0.1:5000/api/coupons-used-count');
+        const data = await res.json();
+        
+        // Updated check: no longer looks for data[0].state
+      if (data && Array.isArray(data) && data.length > 0) {
+        setCouponRedeemCount(data);
+      } else {
+        setCouponRedeemCount([]);
+      }
+      } catch (error) {
+        console.error('Error fetching coupon Redeeming counts:', error);
+        setCouponRedeemCount([]);
+      }
+    }
+    fetchCouponRedeemCount();
+  }, []);
+
     const pieChartData = {
-      labels: userRetentionData.map((item) => item.name),
+      labels: couponRedeemCount.map((item) => item.amount),
       datasets: [
         {
-          data: userRetentionData.map((item) => item.value),
-          backgroundColor: ['#6549b9', '#FF8C42'], // Colors for each section
+          data: couponRedeemCount.map((item) => item.coupon_count),
+          backgroundColor: ['#6549b9', '#FF8C42', '#1E88E5', '#43A047', '#FDD835', '#D81B60'], // Colors for each section
           borderWidth: 0, // Remove white borders
         },
       ],
@@ -295,6 +320,152 @@ export default function UserAnalyticsDashboard() {
     { feature: 'Settings', usage: 2000 },
     { feature: 'Notifications', usage: 2780 },
   ])
+  // Add this state variable with your existing state declarations
+  const [stateCounts, setStateCounts] = useState<Array<{ state: string; count_state: number }>>([]);
+
+  // Add this useEffect block with your existing useEffect hooks
+  useEffect(() => {
+    async function fetchSchoolStateCounts() {
+      try {
+        const res = await fetch('http://127.0.0.1:5000/api/count-school-state');
+        const data = await res.json();
+        
+        // Check if data exists and is an array with valid structure
+        if (data && Array.isArray(data) && data.length > 0 && data[0].state !== undefined) {
+          setStateCounts(data);
+        } else {
+          setStateCounts([]);
+        }
+      } catch (error) {
+        console.error('Error fetching school state counts:', error);
+        setStateCounts([]);
+      }
+    }
+    fetchSchoolStateCounts();
+  }, []);
+  const schoolStateData = {
+    labels: stateCounts.map((item) => item.state),
+    datasets: [
+      {
+        label: 'No. of Schools',
+        data: stateCounts.map((item) => item.count_state),
+        backgroundColor: '#6549b9',
+        // Adding border radius to each bar
+        borderRadius: 15,
+        borderSkipped: false,
+      },
+    ],
+  };
+  const schoolChartOptions = {
+    indexAxis: "y" as const, // Makes it a horizontal bar chart
+    responsive: true,
+    plugins: {
+      legend: { display: false },
+      title: {
+        display: true,
+        font: { size: 16 },
+      },
+    },
+    scales: {
+      x: {
+        ticks: {
+          color: '#d1d5db',
+        },
+        grid: {
+          color: 'rgba(209, 213, 219, 0.1)',
+        },
+      },
+      y: {
+        ticks: {
+          color: '#d1d5db',
+        },
+        grid: {
+          color: 'rgba(209, 213, 219, 0.1)',
+        },
+      },
+    },
+  };
+
+
+
+  const [assignCounts, setAssignCounts] = useState<number[]>([]);
+
+  useEffect(() => {
+    async function fetchTeacherAssignCounts() {
+      try {
+        const res = await fetch("http://127.0.0.1:5000/api/teacher-assign-count");
+        const data = await res.json();
+
+        // Extract only assign counts from API response
+        const counts = data.map((item: { assign_count: number }) => item.assign_count);
+        setAssignCounts(counts);
+      } catch (error) {
+        console.error("Error fetching teacher assignment counts:", error);
+      }
+    }
+    fetchTeacherAssignCounts();
+  }, []);
+
+  // Group assign counts into bins (e.g., 1-5, 6-10, etc.)
+  const bins = [0, 5, 10, 15, 20, 25]; // Define bin ranges
+  const binLabels = ["1-5", "6-10", "11-15", "16-20", "21-25", "26+"]; // Labels for bins
+  const binData = Array(binLabels.length).fill(0); // Initialize bin counts
+
+  assignCounts.forEach((count) => {
+    if (count <= 5) binData[0]++;
+    else if (count <= 10) binData[1]++;
+    else if (count <= 15) binData[2]++;
+    else if (count <= 20) binData[3]++;
+    else if (count <= 25) binData[4]++;
+    else binData[5]++;
+  });
+
+  const teacherAssignData = {
+    labels: binLabels,
+    datasets: [
+      {
+        label: "Number of Teachers",
+        data: binData,
+        backgroundColor: "#6549b9",
+        borderRadius: 5,
+      },
+    ],
+  };
+
+  const teacherAssignOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      ChartJSTooltip: {
+        backgroundColor: '#1f2937',
+        borderColor: '#374151',
+        borderWidth: 1,
+      },
+      legend: {
+        labels: {
+          color: '#d1d5db',
+        },
+      },
+    },
+    scales: {
+      x: {
+        ticks: {
+          color: '#d1d5db',
+        },
+        grid: {
+          color: 'rgba(209, 213, 219, 0.1)',
+        },
+      },
+      y: {
+        ticks: {
+          color: '#d1d5db',
+        },
+        grid: {
+          color: 'rgba(209, 213, 219, 0.1)',
+        },
+      },
+    },
+  };
   const CustomTooltip: React.FC<TooltipProps<number, string>> = (props) => {
     const { active, payload, label } = props;  
     if (active && payload && payload.length) {
@@ -352,7 +523,7 @@ export default function UserAnalyticsDashboard() {
             { title: 'Total Users', value: totalUsers, icon: Users, color: 'from-purple-600 to-blue-600' },
             { title: 'Active Users', value: activeUsers, icon: UserCheck, color: 'from-green-600 to-teal-600' },
             { title: 'New Signups', value: 1230, icon: UserPlus, color: 'from-orange-600 to-red-600' },
-            { title: 'Retention Rate', value: approvalRate, icon: Percent, color: 'from-blue-600 to-cyan-600', suffix : '%' },
+            { title: 'Approval Rate', value: approvalRate, icon: Percent, color: 'from-blue-600 to-cyan-600', suffix : '%' },
           ].map((metric, index) => {
             const Icon = metric.icon;
             return (
@@ -400,7 +571,7 @@ export default function UserAnalyticsDashboard() {
                         <AreaChart width={500} height={300} data={filteredData}>
                             <defs>
                             <linearGradient id="colorUv" x1="0" y1="0" x2="0" y2="1">
-                                <stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.8}/>
+                                <stop offset="35%" stopColor="#8b5cf6" stopOpacity={0.8}/>
                                 <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0}/>
                             </linearGradient>
                             </defs>
@@ -417,11 +588,11 @@ export default function UserAnalyticsDashboard() {
               {/* Bar Chart */}
               <Card className="bg-gray-900/30 backdrop-blur-sm border border-purple-500/40 hover:border-[#5a31b0] transition-all duration-300">
                 <CardHeader className="p-6 border-b border-purple-500/10">
-                  <CardTitle className="text-white font-semibold">Monthly Active Users</CardTitle>
+                  <CardTitle className="text-white font-semibold">Distribution of Teacher Assignment Counts</CardTitle>
                 </CardHeader>
                 <CardContent className="p-6 flex justify-center">
                   <div style={{ width: '500px', height: '300px' }}>
-                    <ChartJSBar data={data} options={options} />
+                    <ChartJSBar data={teacherAssignData} options={teacherAssignOptions} />
                   </div>
                 </CardContent>
               </Card>
@@ -432,10 +603,10 @@ export default function UserAnalyticsDashboard() {
                 {/*Pie chart */}
                 <Card className="bg-gray-900/30 backdrop-blur-sm border border-purple-500/40 hover:border-[#5a31b0] transition-all duration-300">
                     <CardHeader className="p-6 border-b border-purple-500/10">
-                    <CardTitle className="text-white font-semibold">User Retention</CardTitle>
+                    <CardTitle className="text-white font-semibold">Coupons Redeemed count</CardTitle>
                     </CardHeader>
                     <CardContent className="flex justify-center items-center p-6">
-                        <ResponsiveContainer width="100%" height={300}>
+                        <ResponsiveContainer height={300}>
                             <div className="w-[300px] h-[300px]">
                                 <ChartJSPie data={pieChartData} options={pieChartOptions} />
                             </div>
@@ -446,11 +617,11 @@ export default function UserAnalyticsDashboard() {
 
               <Card className="lg:col-span-2 bg-gray-900/30 backdrop-blur-sm border border-purple-500/40 hover:border-[#5a31b0] transition-all duration-300">
                 <CardHeader className="p-6 border-b border-purple-500/10">
-                  <CardTitle className="text-white font-semibold">Feature Usage</CardTitle>
+                  <CardTitle className="text-white font-semibold">Top 5 school counts from different states</CardTitle>
                 </CardHeader>
-                <CardContent className="p-6">
+                <CardContent className="p-3 flex justify-center">
                     <ResponsiveContainer width="100%" height={300}>
-                        <BarChart width={700} height={300} data={featureUsageData}>
+                        {/* <BarChart width={700} height={300} data={featureUsageData}>
                             <XAxis dataKey="feature" stroke="#94a3b8" />
                             <YAxis stroke="#94a3b8" />
                             <Tooltip
@@ -460,7 +631,8 @@ export default function UserAnalyticsDashboard() {
                             }}
                             />
                             <Bar dataKey="usage" fill="#8b5cf6" />
-                        </BarChart>
+                        </BarChart> */}
+                        <ChartJSBar data={schoolStateData} options={schoolChartOptions}/>
                     </ResponsiveContainer>
                 </CardContent>
               </Card>
