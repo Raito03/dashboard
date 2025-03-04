@@ -1,42 +1,39 @@
 'use client'
+import '@tabler/core/dist/css/tabler.min.css';
+import 'bootstrap/dist/css/bootstrap.min.css';  // Import Bootstrap CSS
+//import 'bootstrap/dist/js/bootstrap.bundle.min.js'; // Import Bootstrap JS (includes Popper.js)
+
 import { useState, useEffect } from 'react'
 import NumberFlow from '@number-flow/react'
 import {
   AreaChart,
-  LineChart,
   XAxis,
   YAxis,
   Tooltip,
-  Line,
-  BarChart,
-  Bar,
-  PieChart,
-  Pie,
-  Cell,
-  TooltipProps,
   Area,
   CartesianGrid,
-  Sector,
-  SectorProps,
-  ResponsiveContainer
+  ResponsiveContainer,
+  TooltipProps
 } from 'recharts'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card.jsx'
 import {
-  Home,
-  Settings,
-  Search,
-  HelpCircle,
-  Bell,
-  MessageSquare,
-  User,
-  Sliders,
-  Users,
-  UserCheck,
-  UserPlus,
-  Percent
-} from 'lucide-react'
-
-import { Bar as ChartJSBar, Pie as ChartJSPie} from 'react-chartjs-2';
+  IconHome,
+  IconSettings,
+  IconSearch,
+  IconHelpCircle,
+  IconBell,
+  IconMessage,
+  IconUser,
+  IconAdjustments,
+  IconUsers,
+  IconUserCheck,
+  IconUserPlus,
+  IconPercentage,
+  IconSchool,
+  IconBackpack,
+  IconBallpenFilled,
+  IconBooks
+} from '@tabler/icons-react'
+import { Bar as ChartJSBar, Pie as ChartJSPie } from 'react-chartjs-2'
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -46,55 +43,124 @@ import {
   Tooltip as ChartJSTooltip,
   Legend,
   ArcElement
-} from 'chart.js';
+} from 'chart.js'
+import React from 'react';
 
-ChartJS.register(CategoryScale, LinearScale, BarElement, Title, ChartJSTooltip, Legend, ArcElement);
-
-
+ChartJS.register(CategoryScale, LinearScale, BarElement, Title, ChartJSTooltip, Legend, ArcElement)
 
 // Define the type for your API data
 interface SignupData {
-  month: string | null // allow null in case the API returns null values
+  month: string | null
   count: number
 }
-// Define a custom type that extends SectorProps to include the payload property
-interface CustomSectorProps extends SectorProps {
-  payload: { name: string; value: number }; // Adjust the type of payload as needed
-}
+import { Poppins } from 'next/font/google';
+import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 
+import { SIDENAV_ITEMS } from '@/constants';
+import { SideNavItem } from '@/types';
+import { Icon } from '@iconify/react';
+const MenuItem = ({ item }: { item: SideNavItem }) => {
+  const pathname = usePathname();
+  const [subMenuOpen, setSubMenuOpen] = useState(false);
+  const toggleSubMenu = () => {
+    setSubMenuOpen(!subMenuOpen);
+  };
+  
+  const isDashboardActive = pathname === '/'; // or whatever your dashboard route is
+  return (
+    <div className="w-full">
+      {item.submenu ? (
+        <>
+          {/* // Update the MenuItem component's button structure */}
+        <button
+          onClick={toggleSubMenu}
+          className={`flex flex-row items-center rounded-lg hover:bg-zinc-100 justify-between ${
+            pathname.includes(item.path) ? 'bg-zinc-100' : ''
+          }`}
+          >
+          <div className="flex flex-row space-x-2 items-center">
+            {item.icon}
+            <span className='ml-0'>{item.title}</span>
+          </div>
+          
+          <div className="w-4 h-4 flex items-center justify-center">
+            <Icon
+              icon="lucide:chevron-down"
+              width="16"
+              height="16"
+              className={`transition-transform duration-200  ${
+                subMenuOpen ? 'rotate-180' : ''
+              }`}
+            />
+          </div>
+        </button>
+
+
+          {subMenuOpen && (
+            <div className="my-2 ml-12 flex flex-col space-y-2">
+              {item.subMenuItems?.map((subItem, idx) => {
+                return (
+                  <Link
+                    key={idx}
+                    href={subItem.path}
+                    className={`no-underline font-regular text-s text-black ${
+                      subItem.path === pathname ? 'font-regular' : ''
+                    }`}
+                  >
+                    <span>{subItem.title}</span>
+                  </Link>
+                );
+              })}
+            </div>
+          )}
+        </>
+      ) : (
+        <Link
+          href={item.path}
+          className={`flex flex-row space-x-4 items-center p-2 rounded-lg hover:bg-zinc-100 ${
+            item.path === pathname ? 'bg-zinc-100' : ''
+          }`}
+        >
+          {item.icon}
+          <span className="nav-link title">{item.title}</span>
+        </Link>
+      )}
+    </div>
+  );
+};
+
+const poppins = Poppins({
+  subsets: ['latin'],
+  weight: ['400', '600', '700'], // Choose needed weights
+  variable: '--font-poppins', // Matches the CSS variable
+});
 export default function UserAnalyticsDashboard() {
   const [mounted, setMounted] = useState(false)
-  
-  // State for SQL-fetched user signup data (line chart)
   const [chartData, setChartData] = useState<SignupData[]>([])
-
-  // State for the selected year (for filtering)
   const [selectedYear, setSelectedYear] = useState<string>('')
 
   useEffect(() => {
     setMounted(true)
   }, [])
 
-  // Fetch data from the Flask API
+  // Fetch user signups data
   useEffect(() => {
     async function fetchData() {
       try {
-        // Update the URL if needed; ensure your Flask server is running
         const res = await fetch('http://127.0.0.1:5000/api/user-signups')
         const data = (await res.json()) as SignupData[]
         setChartData(data)
 
-        // Extract available years from data, filtering out invalid month values
         const availableYears: string[] = Array.from(
           new Set(
             data
-              .filter((item) => item.month) // Only items with valid month
+              .filter((item) => item.month)
               .map((item) => (item.month ? item.month.split('-')[0] : ''))
               .filter((year) => year !== '')
           )
         )
 
-        // Set default year if available
         if (availableYears.length > 0) {
           setSelectedYear(availableYears[0])
         }
@@ -105,14 +171,10 @@ export default function UserAnalyticsDashboard() {
     fetchData()
   }, [])
 
-  // Filter chartData by selected year; only consider items with a valid month value
   const filteredData = selectedYear
-    ? chartData.filter(
-        (item) => item.month && item.month.startsWith(selectedYear)
-      )
+    ? chartData.filter((item) => item.month && item.month.startsWith(selectedYear))
     : chartData
 
-  // Compute unique years for the dropdown from items with valid month
   const years: string[] = chartData.length
     ? Array.from(
         new Set(
@@ -124,71 +186,62 @@ export default function UserAnalyticsDashboard() {
       )
     : []
 
-
-  // Add this state variable with your existing state declarations
-  const [totalUsers, setTotalUsers] = useState<number>(0);
-  // Add this useEffect block with your existing useEffect hooks
+  // Fetch additional metrics (totalUsers, activeUsers, approvalRate)
+  const [totalUsers, setTotalUsers] = useState<number>(0)
   useEffect(() => {
     async function fetchUserCount() {
       try {
-        const res = await fetch('http://127.0.0.1:5000/api/user-count');
-        const data = await res.json();
+        const res = await fetch('http://127.0.0.1:5000/api/user-count')
+        const data = await res.json()
         if (data && data.length > 0) {
-          setTotalUsers(data[0].count);
+          setTotalUsers(data[0].count)
         }
       } catch (error) {
-        console.error('Error fetching user count:', error);
+        console.error('Error fetching user count:', error)
       }
     }
-    fetchUserCount();
+    fetchUserCount()
   }, [])
 
-  // Add this state variable with your existing state declarations
-  const [activeUsers, setActiveUsers] = useState<number>(0);
-  // Add this useEffect block with your existing useEffect hooks
+  const [activeUsers, setActiveUsers] = useState<number>(0)
   useEffect(() => {
     async function fetchActiveUserCount() {
       try {
-        const res = await fetch('http://127.0.0.1:5000/api/active-user-count');
-        const data = await res.json();
-        // Add a check to ensure data exists and has a valid count
+        const res = await fetch('http://127.0.0.1:5000/api/active-user-count')
+        const data = await res.json()
         if (data && data.length > 0 && data[0].active_users !== undefined) {
-          setActiveUsers(data[0].active_users);
+          setActiveUsers(data[0].active_users)
         } else {
-          setActiveUsers(0);
+          setActiveUsers(0)
         }
       } catch (error) {
-        console.error('Error fetching user count:', error);
-        setActiveUsers(0);
+        console.error('Error fetching user count:', error)
+        setActiveUsers(0)
       }
     }
-    fetchActiveUserCount();
+    fetchActiveUserCount()
   }, [])
-  
 
-  // Add this state variable with your existing state declarations
-  const [approvalRate, setApprovalRate] = useState<number>(0);
-  // Add this useEffect block with your existing useEffect hooks
+  const [approvalRate, setApprovalRate] = useState<number>(0)
   useEffect(() => {
-    async function fetchActiveUserCount() {
+    async function fetchApprovalRate() {
       try {
-        const res = await fetch('http://127.0.0.1:5000/api/approval-rate');
-        const data = await res.json();
-        // Add a check to ensure data exists and has a valid count
+        const res = await fetch('http://127.0.0.1:5000/api/approval-rate')
+        const data = await res.json()
         if (data && data.length > 0 && data[0].Approval_Rate !== undefined) {
-          setApprovalRate(data[0].Approval_Rate);
+          setApprovalRate(data[0].Approval_Rate)
         } else {
-          setApprovalRate(0);
+          setApprovalRate(0)
         }
       } catch (error) {
-        console.error('Error fetching user count:', error);
-        setApprovalRate(0);
+        console.error('Error fetching approval rate:', error)
+        setApprovalRate(0)
       }
     }
-    fetchActiveUserCount();
+    fetchApprovalRate()
   }, [])
 
-  // Static data for other charts (unchanged)
+  // Static and chart data for demonstration
   const [userData] = useState([
     { month: 'Jan', activeUsers: 4000, newUsers: 1200 },
     { month: 'Feb', activeUsers: 3000, newUsers: 900 },
@@ -198,8 +251,7 @@ export default function UserAnalyticsDashboard() {
     { month: 'Jun', activeUsers: 2390, newUsers: 1100 },
     { month: 'Jul', activeUsers: 3490, newUsers: 1300 },
   ])
-  
-    // Prepare data for Chart.js
+
   const data = {
     labels: userData.map((item) => item.month),
     datasets: [
@@ -207,14 +259,12 @@ export default function UserAnalyticsDashboard() {
         label: 'New Users',
         data: userData.map((item) => item.newUsers),
         backgroundColor: '#6549b9',
-        // Adding border radius to each bar
         borderRadius: 15,
         borderSkipped: false,
       },
     ],
-  };
-  
-  // Chart options including styling for tooltip and axes
+  }
+
   const options = {
     responsive: true,
     maintainAspectRatio: false,
@@ -226,100 +276,133 @@ export default function UserAnalyticsDashboard() {
       },
       legend: {
         labels: {
-          color: '#d1d5db',
+          color: '#333',
         },
       },
     },
     scales: {
-      x: {
-        ticks: {
-          color: '#d1d5db',
-        },
-        grid: {
-          color: 'rgba(209, 213, 219, 0.1)',
-        },
-      },
-      y: {
-        ticks: {
-          color: '#d1d5db',
-        },
-        grid: {
-          color: 'rgba(209, 213, 219, 0.1)',
-        },
-      },
+      x: { ticks: { color: '#333' }, grid: { color: '#eee' } },
+      y: { ticks: { color: '#333' }, grid: { color: '#eee' } },
     },
-  };
+  }
 
-    const [userRetentionData] = useState([
-      { name: 'Retained', value: 75 },
-      { name: 'Churned', value: 25 },
-    ])
-
-    // Add this state variable with your existing state declarations
-  const [couponRedeemCount, setCouponRedeemCount] = useState<Array<{ amount: string; coupon_count: number }>>([]);
-
-  // Add this useEffect block with your existing useEffect hooks
+  // Coupon redeem chart data
+  const [couponRedeemCount, setCouponRedeemCount] = useState<Array<{ amount: string; coupon_count: number }>>([])
   useEffect(() => {
     async function fetchCouponRedeemCount() {
       try {
-        const res = await fetch('http://127.0.0.1:5000/api/coupons-used-count');
-        const data = await res.json();
-        
-        // Updated check: no longer looks for data[0].state
-      if (data && Array.isArray(data) && data.length > 0) {
-        setCouponRedeemCount(data);
-      } else {
-        setCouponRedeemCount([]);
-      }
+        const res = await fetch('http://127.0.0.1:5000/api/coupons-used-count')
+        const data = await res.json()
+        if (data && Array.isArray(data) && data.length > 0) {
+          setCouponRedeemCount(data)
+        } else {
+          setCouponRedeemCount([])
+        }
       } catch (error) {
-        console.error('Error fetching coupon Redeeming counts:', error);
-        setCouponRedeemCount([]);
+        console.error('Error fetching coupon counts:', error)
+        setCouponRedeemCount([])
       }
     }
-    fetchCouponRedeemCount();
-  }, []);
+    fetchCouponRedeemCount()
+  }, [])
 
-    const pieChartData = {
-      labels: couponRedeemCount.map((item) => item.amount),
-      datasets: [
-        {
-          data: couponRedeemCount.map((item) => item.coupon_count),
-          backgroundColor: ['#6549b9', '#FF8C42', '#1E88E5', '#43A047', '#FDD835', '#D81B60'], // Colors for each section
-          borderWidth: 0, // Remove white borders
-        },
-      ],
-    };
-    
-    const pieChartOptions = {
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: {
-        legend: {
-          labels: {
-            color: '#d1d5db', // Legend text color
-          },
-        },
-        tooltip: {
-          backgroundColor: '#1f2937',
-          borderColor: '#374151',
-          borderWidth: 1,
-        },
+  const pieChartData = {
+    labels: couponRedeemCount.map((item) => item.amount),
+    datasets: [
+      {
+        data: couponRedeemCount.map((item) => item.coupon_count),
+        backgroundColor: ['#6549b9', '#FF8C42', '#1E88E5', '#43A047', '#FDD835', '#D81B60'],
+        borderWidth: 0,
       },
-      cutout:'70%',
-      animation: {
-        animateScale: true, // Enables scaling animation
+    ],
+  }
+
+  const pieChartOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: { labels: { color: '#333' } },
+      tooltip: {
+        backgroundColor: '#1f2937',
+        borderColor: '#374151',
+        borderWidth: 1,
       },
-    };
-    
+    },
+    cutout: '70%',
+    animation: { animateScale: true },
+  }
 
-  const COLORS = ['#6549b9', '#FF8C42 '] // Greyish colors
+  // Teacher assignment counts and chart data
+  const [assignCounts, setAssignCounts] = useState<number[]>([])
+  useEffect(() => {
+    async function fetchTeacherAssignCounts() {
+      try {
+        const res = await fetch('http://127.0.0.1:5000/api/teacher-assign-count')
+        const data = await res.json()
+        const counts = data.map((item: { assign_count: number }) => item.assign_count)
+        setAssignCounts(counts)
+      } catch (error) {
+        console.error('Error fetching teacher assignment counts:', error)
+      }
+    }
+    fetchTeacherAssignCounts()
+  }, [])
 
-  const [featureUsageData] = useState([
-    { feature: 'Search', usage: 4000 },
-    { feature: 'Profile', usage: 3000 },
-    { feature: 'Settings', usage: 2000 },
-    { feature: 'Notifications', usage: 2780 },
-  ])
+  const bins = [0, 5, 10, 15, 20, 25]
+  const binLabels = ['1-5', '6-10', '11-15', '16-20', '21-25', '26+']
+  const binData = Array(binLabels.length).fill(0)
+  assignCounts.forEach((count) => {
+    if (count <= 5) binData[0]++
+    else if (count <= 10) binData[1]++
+    else if (count <= 15) binData[2]++
+    else if (count <= 20) binData[3]++
+    else if (count <= 25) binData[4]++
+    else binData[5]++
+  })
+
+  const teacherAssignData = {
+    labels: binLabels,
+    datasets: [
+      {
+        label: 'Number of Teachers',
+        data: binData,
+        backgroundColor: '#4A90E2',
+        borderRadius: 5,
+      },
+    ],
+  }
+
+  const teacherAssignOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      ChartJSTooltip: {
+        backgroundColor: '#1f2937',
+        borderColor: '#374151',
+        borderWidth: 1,
+      },
+      legend: { labels: { color: '#333' } },
+    },
+    scales: {
+      x: { ticks: { color: '#333' }, grid: { color: '#eee' } },
+      y: { ticks: { color: '#333' }, grid: { color: '#eee' } },
+    },
+  }
+
+  const CustomTooltip: React.FC<TooltipProps<number, string>> = ({ active, payload, label }) => {
+    if (active && payload && payload.length) {
+      return (
+        <div className="card card-sm">
+          <div className="card-body">
+            <p className="mb-0">Month: {label}</p>
+            <p className="mb-0">Count: {payload[0].value}</p>
+          </div>
+        </div>
+      )
+    }
+    return null
+  }
+
   // Add this state variable with your existing state declarations
   const [stateCounts, setStateCounts] = useState<Array<{ state: string; count_state: number }>>([]);
 
@@ -349,7 +432,7 @@ export default function UserAnalyticsDashboard() {
       {
         label: 'No. of Schools',
         data: stateCounts.map((item) => item.count_state),
-        backgroundColor: '#6549b9',
+        backgroundColor: '#4A90E2',
         // Adding border radius to each bar
         borderRadius: 15,
         borderSkipped: false,
@@ -369,277 +452,320 @@ export default function UserAnalyticsDashboard() {
     scales: {
       x: {
         ticks: {
-          color: '#d1d5db',
+          color: '#333',
         },
         grid: {
-          color: 'rgba(209, 213, 219, 0.1)',
+          color: '#eee',
         },
       },
       y: {
         ticks: {
-          color: '#d1d5db',
+          color: '#333',
         },
         grid: {
-          color: 'rgba(209, 213, 219, 0.1)',
+          color: '#eee',
         },
       },
     },
   };
-
-
-
-  const [assignCounts, setAssignCounts] = useState<number[]>([]);
-
-  useEffect(() => {
-    async function fetchTeacherAssignCounts() {
-      try {
-        const res = await fetch("http://127.0.0.1:5000/api/teacher-assign-count");
-        const data = await res.json();
-
-        // Extract only assign counts from API response
-        const counts = data.map((item: { assign_count: number }) => item.assign_count);
-        setAssignCounts(counts);
-      } catch (error) {
-        console.error("Error fetching teacher assignment counts:", error);
-      }
-    }
-    fetchTeacherAssignCounts();
-  }, []);
-
-  // Group assign counts into bins (e.g., 1-5, 6-10, etc.)
-  const bins = [0, 5, 10, 15, 20, 25]; // Define bin ranges
-  const binLabels = ["1-5", "6-10", "11-15", "16-20", "21-25", "26+"]; // Labels for bins
-  const binData = Array(binLabels.length).fill(0); // Initialize bin counts
-
-  assignCounts.forEach((count) => {
-    if (count <= 5) binData[0]++;
-    else if (count <= 10) binData[1]++;
-    else if (count <= 15) binData[2]++;
-    else if (count <= 20) binData[3]++;
-    else if (count <= 25) binData[4]++;
-    else binData[5]++;
-  });
-
-  const teacherAssignData = {
-    labels: binLabels,
-    datasets: [
-      {
-        label: "Number of Teachers",
-        data: binData,
-        backgroundColor: "#6549b9",
-        borderRadius: 5,
-      },
-    ],
+  const pathname = usePathname()
+  const isActive = (href: string, currentPath: string) => {
+    const normalize = (path: string) => path.replace(/\/$/, '');
+    return normalize(href) === normalize(currentPath);
   };
-
-  const teacherAssignOptions = {
-    responsive: true,
-    maintainAspectRatio: false,
-    plugins: {
-      ChartJSTooltip: {
-        backgroundColor: '#1f2937',
-        borderColor: '#374151',
-        borderWidth: 1,
-      },
-      legend: {
-        labels: {
-          color: '#d1d5db',
-        },
-      },
-    },
-    scales: {
-      x: {
-        ticks: {
-          color: '#d1d5db',
-        },
-        grid: {
-          color: 'rgba(209, 213, 219, 0.1)',
-        },
-      },
-      y: {
-        ticks: {
-          color: '#d1d5db',
-        },
-        grid: {
-          color: 'rgba(209, 213, 219, 0.1)',
-        },
-      },
-    },
-  };
-  const CustomTooltip: React.FC<TooltipProps<number, string>> = (props) => {
-    const { active, payload, label } = props;  
-    if (active && payload && payload.length) {
-      return (
-        <div className="p-2 bg-gray-800 text-white border border-gray-600 rounded-md shadow-md">
-          <p className="text-sm text-gray-300">{`Month: ${label}`}</p>
-          <p className="text-sm text-gray-100 font-semibold">{`Count: ${payload[0].value}`}</p>
-        </div>
-      )
-    }
-    return null
-  }
   
-
+  // Define sidebar menu items
+  const sidebarItems = [
+    { 
+      href: '/', 
+      icon: <IconHome size={20} />, 
+      label: 'Dashboard' 
+    },
+    { 
+      href: '/students', 
+      icon: <IconBackpack size={20} />, 
+      label: 'Students' 
+    },
+    { 
+      href: '/teachers', 
+      icon: <IconSchool size={20} />, 
+      label: 'Teachers' 
+    },
+    { 
+      href: '/mentors', 
+      icon: <IconBallpenFilled size={20} />, 
+      label: 'Mentors' 
+    },
+    { 
+      href: '/schools', 
+      icon: <IconBooks size={20} />, 
+      label: 'Schools' 
+    }
+  ]
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#0a0a0f] to-[#1a1a24]">
-      {/* Sidebar - added subtle border */}
-      <div className="fixed left-0 top-0 h-screen w-20 bg-gray-900/50 backdrop-blur-md shadow-lg flex flex-col items-center py-8 border-r border-purple-500/20">
-        <div className="w-12 h-12 bg-purple-600 rounded-xl mb-8 flex items-center justify-center border border-purple-400/30">
-          <span className="text-white font-bold text-xl">A</span>
-        </div>
-        <Home className="mb-8 text-gray-400 hover:text-purple-500 transition-colors cursor-pointer" />
-        <Settings className="mb-8 text-gray-400 hover:text-purple-500 transition-colors cursor-pointer" />
-        <Search className="mb-8 text-gray-400 hover:text-purple-500 transition-colors cursor-pointer" />
-        <HelpCircle className="text-gray-400 hover:text-purple-500 transition-colors cursor-pointer" />
-      </div>
+    <div className={`page bg-light ${poppins.variable} font-sans`}>
+      {/* Fixed Sidebar */}
+      {/* Updated Sidebar Component with strict inline styles */}
+      <aside
+          className="navbar navbar-vertical navbar-expand-lg navbar-light bg-white custom-sidebar fixed-left"
+          style={{ width: '250px', zIndex: 1000 }}
+        >
+          <div className="container-fluid">
+          <div className="navbar-nav pt-lg-3 d-flex flex-column g-3">
+              {sidebarItems.map((item,idx) => (
+                <Link 
+                  key={item.href}
+                  href={item.href}
+                  className={`
+                    nav-link 
+                    d-flex 
+                    justify-content-start 
+                    space-x-2 
+                    ml-5 
+                    ${pathname === item.href 
+                      ? 'bg-zinc-100 text-blue-600 font-semibold' 
+                      : 'hover:bg-zinc-50 text-gray-700'}
+                  `}
+                >
+                  {React.cloneElement(item.icon, {
+                    className: pathname === item.href 
+                      ? 'text-blue-600' 
+                      : 'text-gray-600'
+                  })}
+                  <span className="nav-link-title">{item.label}</span>
+                </Link>
+              ))}
+             
+              <div className="nav-link d-flex justify-content-start ml-5">
+                <div className="flex flex-col">
+                  {/* <Link
+                    href="/"
+                    className="flex flex-row space-x-3 items-center justify-center md:justify-start border-b border-zinc-200 h-12 w-full"
+                  >
+                    <span className="h-7 w-7 bg-zinc-300 rounded-lg" />
+                    <span className="font-bold text-xl hidden md:flex">Logo</span>
+                  </Link> */}
 
-       {/* Main Content */}
-       <div className="ml-20 p-8">
-        {/* Top Bar */}
-        <div className="flex justify-between items-center mb-12 bg-gray-900/30 p-4 rounded-xl backdrop-blur-sm">
-          <div className="flex items-center space-x-6">
-            <h2 className="text-purple-500 font-semibold">Analytics Dashboard</h2>
-            <div className="flex space-x-4">
-              <Bell className="text-gray-400 hover:text-purple-500 transition-colors cursor-pointer" />
-              <MessageSquare className="text-gray-400 hover:text-purple-500 transition-colors cursor-pointer" />
-              <Sliders className="text-gray-400 hover:text-purple-500 transition-colors cursor-pointer" />
+                  <div className="flex flex-col space-y-2 ">
+                    {SIDENAV_ITEMS.map((item, idx) => {
+                      return <MenuItem key={idx} item={item} />;
+                    })}
+                  </div>
+                </div>
+              </div>
+              {/* <div className="nav-link active dropdown ml-5">
+                <a href="#" className="btn dropdown-toggle" data-bs-toggle="dropdown">
+                  Resources
+                </a>
+                <div className="dropdown-menu">
+                  <a className="dropdown-item" href="#">Student related</a>
+                  <a className="dropdown-item" href="#">Teacher/Mentor related</a>
+                </div>
+              </div> */}
+              {/* <div className='nav-item dropdown'>
+                <a className="nav-link dropdown-toggle" href="#navbar-addons" data-bs-toggle="dropdown" data-bs-auto-close="false" role="button" aria-expanded="false">
+                  <span className="nav-link-icon d-md-none d-lg-inline-block">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" stroke-linecap="round" stroke-linejoin="round" className="icon icon-1">
+                      <path d="M12 5l0 14"></path>
+                      <path d="M5 12l14 0"></path>
+                    </svg>
+                  </span>
+                  <span className="nav-link-title"> Addons </span>
+                </a>
+                <div className="dropdown-menu">
+                    <a className="dropdown-item" href="./icons.html"> Icons </a>
+                    <a className="dropdown-item" href="./emails.html"> Emails </a>
+                    <a className="dropdown-item" href="./flags.html"> Flags </a>
+                    <a className="dropdown-item" href="./illustrations.html"> Illustrations </a>
+                    <a className="dropdown-item" href="./payment-providers.html"> Payment providers </a>
+                </div>
+
+              </div> */}
+              
             </div>
           </div>
-          <div className="flex items-center space-x-4 bg-gray-800/50 px-4 py-2 rounded-lg">
-            <User className="text-purple-500" />
-            <span className="text-gray-300">Admin</span>
+        </aside>
+
+
+      {/* Main Content */}
+      <div className="page-wrapper" style={{ marginLeft: '250px' }}>
+        {/* Top Navigation */}
+        <header className="navbar navbar-expand-md navbar-light bg-white shadow-sm border-bottom">
+          <div className="container-fluid">
+            <div className="d-flex align-items-center w-full">
+              <span className='font-bold text-xl text-black '>LifeAppDashBoard</span>
+              <div className='w-5/6 h-10'></div>
+              <div className="d-flex gap-3 align-items-center">
+                <a href="#" className="btn btn-light btn-icon">
+                  <IconSearch size={20} className="text-muted"/>
+                </a>
+                <a href="#" className="btn btn-light btn-icon position-relative">
+                  <IconBell size={20} className="text-muted"/>
+                  <span className="badge bg-danger position-absolute top-0 end-0">3</span>
+                </a>
+                <a href="#" className="btn btn-light btn-icon">
+                  <IconSettings size={20} className="text-muted"/>
+                </a>
+              </div>
+            </div>
           </div>
-        </div>
+        </header>
 
-        {/* Welcome Section */}
-        <div className="mb-12">
-          <h1 className="text-4xl font-bold text-white mb-2">Welcome back, Admin!</h1>
-          <p className="text-gray-400">Here's what's happening with your platform today.</p>
-        </div>
+        {/* Main Content Area */}
+        <div className="page-body">
+          <div className="container-xl py-4">
+            {/* Header */}
+            <div className="page-header mb-4 mt-0">
+              <div className="row align-items-center">
+                <div className="col">
+                  <h2 className="page-title mb-1 fw-bold text-dark">Dashboard Overview</h2>
+                  <p className="text-muted mb-0">Platform statistics and analytics</p>
+                </div>
+              </div>
+            </div>
 
-        {/* Metrics Cards - added consistent borders */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-12">
-          {[
-            { title: 'Total Users', value: totalUsers, icon: Users, color: 'from-purple-600 to-blue-600' },
-            { title: 'Active Users', value: activeUsers, icon: UserCheck, color: 'from-green-600 to-teal-600' },
-            { title: 'New Signups', value: 1230, icon: UserPlus, color: 'from-orange-600 to-red-600' },
-            { title: 'Approval Rate', value: approvalRate, icon: Percent, color: 'from-blue-600 to-cyan-600', suffix : '%' },
-          ].map((metric, index) => {
-            const Icon = metric.icon;
-            return (
-              <Card key={index} className="bg-gray-900/30 backdrop-blur-sm border border-purple-500/40 hover:border-[#5a31b0] transition-all duration-300">
-                <CardContent className="p-6">
-                  <div className="flex items-center justify-between mb-4">
-                    <div className={`p-3 rounded-xl bg-gradient-to-br ${metric.color} border border-white/10`}>
-                      <Icon className="w-6 h-6 text-white" />
+            {/* Metrics Grid */}
+            <div className="row g-4 mb-4">
+              {[
+                { title: 'Total Users', value: totalUsers, icon: <IconUsers />, color: 'bg-purple' },
+                { title: 'Active Users', value: activeUsers, icon: <IconUserCheck />, color: 'bg-teal' },
+                { title: 'New Signups', value: 1230, icon: <IconUserPlus />, color: 'bg-orange' },
+                { title: 'Approval Rate', value: approvalRate, icon: <IconPercentage />, color: 'bg-blue', suffix: '%' },
+              ].map((metric, index) => (
+                <div className="col-12 col-sm-6 col-xl-3" key={index}>
+                  <div className="card shadow-sm border-0 h-100">
+                    <div className="card-body">
+                      <div className="d-flex align-items-center gap-3">
+                        <div className={`${metric.color} rounded-circle p-3 text-white`}>
+                          {React.cloneElement(metric.icon, { size: 24 })}
+                        </div>
+                        <div>
+                          <div className="text-muted mb-1">{metric.title}</div>
+                          <div className="h2 mb-0">
+                            <NumberFlow
+                              value={metric.value}
+                              suffix={metric.suffix || ''}
+                              className="fw-bold text-dark"
+                            />
+                          </div>
+                        </div>
+                      </div>
                     </div>
                   </div>
-                  <p className="text-gray-400 text-sm mb-1">{metric.title}</p>
-                  <p className="text-3xl font-bold text-white">
-                                              <NumberFlow
-                                                value={metric.value}
-                                                format={{ notation: 'standard'}}
-                                                transformTiming={{ duration: 800, easing: 'ease-in-out' }}
-                                                suffix={metric.suffix || ''}
-                                        /></p>
-                </CardContent>
-              </Card>
-            );
-          })}
+                </div>
+              ))}
+            </div>
+
+            {/* Charts Section */}
+            {mounted && (
+              <div className="row g-4">
+                {/* Signups Chart */}
+                <div className="col-12 col-xl-6">
+                  <div className="card shadow-sm border-0 h-100">
+                    <div className="card-header bg-transparent d-flex justify-content-between align-items-center py-3">
+                      <h3 className="card-title mb-0 fw-bold">User Signups Trend</h3>
+                      <select
+                        className="form-select form-select-sm w-auto"
+                        value={selectedYear}
+                        onChange={(e) => setSelectedYear(e.target.value)}
+                      >
+                        {years.map((year) => (
+                          <option key={year} value={year}>{year}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="card-body pt-0">
+                      <div style={{ height: '300px' }}>
+                        <ResponsiveContainer width="100%" height="100%" >
+                          {/* Keep existing AreaChart configuration */}
+                            <AreaChart data={filteredData}>
+                              <defs>
+                                <linearGradient id="colorUv" x1="0" y1="0" x2="0" y2="1">
+                                  <stop offset="35%" stopColor="#4A90E2" stopOpacity={0.8} />
+                                  <stop offset="95%" stopColor="#4A90E2" stopOpacity={0} />
+                                </linearGradient>
+                              </defs>
+                              <XAxis dataKey="month" stroke="#333" />
+                              <YAxis stroke="#333" />
+                              <CartesianGrid strokeDasharray="3 3" stroke="#eee" />
+                              <Tooltip content={<CustomTooltip />} />
+                              <Area type="monotone" dataKey="count" stroke="#4A90E2" fill="url(#colorUv)" strokeWidth={2} />
+                            </AreaChart>
+                        </ResponsiveContainer>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Teacher Assignments */}
+                <div className="col-12 col-xl-6">
+                  <div className="card shadow-sm border-0 h-100">
+                    <div className="card-header bg-transparent py-3">
+                      <h3 className="card-title mb-0 fw-bold">Teacher Assignments</h3>
+                    </div>
+                    <div className="card-body pt-0">
+                      <div style={{ height: '300px' }}>
+                        <ChartJSBar 
+                          data={teacherAssignData} 
+                          options={{ ...teacherAssignOptions, plugins: { legend: { display: false }}}}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Coupon Redemptions */}
+                <div className="col-12 col-xl-4">
+                  <div className="card shadow-sm border-0 h-100">
+                    <div className="card-header bg-transparent py-3">
+                      <h3 className="card-title mb-0 fw-bold">Coupon Redemptions</h3>
+                    </div>
+                    <div className="card-body pt-0">
+                      <div style={{ height: '300px' }}>
+                        <ChartJSPie 
+                          data={pieChartData} 
+                          options={pieChartOptions}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* School Distribution */}
+                <div className="col-12 col-xl-8">
+                  <div className="card shadow-sm border-0 h-100">
+                    <div className="card-header bg-transparent py-3">
+                      <h3 className="card-title mb-0 fw-bold">School Distribution</h3>
+                    </div>
+                    <div className="card-body pt-0">
+                      <div style={{ height: '300px' }}>
+                        <ChartJSBar 
+                          data={schoolStateData}
+                          options={schoolChartOptions}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
 
-        {/* Charts Section */}
-        {mounted && (
-          <>
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-12">
-              {/* Area Chart */}
-              <Card className="bg-gray-900/30 backdrop-blur-sm border border-purple-500/40 hover:border-[#5a31b0] transition-all duration-300">
-                <CardHeader className="flex justify-between items-center p-6 border-b border-purple-500/10">
-                  <CardTitle className="text-white font-semibold">User Signups Trend</CardTitle>
-                  <select
-                    className="bg-gray-800/50 text-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-purple-500 outline-none border border-purple-500/20"
-                    value={selectedYear}
-                    onChange={(e) => setSelectedYear(e.target.value)}
-                  >
-                    {years.map((year) => (
-                      <option key={year} value={year}>{year}</option>
-                    ))}
-                  </select>
-                </CardHeader>
-                <CardContent className="p-6">
-                    <ResponsiveContainer width="100%" height={300}>
-                        <AreaChart width={500} height={300} data={filteredData}>
-                            <defs>
-                            <linearGradient id="colorUv" x1="0" y1="0" x2="0" y2="1">
-                                <stop offset="35%" stopColor="#8b5cf6" stopOpacity={0.8}/>
-                                <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0}/>
-                            </linearGradient>
-                            </defs>
-                            <XAxis dataKey="month" stroke="#94a3b8" />
-                            <YAxis stroke="#94a3b8" />
-                            <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
-                            <Tooltip content={<CustomTooltip />} />
-                            <Area type="monotone" dataKey="count" stroke="#8b5cf6" fill="url(#colorUv)" strokeWidth={2} />
-                        </AreaChart>
-                  </ResponsiveContainer>
-                </CardContent>
-              </Card>
-
-              {/* Bar Chart */}
-              <Card className="bg-gray-900/30 backdrop-blur-sm border border-purple-500/40 hover:border-[#5a31b0] transition-all duration-300">
-                <CardHeader className="p-6 border-b border-purple-500/10">
-                  <CardTitle className="text-white font-semibold">Distribution of Teacher Assignment Counts</CardTitle>
-                </CardHeader>
-                <CardContent className="p-6 flex justify-center">
-                  <div style={{ width: '500px', height: '300px' }}>
-                    <ChartJSBar data={teacherAssignData} options={teacherAssignOptions} />
-                  </div>
-                </CardContent>
-              </Card>
+        {/* Footer */}
+        <footer className="footer bg-white border-top py-3 mt-auto">
+          <div className="container-xl">
+            <div className="d-flex justify-content-between align-items-center text-muted">
+              <span>© 2024 LifeAppDashboard. All rights reserved.</span>
+              <div className="d-flex gap-3">
+                <a href="#" className="text-muted text-decoration-none">Privacy</a>
+                <a href="#" className="text-muted text-decoration-none">Terms</a>
+                <a href="#" className="text-muted text-decoration-none">Help</a>
+              </div>
             </div>
-
-            {/* Bottom Charts */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                {/*Pie chart */}
-                <Card className="bg-gray-900/30 backdrop-blur-sm border border-purple-500/40 hover:border-[#5a31b0] transition-all duration-300">
-                    <CardHeader className="p-6 border-b border-purple-500/10">
-                    <CardTitle className="text-white font-semibold">Coupons Redeemed count</CardTitle>
-                    </CardHeader>
-                    <CardContent className="flex justify-center items-center p-6">
-                        <ResponsiveContainer height={300}>
-                            <div className="w-[300px] h-[300px]">
-                                <ChartJSPie data={pieChartData} options={pieChartOptions} />
-                            </div>
-                        </ResponsiveContainer>
-                    
-                    </CardContent>
-              </Card>
-
-              <Card className="lg:col-span-2 bg-gray-900/30 backdrop-blur-sm border border-purple-500/40 hover:border-[#5a31b0] transition-all duration-300">
-                <CardHeader className="p-6 border-b border-purple-500/10">
-                  <CardTitle className="text-white font-semibold">Top 5 school counts from different states</CardTitle>
-                </CardHeader>
-                <CardContent className="p-3 flex justify-center">
-                    <ResponsiveContainer width="100%" height={300}>
-                        {/* <BarChart width={700} height={300} data={featureUsageData}>
-                            <XAxis dataKey="feature" stroke="#94a3b8" />
-                            <YAxis stroke="#94a3b8" />
-                            <Tooltip
-                            contentStyle={{
-                                backgroundColor: '#1f2937',
-                                border: '1px solid #374151',
-                            }}
-                            />
-                            <Bar dataKey="usage" fill="#8b5cf6" />
-                        </BarChart> */}
-                        <ChartJSBar data={schoolStateData} options={schoolChartOptions}/>
-                    </ResponsiveContainer>
-                </CardContent>
-              </Card>
-            </div>
-          </>
-        )}
+          </div>
+        </footer>
       </div>
     </div>
   )
-} 
+}
