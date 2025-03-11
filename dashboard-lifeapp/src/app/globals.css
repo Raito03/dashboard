@@ -26,12 +26,12 @@ body {
   font-family: var(--font-poppins);
 }
 
-/* Smooth icon transition */
+/* Smooth icon transition
 .nav-link .icon {
   transition: transform 0.2s ease-in-out;
 }
 
-/* Fixed positioning for chevron */
+/* Fixed positioning for chevron 
 .nav-link .chevron-container {
   width: 24px;
   min-width: 24px;
@@ -39,20 +39,20 @@ body {
   justify-content: center;
 }
   
-/* Custom Sidebar Colors */
+/* Custom Sidebar Colors 
 .navbar-light .nav-link {
-  color: #4a5568 !important; /* Medium gray */
+  color: #4a5568 !important; /* Medium gray 
 }
 
 .navbar-light .nav-link.active {
-  color: #6549b9 !important; /* Brand purple */
+  color: #6549b9 !important; /* Brand purple 
 }
 
 .navbar-light .nav-link:hover {
-  color: #2d3748 !important; /* Dark gray */
+  color: #2d3748 !important; /* Dark gray
 }
 
-/* Icon color overrides */
+/* Icon color overrides 
 .navbar-light .nav-link svg {
   color: #4a5568 !important;
 }
@@ -61,7 +61,7 @@ body {
   color: #6549b9 !important;
 }
 
-/* Enhanced sidebar specific styling */
+/* Enhanced sidebar specific styling 
 .sidebar-light .nav-link {
   color: #4a5568 !important;
 }
@@ -80,7 +80,7 @@ body {
 
 .sidebar-light .nav-link.active svg {
   color: #6549b9 !important;
-}
+} */
 
 /* Comment out dark mode preferences if not needed */
 /* If you need dark mode, uncomment and adjust as necessary */

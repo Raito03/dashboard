@@ -16,22 +16,13 @@ import {
   TooltipProps
 } from 'recharts'
 import {
-  IconHome,
   IconSettings,
   IconSearch,
-  IconHelpCircle,
   IconBell,
-  IconMessage,
-  IconUser,
-  IconAdjustments,
   IconUsers,
   IconUserCheck,
   IconUserPlus,
   IconPercentage,
-  IconSchool,
-  IconBackpack,
-  IconBallpenFilled,
-  IconBooks
 } from '@tabler/icons-react'
 import { Bar as ChartJSBar, Pie as ChartJSPie } from 'react-chartjs-2'
 import {
@@ -54,81 +45,7 @@ interface SignupData {
   count: number
 }
 import { Poppins } from 'next/font/google';
-import Link from 'next/link';
-import { usePathname } from 'next/navigation';
-
-import { SIDENAV_ITEMS } from '@/constants';
-import { SideNavItem } from '@/types';
-import { Icon } from '@iconify/react';
-const MenuItem = ({ item }: { item: SideNavItem }) => {
-  const pathname = usePathname();
-  const [subMenuOpen, setSubMenuOpen] = useState(false);
-  const toggleSubMenu = () => {
-    setSubMenuOpen(!subMenuOpen);
-  };
-  
-  const isDashboardActive = pathname === '/'; // or whatever your dashboard route is
-  return (
-    <div className="w-full">
-      {item.submenu ? (
-        <>
-          {/* // Update the MenuItem component's button structure */}
-        <button
-          onClick={toggleSubMenu}
-          className={`flex flex-row items-center rounded-lg hover:bg-zinc-100 justify-between ${
-            pathname.includes(item.path) ? 'bg-zinc-100' : ''
-          }`}
-          >
-          <div className="flex flex-row space-x-2 items-center">
-            {item.icon}
-            <span className='ml-0'>{item.title}</span>
-          </div>
-          
-          <div className="w-4 h-4 flex items-center justify-center">
-            <Icon
-              icon="lucide:chevron-down"
-              width="16"
-              height="16"
-              className={`transition-transform duration-200  ${
-                subMenuOpen ? 'rotate-180' : ''
-              }`}
-            />
-          </div>
-        </button>
-
-
-          {subMenuOpen && (
-            <div className="my-2 ml-12 flex flex-col space-y-2">
-              {item.subMenuItems?.map((subItem, idx) => {
-                return (
-                  <Link
-                    key={idx}
-                    href={subItem.path}
-                    className={`no-underline font-regular text-s text-black ${
-                      subItem.path === pathname ? 'font-regular' : ''
-                    }`}
-                  >
-                    <span>{subItem.title}</span>
-                  </Link>
-                );
-              })}
-            </div>
-          )}
-        </>
-      ) : (
-        <Link
-          href={item.path}
-          className={`flex flex-row space-x-4 items-center p-2 rounded-lg hover:bg-zinc-100 ${
-            item.path === pathname ? 'bg-zinc-100' : ''
-          }`}
-        >
-          {item.icon}
-          <span className="nav-link title">{item.title}</span>
-        </Link>
-      )}
-    </div>
-  );
-};
+import Sidebar from './sidebar';
 
 const poppins = Poppins({
   subsets: ['latin'],
@@ -222,6 +139,25 @@ export default function UserAnalyticsDashboard() {
     fetchActiveUserCount()
   }, [])
 
+  const [newSignups, setNewSignups] = useState<number>(0)
+  useEffect(() => {
+    async function fetchNewSignups() {
+      try {
+        const res = await fetch('http://127.0.0.1:5000/api/new-signups')
+        const data = await res.json()
+        if (data && data.length > 0 && data[0].count !== undefined) {
+          setNewSignups(data[0].count)
+        } else {
+          setNewSignups(0)
+        }
+      } catch (error) {
+        console.error('Error fetching user count:', error)
+        setNewSignups(0)
+      }
+    }
+    fetchNewSignups()
+  }, [])
+
   const [approvalRate, setApprovalRate] = useState<number>(0)
   useEffect(() => {
     async function fetchApprovalRate() {
@@ -242,49 +178,49 @@ export default function UserAnalyticsDashboard() {
   }, [])
 
   // Static and chart data for demonstration
-  const [userData] = useState([
-    { month: 'Jan', activeUsers: 4000, newUsers: 1200 },
-    { month: 'Feb', activeUsers: 3000, newUsers: 900 },
-    { month: 'Mar', activeUsers: 2000, newUsers: 800 },
-    { month: 'Apr', activeUsers: 2780, newUsers: 1000 },
-    { month: 'May', activeUsers: 1890, newUsers: 700 },
-    { month: 'Jun', activeUsers: 2390, newUsers: 1100 },
-    { month: 'Jul', activeUsers: 3490, newUsers: 1300 },
-  ])
+  // const [userData] = useState([
+  //   { month: 'Jan', activeUsers: 4000, newUsers: 1200 },
+  //   { month: 'Feb', activeUsers: 3000, newUsers: 900 },
+  //   { month: 'Mar', activeUsers: 2000, newUsers: 800 },
+  //   { month: 'Apr', activeUsers: 2780, newUsers: 1000 },
+  //   { month: 'May', activeUsers: 1890, newUsers: 700 },
+  //   { month: 'Jun', activeUsers: 2390, newUsers: 1100 },
+  //   { month: 'Jul', activeUsers: 3490, newUsers: 1300 },
+  // ])
 
-  const data = {
-    labels: userData.map((item) => item.month),
-    datasets: [
-      {
-        label: 'New Users',
-        data: userData.map((item) => item.newUsers),
-        backgroundColor: '#6549b9',
-        borderRadius: 15,
-        borderSkipped: false,
-      },
-    ],
-  }
+  // const data = {
+  //   labels: userData.map((item) => item.month),
+  //   datasets: [
+  //     {
+  //       label: 'New Users',
+  //       data: userData.map((item) => item.newUsers),
+  //       backgroundColor: '#6549b9',
+  //       borderRadius: 15,
+  //       borderSkipped: false,
+  //     },
+  //   ],
+  // }
 
-  const options = {
-    responsive: true,
-    maintainAspectRatio: false,
-    plugins: {
-      ChartJSTooltip: {
-        backgroundColor: '#1f2937',
-        borderColor: '#374151',
-        borderWidth: 1,
-      },
-      legend: {
-        labels: {
-          color: '#333',
-        },
-      },
-    },
-    scales: {
-      x: { ticks: { color: '#333' }, grid: { color: '#eee' } },
-      y: { ticks: { color: '#333' }, grid: { color: '#eee' } },
-    },
-  }
+  // const options = {
+  //   responsive: true,
+  //   maintainAspectRatio: false,
+  //   plugins: {
+  //     ChartJSTooltip: {
+  //       backgroundColor: '#1f2937',
+  //       borderColor: '#374151',
+  //       borderWidth: 1,
+  //     },
+  //     legend: {
+  //       labels: {
+  //         color: '#333',
+  //       },
+  //     },
+  //   },
+  //   scales: {
+  //     x: { ticks: { color: '#333' }, grid: { color: '#eee' } },
+  //     y: { ticks: { color: '#333' }, grid: { color: '#eee' } },
+  //   },
+  // }
 
   // Coupon redeem chart data
   const [couponRedeemCount, setCouponRedeemCount] = useState<Array<{ amount: string; coupon_count: number }>>([])
@@ -468,123 +404,13 @@ export default function UserAnalyticsDashboard() {
       },
     },
   };
-  const pathname = usePathname()
-  const isActive = (href: string, currentPath: string) => {
-    const normalize = (path: string) => path.replace(/\/$/, '');
-    return normalize(href) === normalize(currentPath);
-  };
   
-  // Define sidebar menu items
-  const sidebarItems = [
-    { 
-      href: '/', 
-      icon: <IconHome size={20} />, 
-      label: 'Dashboard' 
-    },
-    { 
-      href: '/students', 
-      icon: <IconBackpack size={20} />, 
-      label: 'Students' 
-    },
-    { 
-      href: '/teachers', 
-      icon: <IconSchool size={20} />, 
-      label: 'Teachers' 
-    },
-    { 
-      href: '/mentors', 
-      icon: <IconBallpenFilled size={20} />, 
-      label: 'Mentors' 
-    },
-    { 
-      href: '/schools', 
-      icon: <IconBooks size={20} />, 
-      label: 'Schools' 
-    }
-  ]
   return (
     <div className={`page bg-light ${poppins.variable} font-sans`}>
       {/* Fixed Sidebar */}
       {/* Updated Sidebar Component with strict inline styles */}
-      <aside
-          className="navbar navbar-vertical navbar-expand-lg navbar-light bg-white custom-sidebar fixed-left"
-          style={{ width: '250px', zIndex: 1000 }}
-        >
-          <div className="container-fluid">
-          <div className="navbar-nav pt-lg-3 d-flex flex-column g-3">
-              {sidebarItems.map((item,idx) => (
-                <Link 
-                  key={item.href}
-                  href={item.href}
-                  className={`
-                    nav-link 
-                    d-flex 
-                    justify-content-start 
-                    space-x-2 
-                    ml-5 
-                    ${pathname === item.href 
-                      ? 'bg-zinc-100 text-blue-600 font-semibold' 
-                      : 'hover:bg-zinc-50 text-gray-700'}
-                  `}
-                >
-                  {React.cloneElement(item.icon, {
-                    className: pathname === item.href 
-                      ? 'text-blue-600' 
-                      : 'text-gray-600'
-                  })}
-                  <span className="nav-link-title">{item.label}</span>
-                </Link>
-              ))}
-             
-              <div className="nav-link d-flex justify-content-start ml-5">
-                <div className="flex flex-col">
-                  {/* <Link
-                    href="/"
-                    className="flex flex-row space-x-3 items-center justify-center md:justify-start border-b border-zinc-200 h-12 w-full"
-                  >
-                    <span className="h-7 w-7 bg-zinc-300 rounded-lg" />
-                    <span className="font-bold text-xl hidden md:flex">Logo</span>
-                  </Link> */}
-
-                  <div className="flex flex-col space-y-2 ">
-                    {SIDENAV_ITEMS.map((item, idx) => {
-                      return <MenuItem key={idx} item={item} />;
-                    })}
-                  </div>
-                </div>
-              </div>
-              {/* <div className="nav-link active dropdown ml-5">
-                <a href="#" className="btn dropdown-toggle" data-bs-toggle="dropdown">
-                  Resources
-                </a>
-                <div className="dropdown-menu">
-                  <a className="dropdown-item" href="#">Student related</a>
-                  <a className="dropdown-item" href="#">Teacher/Mentor related</a>
-                </div>
-              </div> */}
-              {/* <div className='nav-item dropdown'>
-                <a className="nav-link dropdown-toggle" href="#navbar-addons" data-bs-toggle="dropdown" data-bs-auto-close="false" role="button" aria-expanded="false">
-                  <span className="nav-link-icon d-md-none d-lg-inline-block">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" stroke-linecap="round" stroke-linejoin="round" className="icon icon-1">
-                      <path d="M12 5l0 14"></path>
-                      <path d="M5 12l14 0"></path>
-                    </svg>
-                  </span>
-                  <span className="nav-link-title"> Addons </span>
-                </a>
-                <div className="dropdown-menu">
-                    <a className="dropdown-item" href="./icons.html"> Icons </a>
-                    <a className="dropdown-item" href="./emails.html"> Emails </a>
-                    <a className="dropdown-item" href="./flags.html"> Flags </a>
-                    <a className="dropdown-item" href="./illustrations.html"> Illustrations </a>
-                    <a className="dropdown-item" href="./payment-providers.html"> Payment providers </a>
-                </div>
-
-              </div> */}
-              
-            </div>
-          </div>
-        </aside>
+      <Sidebar />
+      
 
 
       {/* Main Content */}
@@ -613,7 +439,7 @@ export default function UserAnalyticsDashboard() {
 
         {/* Main Content Area */}
         <div className="page-body">
-          <div className="container-xl py-4">
+          <div className="container-xl pt-0 pb-4">
             {/* Header */}
             <div className="page-header mb-4 mt-0">
               <div className="row align-items-center">
@@ -629,7 +455,7 @@ export default function UserAnalyticsDashboard() {
               {[
                 { title: 'Total Users', value: totalUsers, icon: <IconUsers />, color: 'bg-purple' },
                 { title: 'Active Users', value: activeUsers, icon: <IconUserCheck />, color: 'bg-teal' },
-                { title: 'New Signups', value: 1230, icon: <IconUserPlus />, color: 'bg-orange' },
+                { title: 'New Signups', value: newSignups, icon: <IconUserPlus />, color: 'bg-orange' },
                 { title: 'Approval Rate', value: approvalRate, icon: <IconPercentage />, color: 'bg-blue', suffix: '%' },
               ].map((metric, index) => (
                 <div className="col-12 col-sm-6 col-xl-3" key={index}>
@@ -646,6 +472,7 @@ export default function UserAnalyticsDashboard() {
                               value={metric.value}
                               suffix={metric.suffix || ''}
                               className="fw-bold text-dark"
+                              transformTiming={{endDelay:6, duration:750, easing:'cubic-bezier(0.42, 0, 0.58, 1)'}}
                             />
                           </div>
                         </div>
@@ -663,14 +490,14 @@ export default function UserAnalyticsDashboard() {
                 <div className="col-12 col-xl-6">
                   <div className="card shadow-sm border-0 h-100">
                     <div className="card-header bg-transparent d-flex justify-content-between align-items-center py-3">
-                      <h3 className="card-title mb-0 fw-bold">User Signups Trend</h3>
+                      <h3 className="card-title mb-0 fw-semibold">User Signups Trend</h3>
                       <select
                         className="form-select form-select-sm w-auto"
                         value={selectedYear}
                         onChange={(e) => setSelectedYear(e.target.value)}
                       >
                         {years.map((year) => (
-                          <option key={year} value={year}>{year}</option>
+                          <option className='border-0' key={year} value={year}>{year}</option>
                         ))}
                       </select>
                     </div>
@@ -701,7 +528,7 @@ export default function UserAnalyticsDashboard() {
                 <div className="col-12 col-xl-6">
                   <div className="card shadow-sm border-0 h-100">
                     <div className="card-header bg-transparent py-3">
-                      <h3 className="card-title mb-0 fw-bold">Teacher Assignments</h3>
+                      <h3 className="card-title mb-0 fw-semibold">Teacher Assignments</h3>
                     </div>
                     <div className="card-body pt-0">
                       <div style={{ height: '300px' }}>
@@ -718,7 +545,7 @@ export default function UserAnalyticsDashboard() {
                 <div className="col-12 col-xl-4">
                   <div className="card shadow-sm border-0 h-100">
                     <div className="card-header bg-transparent py-3">
-                      <h3 className="card-title mb-0 fw-bold">Coupon Redemptions</h3>
+                      <h3 className="card-title mb-0 fw-semibold">Coupon Redemptions</h3>
                     </div>
                     <div className="card-body pt-0">
                       <div style={{ height: '300px' }}>
@@ -735,7 +562,7 @@ export default function UserAnalyticsDashboard() {
                 <div className="col-12 col-xl-8">
                   <div className="card shadow-sm border-0 h-100">
                     <div className="card-header bg-transparent py-3">
-                      <h3 className="card-title mb-0 fw-bold">School Distribution</h3>
+                      <h3 className="card-title mb-0 fw-semibold">School Distribution</h3>
                     </div>
                     <div className="card-body pt-0">
                       <div style={{ height: '300px' }}>
