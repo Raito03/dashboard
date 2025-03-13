@@ -536,9 +536,8 @@ export default function schoolDashboard() {
                                 </div>
                                 <div className="col-12 col-md-6 col-lg-3">
                                     <select className="form-select" value={selectedMissionAcceptance} onChange={(e) => setSelectedMissionAcceptance(e.target.value)} >
-                                        <option value="">Missions Approved/Requested</option>
+                                        <option value="">All Missions</option>
                                         <option value="accepted">Missions Approved</option>
-                                        <option value="requested">Missions Requested</option>
                                         <option value="rejected">Mission Rejected</option>
                                     </select>
                                 </div>
@@ -762,17 +761,8 @@ export default function schoolDashboard() {
                                                     <th>School ID</th>
                                                     <th>School Code</th>
                                                     <th>Registered At</th>
-                                                    <th>Mission ID</th>
                                                     <th>Total Requested</th>
                                                     <th>Total Accepted</th>
-                                                    <th>User Description</th>
-                                                    <th>User Comments</th>
-                                                    <th>Mission Approved At</th>
-                                                    <th>Mission Rejected At</th>
-                                                    <th>Mission Requested At</th>
-                                                    <th>Mission Type</th>
-                                                    <th>Mission Title</th>
-                                                    <th>Mission Description</th>
                                                 </tr>
                                             </thead>
                                             <tbody>
@@ -797,17 +787,8 @@ export default function schoolDashboard() {
                                                         <td>{row.school_id}</td>
                                                         <td>{row.school_code}</td>
                                                         <td>{row.registered_at}</td>
-                                                        <td>{row.la_mission_id}</td>
                                                         <td>{row.total_missions_requested || 0}</td>
                                                         <td>{row.total_missions_accepted || 0}</td>
-                                                        <td>{row.description}</td>
-                                                        <td>{row.comments}</td>
-                                                        <td>{row.approved_at}</td>
-                                                        <td>{row.rejected_at}</td>
-                                                        <td>{row.requested_at}</td>
-                                                        <td>{row.mission_type}</td>
-                                                        <td>{row.mission_title}</td>
-                                                        <td>{row.mission_description}</td>
                                                     </tr>
                                                 ))}
                                             </tbody>

@@ -283,12 +283,8 @@ def search():
             u.id, u.name, ls.name AS school_name, u.guardian_name, u.email, u.username, 
             u.mobile_no, u.dob, u.type AS user_type, u.grade, u.city, u.state, 
             u.address, u.earn_coins, u.heart_coins, u.brain_coins, u.school_id, u.school_code, u.created_at as registered_at, 
-            mc.la_mission_id, mc.description, mc.comments, mc.approved_at, mc.rejected_at, mc.created_at as requested_at,
-            m.type AS mission_type, m.title AS mission_title, m.description AS mission_description,
             ums.total_missions_requested, ums.total_missions_accepted
-        FROM lifeapp.la_mission_completes mc 
-        INNER JOIN lifeapp.users u ON u.id = mc.user_id 
-        INNER JOIN lifeapp.la_missions m ON m.id = mc.la_mission_id 
+        FROM lifeapp.users u
         INNER JOIN lifeapp.schools ls ON ls.id = u.school_id
         LEFT JOIN user_mission_stats ums ON ums.user_id = u.id
         WHERE u.type = 3 
@@ -318,11 +314,9 @@ def search():
             params.append(5)
     if mission_acceptance:
         if mission_acceptance == 'accepted':
-            sql += " AND mc.approved_at is not null"
-        elif mission_acceptance == 'rejected':
-            sql += " AND mc.rejected_at is not null"
-        else:
-            sql += " AND mc.approved_at is null and mc.rejected_at is null"
+            sql += " AND ums.total_missions_accepted > 0 "
+        else :
+            sql += " AND ums.total_missions_accepted = 0 "
     
     # Add filters for mission counts if provided
     if requested_count:
@@ -389,6 +383,99 @@ def fetch_coupon_redeem_list():
         sql += " WHERE u.name LIKE %s OR ls.name LIKE %s OR u.state LIKE %s OR u.city LIKE %s"
         params.extend([f"%{search}%", f"%{search}%", f"%{search}%", f"%{search}%"])
         
+    try:
+        connection = get_db_connection()
+        with connection.cursor() as cursor:
+            cursor.execute(sql, tuple(params))
+            result = cursor.fetchall()
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        connection.close()
+
+
+@app.route('/api/student_mission_search', methods=['POST'])
+def mission_search():
+    filters = request.get_json() or {}
+    mission_acceptance = filters.get('mission_acceptance')
+    assigned_by = filters.get('assigned_by')
+    from_date = filters.get('from_date')  # New filter: starting date
+    to_date = filters.get('to_date')      # New filter: ending date
+    
+    # Build the base query with the CTE, including mission count aggregations
+    sql = """
+            with cte as (
+                SELECT 
+                    m.id AS Mission_Id, 
+                    m.title AS Mission_Title, 
+                    CASE 
+                        WHEN u.name IS NULL THEN 'self' 
+                        WHEN u.type = 3 THEN 'self' 
+                        ELSE u.name 
+                    END AS Approved_By, 
+                    CASE 
+                        when mc.approved_at is not null then 'Approved'
+                        when mc.rejected_at is null then 'Requested'
+                        else 'Rejected'
+                    END as Status,
+                    mc.user_id AS Student_Id, 
+                    mc.created_at AS Requested_At, 
+                    mc.points AS Total_Points, 
+                    mc.timing AS Each_Mission_Timing 
+                FROM lifeapp.la_missions m 
+                LEFT JOIN lifeapp.la_mission_assigns lma ON m.id = lma.la_mission_id
+                LEFT JOIN lifeapp.users u ON u.id = lma.teacher_id 
+                LEFT JOIN lifeapp.la_mission_completes mc ON m.id = mc.la_mission_id
+                )
+            select 
+                cte.Mission_Id,
+                u.name as Student_Name,
+                u.school_id,
+                ls.name as School_Name,
+                cte.Mission_Title,
+                cte.Approved_By,
+                cte.Status,
+                cte.Student_Id,
+                cte.Requested_At,
+                cte.Total_Points,
+                cte.Each_Mission_Timing,
+                u.mobile_no,
+                u.dob,
+                u.grade,
+                u.city,
+                u.state,
+                u.address,
+                u.earn_coins,
+                u.heart_coins,
+                u.brain_coins
+            from cte inner join lifeapp.users u on cte.Student_id = u.id
+                    inner join lifeapp.schools ls on ls.id = u.school_id
+    """
+    params = []
+    
+    if mission_acceptance:
+        if mission_acceptance == 'Accepted':
+            sql += " AND cte.Status = 'Approved' "
+        elif mission_acceptance == 'Rejected':
+            sql += " AND cte.Status = 'Rejected' "
+        else:
+            sql += " AND cte.Status = 'Requested' "
+    if assigned_by:
+        if assigned_by == 'Teacher':
+            sql += " AND cte.Approved_By != 'self' "
+        else:
+            sql += " AND cte.Approved_By = 'self' "
+    # Add date range filters
+    if from_date:
+        sql += " AND cte.Requested_At >= %s"
+        params.append(from_date)
+    if to_date:
+        sql += " AND cte.Requested_At <= %s"
+        params.append(to_date)
+
+    sql += " ;"
+    
     try:
         connection = get_db_connection()
         with connection.cursor() as cursor:
