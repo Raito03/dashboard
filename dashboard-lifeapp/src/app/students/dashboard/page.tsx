@@ -28,47 +28,90 @@ interface SearchableDropdownProps {
     placeholder: string;
     value: string;
     onChange: (value: string) => void;
-    isLoading?: boolean; // Add this prop
+    isLoading?: boolean;
+    maxDisplayItems?: number;
 }
 
-function SearchableDropdown({ options, placeholder, value, onChange, isLoading = false }: SearchableDropdownProps) {
+function SearchableDropdown({
+    options,
+    placeholder,
+    value,
+    onChange,
+    isLoading = false,
+    maxDisplayItems = 100
+}: SearchableDropdownProps) {
     const [isOpen, setIsOpen] = useState(false);
     const [searchTerm, setSearchTerm] = useState("");
+    const [debouncedSearchTerm, setDebouncedSearchTerm] = useState("");
     const dropdownRef = useRef<HTMLDivElement>(null);
-
-    // ✅ Debounce input changes to optimize search performance
+    const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+    
+    // Implement debounce manually
     useEffect(() => {
-        const handler = setTimeout(() => {
-            setSearchTerm(searchTerm);
-        }, 300); // 300ms debounce delay
-
-        return () => clearTimeout(handler);
+        if (searchTimeoutRef.current) {
+            clearTimeout(searchTimeoutRef.current);
+        }
+        
+        searchTimeoutRef.current = setTimeout(() => {
+            setDebouncedSearchTerm(searchTerm);
+        }, 300);
+        
+        return () => {
+            if (searchTimeoutRef.current) {
+                clearTimeout(searchTimeoutRef.current);
+            }
+        };
     }, [searchTerm]);
 
-    // ✅ Use useMemo to avoid filtering on every render
+    // Virtual list approach for large datasets
     const filteredOptions = useMemo(() => {
-        return options.filter((option) =>
-            typeof option === "string" && option.toLowerCase().includes(searchTerm.toLowerCase())
-        );
-    }, [options, searchTerm]);
+        if (!debouncedSearchTerm.trim()) {
+            return options.slice(0, maxDisplayItems);
+        }
+        
+        const searchLower = debouncedSearchTerm.toLowerCase();
+        
+        // Use more efficient filtering for large datasets
+        return options
+            .filter(option => 
+                typeof option === "string" && 
+                option.toLowerCase().includes(searchLower)
+            )
+            .slice(0, maxDisplayItems);
+    }, [options, debouncedSearchTerm, maxDisplayItems]);
 
+    // Handle clicks outside the dropdown
     useEffect(() => {
         function handleClickOutside(event: MouseEvent) {
-            const target = event.target as HTMLElement;
-            if (dropdownRef.current && !dropdownRef.current.contains(target)) {
+            if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
                 setIsOpen(false);
             }
         }
-        document.addEventListener("mousedown", handleClickOutside);
-        return () => document.removeEventListener("mousedown", handleClickOutside);
-    }, []);
+        
+        if (isOpen) {
+            document.addEventListener("mousedown", handleClickOutside);
+        }
+        
+        return () => {
+            document.removeEventListener("mousedown", handleClickOutside);
+        };
+    }, [isOpen]);
 
+    const handleSelect = (option: string) => {
+        onChange(option);
+        setIsOpen(false);
+        setSearchTerm("");
+        setDebouncedSearchTerm("");
+    };
   
     return (
         <div className="relative" ref={dropdownRef}>
             <div
                 className="flex w-full cursor-pointer items-center justify-between rounded-md border border-gray-300 bg-white px-3 py-2 text-gray-900 focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500"
                 onClick={() => setIsOpen(!isOpen)}
+                role="combobox"
+                aria-expanded={isOpen}
+                aria-haspopup="listbox"
             >
                 <span className={value ? "text-gray-900" : "text-gray-500"}>
                     {isLoading ? "Loading..." : (value || placeholder)}
@@ -86,24 +129,33 @@ function SearchableDropdown({ options, placeholder, value, onChange, isLoading =
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
                             onClick={(e) => e.stopPropagation()}
+                            autoFocus
                         />
                     </div>
                     <div className="max-h-48 overflow-auto">
-                        {filteredOptions.map((option, index) => (
-                            <div
-                                key={index}
-                                className="cursor-pointer px-3 py-2 text-gray-900 hover:bg-purple-50"
-                                onClick={() => {
-                                    onChange(option);
-                                    setIsOpen(false);
-                                    setSearchTerm("");
-                                }}
-                            >
-                                {option}
-                            </div>
-                        ))}
-                        {filteredOptions.length === 0 && (
-                            <div className="px-3 py-2 text-gray-500">No results found</div>
+                        {isLoading ? (
+                            <div className="px-3 py-2 text-gray-500">Loading options...</div>
+                        ) : (
+                            <>
+                                {filteredOptions.length > 0 ? (
+                                    filteredOptions.map((option, index) => (
+                                        <div
+                                            key={index}
+                                            className="cursor-pointer px-3 py-2 text-gray-900 hover:bg-purple-50"
+                                            onClick={() => handleSelect(option)}
+                                        >
+                                            {option}
+                                        </div>
+                                    ))
+                                ) : (
+                                    <div className="px-3 py-2 text-gray-500">No results found</div>
+                                )}
+                                {options.length > maxDisplayItems && filteredOptions.length === maxDisplayItems && (
+                                    <div className="px-3 py-2 text-gray-500 text-xs">
+                                        Showing first {maxDisplayItems} results. Refine your search to see more.
+                                    </div>
+                                )}
+                            </>
                         )}
                     </div>
                 </div>
@@ -132,13 +184,30 @@ export default function schoolDashboard() {
     }, [])
 
     const [states, setStates] = useState<string[]>([]);
+    const [isStatesLoading, setIsStatesLoading] = useState(false);
+
     useEffect(() => {
         async function fetchStates() {
+            // Check cache first
+            const cachedStates = sessionStorage.getItem('stateList');
+            if (cachedStates) {
+                setStates(JSON.parse(cachedStates));
+                return;
+            }
+            
+            setIsStatesLoading(true);
             try {
-                const res = await fetch('http://127.0.0.1:5000/api/state_list')
+                const res = await fetch('http://127.0.0.1:5000/api/state_list');
                 const data: { state: string }[] = await res.json();
+                
                 if (Array.isArray(data)) {
-                    setStates(data.map((item) => (item.state ? item.state : "")));
+                    const stateList = data
+                        .map((item) => (item.state ? item.state.trim() : ""))
+                        .filter(state => state !== ""); // Filter out empty states
+                    
+                    setStates(stateList);
+                    // Cache the results
+                    sessionStorage.setItem('stateList', JSON.stringify(stateList));
                 } else {
                     console.error("Unexpected API response format:", data);
                     setStates([]);
@@ -146,43 +215,250 @@ export default function schoolDashboard() {
             } catch (error) {
                 console.error("Error fetching state list:", error);
                 setStates([]);
-            }
-            }
-            fetchStates()
-        }, []
-    )
-    
-    const [city, setCity] = useState<string[]>([])
-    const [selectedCity, setSelectedCity] = useState("")
-    const [isCityLoading, setIsCityLoading] = useState(false)
-    
-    // Fetch cities properly using useEffect
-    useEffect(() => {
-        async function fetchCity() {
-            setIsCityLoading(true)
-            try {
-                const res = await fetch('http://127.0.0.1:5000/api/city_list')
-                const data: { city: string }[] = await res.json();
-                if (Array.isArray(data)) {
-                    setCity(data.map((item) => item.city));
-                } else {
-                    console.error("Unexpected API response format:", data);
-                    setCity([]);
-                }
-            } catch (error) {
-                console.error("Error fetching city list:", error);
-                setCity([]);
             } finally {
-                setIsCityLoading(false)
+                setIsStatesLoading(false);
             }
         }
         
-        fetchCity()
-    }, []) 
- 
+        fetchStates();
+    }, []);
+
+    // For city fetching - optimized but independent of state
+    const [cities, setCities] = useState<string[]>([]);
+    const [isCitiesLoading, setIsCitiesLoading] = useState(false);
+    const [selectedCity, setSelectedCity] = useState("");
+    useEffect(() => {
+        async function fetchCities() {
+            // Check cache first
+            const cachedSchools = sessionStorage.getItem('cityList');
+            if (cachedSchools) {
+                setCities(JSON.parse(cachedSchools));
+                return;
+            }
+            
+            setIsCitiesLoading(true);
+            try {
+                const res = await fetch('http://127.0.0.1:5000/api/city_list');
+                const data: { city: string }[] = await res.json();
+                
+                if (Array.isArray(data)) {
+                    // Process data in chunks to avoid UI freezing with large datasets
+                    const processCityBatch = (startIndex: number, batchSize: number) => {
+                        const endIndex = Math.min(startIndex + batchSize, data.length);
+                        const batch = data
+                            .slice(startIndex, endIndex)
+                            .map(item => item.city ? item.city.trim() : "")
+                            .filter(city => city !== "");
+                        
+                        setCities(prevCities => [...prevCities, ...batch]);
+                        
+                        if (endIndex < data.length) {
+                            // Process next batch in the next tick to avoid blocking the UI
+                            setTimeout(() => processCityBatch(endIndex, batchSize), 0);
+                        } else {
+                            // All done, cache the results
+                            sessionStorage.setItem('cityList', JSON.stringify([...cities, ...batch]));
+                            setIsCitiesLoading(false);
+                        }
+                    };
+                    
+                    // Start processing in batches (100 items at a time)
+                    setCities([]); // Reset before starting
+                    processCityBatch(0, 100);
+                } else {
+                    console.error("Unexpected API response format:", data);
+                    setCities([]);
+                    setIsCitiesLoading(false);
+                }
+            } catch (error) {
+                console.error("Error fetching city list:", error);
+                setCities([]);
+                setIsCitiesLoading(false);
+            }
+        }
+        
+        fetchCities();
+    }, []);
  
     
-   
+
+
+    // For city fetching - optimized but independent of state
+    const [schools, setSchools] = useState<string[]>([]);
+    const [isSchoolsLoading, setIsSchoolsLoading] = useState(false);
+    const [selectedSchools, setSelectedSchools] = useState("");
+    useEffect(() => {
+        async function fetchSchools() {
+            // Check cache first
+            const cachedSchools = sessionStorage.getItem('SchoolList');
+            if (cachedSchools) {
+                setSchools(JSON.parse(cachedSchools));
+                return;
+            }
+            
+            setIsSchoolsLoading(true);
+            try {
+                const res = await fetch('http://127.0.0.1:5000/api/school_list');
+                const data: { name: string }[] = await res.json();
+                
+                if (Array.isArray(data)) {
+                    // Process data in chunks to avoid UI freezing with large datasets
+                    const processSchoolsBatch = (startIndex: number, batchSize: number) => {
+                        const endIndex = Math.min(startIndex + batchSize, data.length);
+                        const batch = data
+                            .slice(startIndex, endIndex)
+                            .map(item => item.name ? item.name.trim() : "")
+                            .filter(name => name !== "");
+                        
+                        setSchools(prevSchools => [...prevSchools, ...batch]);
+                        
+                        if (endIndex < data.length) {
+                            // Process next batch in the next tick to avoid blocking the UI
+                            setTimeout(() => processSchoolsBatch(endIndex, batchSize), 0);
+                        } else {
+                            // All done, cache the results
+                            sessionStorage.setItem('SchoolList', JSON.stringify([...schools, ...batch]));
+                            setIsSchoolsLoading(false);
+                        }
+                    };
+                    
+                    // Start processing in batches (100 items at a time)
+                    setSchools([]); // Reset before starting
+                    processSchoolsBatch(0, 100);
+                } else {
+                    console.error("Unexpected API response format:", data);
+                    setSchools([]);
+                    setIsSchoolsLoading(false);
+                }
+            } catch (error) {
+                console.error("Error fetching School list:", error);
+                setSchools([]);
+                setIsSchoolsLoading(false);
+            }
+        }
+        
+        fetchSchools();
+    }, []);
+    
+
+
+
+    const [selectedGrade, setSelectedGrade] = useState("");
+    const [selectedMissionType, setSelectedMissionType] = useState("");
+    const [selectedMissionAcceptance, setSelectedMissionAcceptance] = useState("")
+    const [selectedMissionRequestedNo, setSelectedMissionRequestedNo] = useState("")
+    const [selectedMissionAcceptedNo, setSelectedMissionAcceptedNo] =useState("")
+    const [selectedEarnCoins, setSelectedEarnCoins] = useState("");
+    const [selectedFromDate, setSelectedFromDate] = useState(""); // New state for From Date
+    const [selectedToDate, setSelectedToDate] = useState("");     // New state for To Date
+    const [tableData, setTableData] = useState<any[]>([]);
+    const [currentPage, setCurrentPage] = useState<number>(0);
+    const rowsPerPage = 50;
+    const [isTableLoading, setIsTableLoading] = useState(false);
+    // Handler for search button
+    const handleSearch = async () => {
+        const filters = {
+            state: selectedState,
+            school: selectedSchools,
+            city: selectedCity,
+            grade: selectedGrade,
+            mission_type: selectedMissionType,
+            mission_acceptance: selectedMissionAcceptance,
+            mission_requested_no: selectedMissionRequestedNo, // Add these filters
+            mission_accepted_no: selectedMissionAcceptedNo,    // Add these filters
+            earn_coins: selectedEarnCoins, // Add this line
+            from_date: selectedFromDate, // Include the From Date filter
+            to_date: selectedToDate      // Include the To Date filter
+        };
+
+        setIsTableLoading(true); // Set loading to true when search starts
+
+        try {
+            const res = await fetch('http://127.0.0.1:5000/api/student_dashboard_search', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(filters)
+            });
+            const data = await res.json();
+            setTableData(data);
+            setCurrentPage(0); // Reset to first page on new search
+        } catch (error) {
+            console.error("Search error:", error);
+        } finally {
+            setIsTableLoading(false); // Set loading to false when search completes (success or error)
+        }
+    };
+
+    // Determine paginated data
+    const paginatedData = tableData.slice(currentPage * rowsPerPage, (currentPage + 1) * rowsPerPage);
+
+
+    const handleClear = () => {
+        setSelectedState("");
+        setSelectedCity("");
+        setSelectedSchools("");
+        setSelectedGrade("");
+        setSelectedMissionType("");
+        setSelectedMissionAcceptance("");
+        setSelectedMissionAcceptedNo("");
+        setSelectedMissionRequestedNo("");
+        setSelectedEarnCoins("");
+        setSelectedFromDate(""); // Clear the From Date
+        setSelectedToDate("");   // Clear the To Date
+        // Clear other filters...
+        setTableData([]);
+    };
+
+    // Add this function in your schoolDashboard component before the return statement
+
+    const exportToCSV = () => {
+        // Return early if there's no data to export
+        if (tableData.length === 0) {
+        alert("No data to export. Please perform a search first.");
+        return;
+        }
+    
+        try {
+        // Get all the headers (keys) from the first data row
+        const headers = Object.keys(tableData[0]);
+        
+        // Create CSV header row
+        let csvContent = headers.join(',') + '\n';
+        
+        // Add data rows
+        tableData.forEach(row => {
+            const values = headers.map(header => {
+            const cellValue = row[header] === null || row[header] === undefined ? '' : row[header];
+            
+            // Handle values that contain commas, quotes, or newlines
+            const escapedValue = String(cellValue).replace(/"/g, '""');
+            
+            // Wrap in quotes to handle special characters
+            return `"${escapedValue}"`;
+            });
+            
+            csvContent += values.join(',') + '\n';
+        });
+        
+        // Create a blob and download link
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        
+        // Create a temporary link element and trigger the download
+        const link = document.createElement('a');
+        link.setAttribute('href', url);
+        link.setAttribute('download', `student_data_export_${new Date().toISOString().slice(0,10)}.csv`);
+        link.style.visibility = 'hidden';
+        
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        } catch (error) {
+        console.error("Error exporting CSV:", error);
+        alert("An error occurred while exporting data. Please try again.");
+        }
+    };
+    
     return(
         <div className={`page bg-light ${poppins.variable} font-sans`}>
             <Sidebar />
@@ -251,29 +527,40 @@ export default function schoolDashboard() {
                             <div className="row g-3">
                                 {/* Dropdowns Row 1 */}
                                 <div className="col-12 col-md-6 col-lg-3">
-                                    <select className="form-select">
-                                        <option value="">All Missions</option>
-                                        <option value="mission1">Mission 1</option>
-                                        <option value="mission2">Mission 2</option>
-                                        <option value="mission3">Mission 3</option>
+                                    <select className="form-select" value={selectedMissionType} onChange={(e) => setSelectedMissionType(e.target.value)}>
+                                        <option value="">All Missions Types</option>
+                                        <option value="Mission">Mission</option>
+                                        <option value="Jigyasa">Jigyasa</option>
+                                        <option value="Pragya">Pragya</option>
                                     </select>
                                 </div>
                                 <div className="col-12 col-md-6 col-lg-3">
-                                    <select className="form-select">
-                                        <option value="">Select School</option>
-                                        <option value="school1">School 1</option>
-                                        <option value="school2">School 2</option>
-                                        <option value="school3">School 3</option>
+                                    <select className="form-select" value={selectedMissionAcceptance} onChange={(e) => setSelectedMissionAcceptance(e.target.value)} >
+                                        <option value="">Missions Approved/Requested</option>
+                                        <option value="accepted">Missions Approved</option>
+                                        <option value="requested">Missions Requested</option>
+                                        <option value="rejected">Mission Rejected</option>
                                     </select>
                                 </div>
                                 <div className="col-12 col-md-6 col-lg-3">
-                                    <select className="form-select">
+                                    <SearchableDropdown
+                                        options={schools}
+                                        placeholder="Select School"
+                                        value={selectedSchools}
+                                        onChange={setSelectedSchools}
+                                        isLoading={isSchoolsLoading}
+                                        maxDisplayItems={200}
+                                        
+                                    />
+                                </div>
+                                <div className="col-12 col-md-6 col-lg-3">
+                                    <select className="form-select" value={selectedGrade} onChange={(e) => setSelectedGrade(e.target.value)}>
                                         <option value="">Select Grade</option>
-                                        <option value="1">Grade 1</option>
-                                        <option value="2">Grade 2</option>
-                                        <option value="3">Grade 3</option>
-                                        <option value="4">Grade 4</option>
-                                        <option value="5">Grade 5</option>
+                                        {Array.from({ length: 12 }, (_, i) => i + 1).map(grade => (
+                                            <option key={grade} value={grade.toString()}>
+                                                Grade {grade}
+                                            </option>
+                                        ))}
                                     </select>
                                 </div>
 
@@ -283,6 +570,8 @@ export default function schoolDashboard() {
                                         placeholder="Select State"
                                         value={selectedState}
                                         onChange={setSelectedState}
+                                        isLoading={isStatesLoading}
+                                        maxDisplayItems={200}
                                         
                                     />
                                 </div>
@@ -290,31 +579,38 @@ export default function schoolDashboard() {
                                 {/* Dropdowns Row 2 */}
                                 <div className="col-12 col-md-6 col-lg-3">
                                     <SearchableDropdown
-                                        options={city}
+                                        options={cities}
                                         placeholder="Select city"
                                         value={selectedCity}
                                         onChange={setSelectedCity}
-                                        isLoading={isCityLoading}
+                                        isLoading={isCitiesLoading}
+                                        maxDisplayItems={200}
                                     />
                                 </div>
                                 <div className="col-12 col-md-6 col-lg-3">
-                                    <select className="form-select">
+                                    <select className="form-select" value={selectedMissionRequestedNo} onChange={(e) => setSelectedMissionRequestedNo(e.target.value)}>
                                         <option value="">Select Mission Requested</option>
-                                        <option value="requested1">Requested 1</option>
-                                        <option value="requested2">Requested 2</option>
-                                        <option value="requested3">Requested 3</option>
+                                        {Array.from({ length: 20 }, (_, i) => i + 1).map(requesteds => (
+                                            <option key={requesteds} value={requesteds.toString()}>
+                                                Requests made - {requesteds}
+                                            </option>
+                                        ))}
                                     </select>
                                 </div>
                                 <div className="col-12 col-md-6 col-lg-3">
-                                    <select className="form-select">
+                                    <select className="form-select" value={selectedMissionAcceptedNo} onChange={(e) => setSelectedMissionAcceptedNo(e.target.value)}>
                                         <option value="">Select Mission Approved</option>
-                                        <option value="approved1">Approved 1</option>
-                                        <option value="approved2">Approved 2</option>
-                                        <option value="approved3">Approved 3</option>
+                                        {Array.from({ length: 20 }, (_, i) => i + 1).map(approves => (
+                                            <option key={approves} value={approves.toString()}>
+                                                Approves made - {approves}
+                                            </option>
+                                        ))}
                                     </select>
                                 </div>
                                 <div className="col-12 col-md-6 col-lg-3">
-                                    <select className="form-select">
+                                    <select className="form-select" value={selectedEarnCoins} 
+                                        onChange={(e) => setSelectedEarnCoins(e.target.value)}
+                                    >
                                         <option value="">Select Earn Coins</option>
                                         <option value="0-100">0-100 Coins</option>
                                         <option value="101-500">101-500 Coins</option>
@@ -324,19 +620,21 @@ export default function schoolDashboard() {
                                 </div>
 
                                 {/* Dropdowns & Inputs Row 3 */}
-                                <div className="col-12 col-md-6 col-lg-3">
+                                {/* <div className="col-12 col-md-6 col-lg-3">
                                     <select className="form-select">
                                         <option value="">Select User Type</option>
                                         <option value="student">Student</option>
                                         <option value="teacher">Teacher</option>
                                         <option value="admin">Admin</option>
                                     </select>
-                                </div>
+                                </div> */}
                                 <div className="col-12 col-md-6 col-lg-3">
                                     <input
                                         type="date"
                                         placeholder="From Date"
                                         className="form-control"
+                                        value={selectedFromDate}
+                                        onChange={(e) => setSelectedFromDate(e.target.value)}
                                     />
                                 </div>
                                 <div className="col-12 col-md-6 col-lg-3">
@@ -344,6 +642,8 @@ export default function schoolDashboard() {
                                         type="date"
                                         placeholder="To Date"
                                         className="form-control"
+                                        value={selectedToDate}
+                                        onChange={(e) => setSelectedToDate(e.target.value)}
                                     />
                                 </div>
                                 <div className="col-12 col-md-6 col-lg-3">
@@ -387,12 +687,12 @@ export default function schoolDashboard() {
 
                             {/* Action Buttons */}
                             <div className="d-flex flex-wrap gap-2 mt-4">
-                                <button className="btn btn-success d-inline-flex align-items-center">
+                                <button className="btn btn-success d-inline-flex align-items-center" onClick={handleSearch}>
                                     <Search className="me-2" size={16} />
                                     Search
                                 </button>
                                 
-                                <button className="btn btn-warning d-inline-flex align-items-center text-dark">
+                                <button className="btn btn-warning d-inline-flex align-items-center text-dark" onClick={handleClear}>
                                     <XCircle className="me-2" size={16} />
                                     Clear
                                 </button>
@@ -402,7 +702,7 @@ export default function schoolDashboard() {
 
                     {/* Action Buttons */}
                     <div className="d-flex flex-wrap gap-2">
-                        <button className="btn btn-purple d-inline-flex align-items-center text-white" style={{ backgroundColor: '#6f42c1' }}>
+                        <button className="btn btn-purple d-inline-flex align-items-center text-white" style={{ backgroundColor: '#6f42c1' }} onClick={exportToCSV}>
                             <Download className="me-2" size={16} />
                             Export
                         </button>
@@ -417,6 +717,129 @@ export default function schoolDashboard() {
                             View Graph
                         </button>
                     </div>
+                    
+
+                    
+                    {/* Paginated Results Table */}
+                    <div className="card shadow-sm border-0 mt-2">
+                        <div className="card-body overflow-x-scroll">
+                            <h5 className="card-title mb-4">Results</h5>
+                            {isTableLoading ? (
+                                    <div className="text-center p-5">
+                                        <div className="spinner-border text-purple" role="status" style={{ width: "3rem", height: "3rem" }}>
+                                            <span className="visually-hidden">Loading...</span>
+                                        </div>
+                                        <p className="mt-3 text-muted">Loading data, please wait...</p>
+                                    </div>
+                                ) : tableData.length === 0 ? (
+                                    <div className="text-center p-5">
+                                        <div className="text-muted justify-items-center">
+                                            <IconSearch size={48} className="mb-3 opacity-50 " />
+                                            <p>No data to display. Please use the search filters above and click Search.</p>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <>
+                                        <table className="table table-striped">
+                                            <thead>
+                                                <tr>
+                                                    <th>ID</th>
+                                                    <th>Name</th>
+                                                    <th>School</th>
+                                                    <th>Guardian</th>
+                                                    <th>Email</th>
+                                                    <th>Username</th>
+                                                    <th>Mobile</th>
+                                                    <th>DOB</th>
+                                                    <th>User Type</th>
+                                                    <th>Grade</th>
+                                                    <th>City</th>
+                                                    <th>State</th>
+                                                    <th>Address</th>
+                                                    <th>Earn Coins</th>
+                                                    <th>Heart Coins</th>
+                                                    <th>Brain Coins</th>
+                                                    <th>School ID</th>
+                                                    <th>School Code</th>
+                                                    <th>Registered At</th>
+                                                    <th>Mission ID</th>
+                                                    <th>Total Requested</th>
+                                                    <th>Total Accepted</th>
+                                                    <th>User Description</th>
+                                                    <th>User Comments</th>
+                                                    <th>Mission Approved At</th>
+                                                    <th>Mission Rejected At</th>
+                                                    <th>Mission Requested At</th>
+                                                    <th>Mission Type</th>
+                                                    <th>Mission Title</th>
+                                                    <th>Mission Description</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {paginatedData.map((row, index) => (
+                                                    <tr key={index}>
+                                                        <td>{row.id}</td>
+                                                        <td>{row.name}</td>
+                                                        <td>{row.school_name}</td>
+                                                        <td>{row.guardian_name}</td>
+                                                        <td>{row.email}</td>
+                                                        <td>{row.username}</td>
+                                                        <td>{row.mobile_no}</td>
+                                                        <td>{row.dob}</td>
+                                                        <td>{row.user_type}</td>
+                                                        <td>{row.grade}</td>
+                                                        <td>{row.city}</td>
+                                                        <td>{row.state}</td>
+                                                        <td>{row.address}</td>
+                                                        <td>{row.earn_coins}</td>
+                                                        <td>{row.heart_coins}</td>
+                                                        <td>{row.brain_coins}</td>
+                                                        <td>{row.school_id}</td>
+                                                        <td>{row.school_code}</td>
+                                                        <td>{row.registered_at}</td>
+                                                        <td>{row.la_mission_id}</td>
+                                                        <td>{row.total_missions_requested || 0}</td>
+                                                        <td>{row.total_missions_accepted || 0}</td>
+                                                        <td>{row.description}</td>
+                                                        <td>{row.comments}</td>
+                                                        <td>{row.approved_at}</td>
+                                                        <td>{row.rejected_at}</td>
+                                                        <td>{row.requested_at}</td>
+                                                        <td>{row.mission_type}</td>
+                                                        <td>{row.mission_title}</td>
+                                                        <td>{row.mission_description}</td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                        
+                                        {/* Pagination Controls */}
+                                        <div className="d-flex justify-content-between mt-3">
+                                            <button 
+                                                className="btn btn-secondary"
+                                                onClick={() => setCurrentPage(prev => Math.max(prev - 1, 0))}
+                                                disabled={currentPage === 0}
+                                            >
+                                                Previous
+                                            </button>
+                                            <div className="d-flex align-items-center">
+                                                <span className="mx-2">
+                                                    Page {currentPage + 1} of {Math.ceil(tableData.length / rowsPerPage) || 1}
+                                                </span>
+                                            </div>
+                                            <button 
+                                                className="btn btn-secondary"
+                                                onClick={() => setCurrentPage(prev => (prev + 1) * rowsPerPage < tableData.length ? prev + 1 : prev)}
+                                                disabled={(currentPage + 1) * rowsPerPage >= tableData.length}
+                                            >
+                                                Next
+                                            </button>
+                                        </div>
+                                    </>
+                                )}
+                        </div>
+                    </div>
+
 
                 </div>
             </div>
@@ -425,3 +848,7 @@ export default function schoolDashboard() {
         </div>
     )
 } 
+
+function useDebounce(arg0: () => void, arg1: number, arg2: string[]) {
+    throw new Error('Function not implemented.');
+}

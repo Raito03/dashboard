@@ -26,7 +26,7 @@ export const SIDENAV_ITEMS: SideNavItem[] = [
     subMenuItems: [
       { title: 'Dashboard', path: '/students/dashboard' },
       { title: 'Mission', path: '/students/mission' },
-      { title: 'Coins', path: '/students/coins' }
+      { title: 'Coupons Redeemed', path: '/students/coupons_redeemed' }
     ]
   },
   {
