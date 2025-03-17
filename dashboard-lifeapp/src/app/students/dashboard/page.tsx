@@ -43,10 +43,12 @@ function SearchableDropdown({
     const [isOpen, setIsOpen] = useState(false);
     const [searchTerm, setSearchTerm] = useState("");
     const [debouncedSearchTerm, setDebouncedSearchTerm] = useState("");
+    const [displayedItems, setDisplayedItems] = useState(maxDisplayItems);
     const dropdownRef = useRef<HTMLDivElement>(null);
     const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+    const scrollContainerRef = useRef<HTMLDivElement>(null);
     
-    // Implement debounce manually
+    // Implement debounce for search
     useEffect(() => {
         if (searchTimeoutRef.current) {
             clearTimeout(searchTimeoutRef.current);
@@ -54,6 +56,8 @@ function SearchableDropdown({
         
         searchTimeoutRef.current = setTimeout(() => {
             setDebouncedSearchTerm(searchTerm);
+            // Reset displayed items when search changes
+            setDisplayedItems(maxDisplayItems);
         }, 300);
         
         return () => {
@@ -61,24 +65,48 @@ function SearchableDropdown({
                 clearTimeout(searchTimeoutRef.current);
             }
         };
-    }, [searchTerm]);
+    }, [searchTerm, maxDisplayItems]);
 
-    // Virtual list approach for large datasets
+    // Get filtered options based on search term
     const filteredOptions = useMemo(() => {
         if (!debouncedSearchTerm.trim()) {
-            return options.slice(0, maxDisplayItems);
+            return options;
         }
         
         const searchLower = debouncedSearchTerm.toLowerCase();
         
-        // Use more efficient filtering for large datasets
-        return options
-            .filter(option => 
-                typeof option === "string" && 
-                option.toLowerCase().includes(searchLower)
-            )
-            .slice(0, maxDisplayItems);
-    }, [options, debouncedSearchTerm, maxDisplayItems]);
+        return options.filter(option => 
+            typeof option === "string" && 
+            option.toLowerCase().includes(searchLower)
+        );
+    }, [options, debouncedSearchTerm]);
+
+    // Handle scroll event to implement infinite scrolling
+    const handleScroll = useCallback(() => {
+        if (!scrollContainerRef.current) return;
+        
+        const { scrollTop, scrollHeight, clientHeight } = scrollContainerRef.current;
+        const scrollPosition = scrollTop + clientHeight;
+        
+        // If user has scrolled to near bottom, load more items
+        if (scrollHeight - scrollPosition < 50 && displayedItems < filteredOptions.length) {
+            setDisplayedItems(prev => Math.min(prev + maxDisplayItems, filteredOptions.length));
+        }
+    }, [displayedItems, filteredOptions.length, maxDisplayItems]);
+
+    // Add scroll event listener
+    useEffect(() => {
+        const scrollContainer = scrollContainerRef.current;
+        if (scrollContainer) {
+            scrollContainer.addEventListener('scroll', handleScroll);
+        }
+        
+        return () => {
+            if (scrollContainer) {
+                scrollContainer.removeEventListener('scroll', handleScroll);
+            }
+        };
+    }, [handleScroll]);
 
     // Handle clicks outside the dropdown
     useEffect(() => {
@@ -102,7 +130,16 @@ function SearchableDropdown({
         setIsOpen(false);
         setSearchTerm("");
         setDebouncedSearchTerm("");
+        setDisplayedItems(maxDisplayItems);
     };
+
+    // The options to display - limited by displayedItems count
+    const visibleOptions = useMemo(() => {
+        return filteredOptions.slice(0, displayedItems);
+    }, [filteredOptions, displayedItems]);
+
+    // Calculate if there are more items to load
+    const hasMoreItems = filteredOptions.length > displayedItems;
   
     return (
         <div className="relative" ref={dropdownRef}>
@@ -132,13 +169,16 @@ function SearchableDropdown({
                             autoFocus
                         />
                     </div>
-                    <div className="max-h-48 overflow-auto">
+                    <div 
+                        className="max-h-48 overflow-auto"
+                        ref={scrollContainerRef}
+                    >
                         {isLoading ? (
                             <div className="px-3 py-2 text-gray-500">Loading options...</div>
                         ) : (
                             <>
-                                {filteredOptions.length > 0 ? (
-                                    filteredOptions.map((option, index) => (
+                                {visibleOptions.length > 0 ? (
+                                    visibleOptions.map((option, index) => (
                                         <div
                                             key={index}
                                             className="cursor-pointer px-3 py-2 text-gray-900 hover:bg-purple-50"
@@ -150,9 +190,19 @@ function SearchableDropdown({
                                 ) : (
                                     <div className="px-3 py-2 text-gray-500">No results found</div>
                                 )}
-                                {options.length > maxDisplayItems && filteredOptions.length === maxDisplayItems && (
-                                    <div className="px-3 py-2 text-gray-500 text-xs">
-                                        Showing first {maxDisplayItems} results. Refine your search to see more.
+                                
+                                {/* Show loading more indicator */}
+                                {hasMoreItems && (
+                                    <div className="flex items-center justify-center px-3 py-2 text-gray-500 border-t border-gray-100 bg-gray-50">
+                                        <div className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-gray-300 border-t-purple-500"></div>
+                                        <span>Loading more... ({visibleOptions.length} of {filteredOptions.length})</span>
+                                    </div>
+                                )}
+                                
+                                {/* Show total count if filtered */}
+                                {debouncedSearchTerm && filteredOptions.length > 0 && (
+                                    <div className="px-3 py-2 text-xs text-center text-gray-500 bg-gray-50 border-t border-gray-100">
+                                        Found {filteredOptions.length} matching results
                                     </div>
                                 )}
                             </>
@@ -292,8 +342,16 @@ export default function schoolDashboard() {
             // Check cache first
             const cachedSchools = sessionStorage.getItem('SchoolList');
             if (cachedSchools) {
-                setSchools(JSON.parse(cachedSchools));
-                return;
+                try {
+                    const parsed = JSON.parse(cachedSchools);
+                    if (Array.isArray(parsed) && parsed.length > 0) {
+                        setSchools(parsed);
+                        return;
+                    }
+                } catch (err) {
+                    console.error("Error parsing cached schools:", err);
+                    // Continue to fetch if cache parse fails
+                }
             }
             
             setIsSchoolsLoading(true);
@@ -302,28 +360,34 @@ export default function schoolDashboard() {
                 const data: { name: string }[] = await res.json();
                 
                 if (Array.isArray(data)) {
+                    // Create a reference to collect all processed schools
+                    let allProcessedSchools: string[] = [];
+                    
                     // Process data in chunks to avoid UI freezing with large datasets
-                    const processSchoolsBatch = (startIndex: number, batchSize: number) => {
+                    const processSchoolsBatch = (startIndex: number, batchSize: number): void => {
                         const endIndex = Math.min(startIndex + batchSize, data.length);
                         const batch = data
                             .slice(startIndex, endIndex)
                             .map(item => item.name ? item.name.trim() : "")
                             .filter(name => name !== "");
                         
-                        setSchools(prevSchools => [...prevSchools, ...batch]);
+                        // Add to our complete collection
+                        allProcessedSchools = [...allProcessedSchools, ...batch];
+                        
+                        // Update the state with what we've processed so far
+                        setSchools(allProcessedSchools);
                         
                         if (endIndex < data.length) {
                             // Process next batch in the next tick to avoid blocking the UI
                             setTimeout(() => processSchoolsBatch(endIndex, batchSize), 0);
                         } else {
-                            // All done, cache the results
-                            sessionStorage.setItem('SchoolList', JSON.stringify([...schools, ...batch]));
+                            // All done, cache the results using our complete reference
+                            sessionStorage.setItem('SchoolList', JSON.stringify(allProcessedSchools));
                             setIsSchoolsLoading(false);
                         }
                     };
                     
                     // Start processing in batches (100 items at a time)
-                    setSchools([]); // Reset before starting
                     processSchoolsBatch(0, 100);
                 } else {
                     console.error("Unexpected API response format:", data);
@@ -339,7 +403,6 @@ export default function schoolDashboard() {
         
         fetchSchools();
     }, []);
-    
 
 
 

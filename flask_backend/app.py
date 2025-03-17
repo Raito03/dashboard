@@ -201,7 +201,7 @@ def get_school_list():
         connection = get_db_connection()
         with connection.cursor() as cursor:
             sql = """
-                select distinct(name) from lifeapp.schools WHERE name REGEXP '^[A-Za-z]' and code != 'null';
+                select distinct(name) from lifeapp.schools;
             """
             cursor.execute(sql)
             result = cursor.fetchall()
@@ -486,6 +486,122 @@ def mission_search():
         return jsonify({'error': str(e)}), 500
     finally:
         connection.close()
+
+
+@app.route('/api/teacher_dashboard_search', methods=['POST'])
+def fetch_teacher_dashboard():
+    filters = request.get_json() or {}
+    state = filters.get('state')
+    city = filters.get('city')
+    school_code = filters.get('school_code')  # Make sure this matches frontend key
+    is_life_lab = filters.get('is_life_lab')
+
+    # Start with base SQL
+    sql = """
+        SELECT 
+            u.name, u.email,
+            u.mobile_no, u.state, 
+            u.city, u.school_id, 
+            CASE 
+                WHEN ls.is_life_lab = 1 
+                    THEN 'Yes' 
+                ELSE 'No' 
+            END AS is_life_lab 
+        FROM lifeapp.users u
+        INNER JOIN lifeapp.schools ls ON ls.id = u.school_id 
+        WHERE u.type = 5
+    """
+    params = []
+    
+    # Add conditions based on filters
+    if state and state.strip():
+        sql += " AND u.state = %s"
+        params.append(state)
+    if school_code and school_code.strip():
+        sql += " AND u.school_id = %s"
+        params.append(school_code)
+    if city and city.strip():
+        sql += " AND u.city = %s"
+        params.append(city)
+    if is_life_lab:
+        if is_life_lab == "Yes":
+            sql += " AND ls.is_life_lab = 1"
+        elif is_life_lab == "No":
+            sql += " AND ls.is_life_lab = 0"
+
+    # Print the SQL for debugging (remove in production)
+    # print("SQL Query:", sql)
+    # print("Parameters:", params)
+    
+    try:
+        connection = get_db_connection()
+        with connection.cursor() as cursor:
+            cursor.execute(sql, tuple(params))
+            result = cursor.fetchall()
+            
+            # Add debug output
+            # print("Query returned", len(result), "rows")
+            
+            # Always return a JSON array, even if empty
+            return jsonify(result if result else [])
+    except Exception as e:
+        print("Error in teacher_dashboard_search:", str(e))
+        return jsonify({'error': str(e)}), 500
+    finally:
+        connection.close()
+
+
+@app.route('/api/teacher_concept_cartoons', methods=['POST'])
+def fetch_teacher_concept_cartoons():
+    filters = request.get_json() or {}
+    subject = filters.get('subject')
+    status = filters.get('status')
+
+    # Start with base SQL without WHERE clause
+    sql = """
+            SELECT 
+                CASE 
+                    WHEN lacc.la_subject_id = 1 
+                        THEN 'Science'
+                    WHEN lacc.la_subject_id = 2
+                        THEN 'Maths' 
+                END AS la_subject,
+                lacc.la_level_id, lacc.title, lacc.document,
+                CASE
+                    WHEN lacc.status = 1
+                        THEN 'Published'
+                    ELSE 'Drafted'
+                END AS status
+            FROM lifeapp.la_concept_cartoons lacc
+        """
+    params = []
+    
+    # Add WHERE clause only if filters are provided
+    conditions = []
+    
+    if subject and subject.strip():
+        conditions.append("(CASE WHEN lacc.la_subject_id = 1 THEN 'Science' WHEN lacc.la_subject_id = 2 THEN 'Maths' END) = %s")
+        params.append(subject)
+    if status and status.strip():
+        conditions.append("(CASE WHEN lacc.status = 1 THEN 'Published' ELSE 'Drafted' END) = %s")
+        params.append(status)
+    
+    # Add WHERE clause if there are conditions
+    if conditions:
+        sql += " WHERE " + " AND ".join(conditions)
+
+    try:
+        connection = get_db_connection()
+        with connection.cursor() as cursor:
+            cursor.execute(sql, tuple(params))
+            result = cursor.fetchall()
+            return jsonify(result if result else [])
+    except Exception as e:
+        print("Error in teacher_concept_cartoons:", str(e))
+        return jsonify({'error': str(e)}), 500
+    finally:
+        connection.close()
+
 
 if __name__ == '__main__':
     app.run(debug=True)
