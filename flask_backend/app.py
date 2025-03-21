@@ -7,14 +7,21 @@ import pymysql.cursors
 app = Flask(__name__)
 CORS(app)  # Enable CORS
 
+import os
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
+
 def get_db_connection():
     return pymysql.connect(
-        host='localhost',
-        user='root',
-        password='Diamond0606***',
-        database='lifeapp',
+        host=os.getenv('DB_HOST', 'localhost'),
+        user=os.getenv('DB_USER', 'root'),
+        password=os.getenv('DB_PASSWORD', ''),
+        database=os.getenv('DB_NAME', 'lifeapp'),
         cursorclass=pymysql.cursors.DictCursor
     )
+
 
 @app.route('/api/user-signups', methods=['GET'])
 def get_user_signups():
@@ -126,8 +133,9 @@ def get_approval_rate():
 
 @app.route('/api/count-school-state', methods= ['GET'])
 def get_count_school_rate():
+    connection = get_db_connection()
     try:
-        connection = get_db_connection()
+       
         with connection.cursor() as cursor:
             #execute sql query
             sql = """
@@ -216,8 +224,9 @@ def get_school_list():
 
 @app.route('/api/state_list', methods=['GET'])
 def get_state_list():
+    connection = get_db_connection()
     try:
-        connection = get_db_connection()
+        
         with connection.cursor() as cursor:
             sql = """
                 select distinct(state) from lifeapp.schools where state != 'null' and state != '2';
@@ -590,6 +599,7 @@ def fetch_teacher_concept_cartoons():
     if conditions:
         sql += " WHERE " + " AND ".join(conditions)
 
+    sql +=";"
     try:
         connection = get_db_connection()
         with connection.cursor() as cursor:
@@ -602,6 +612,809 @@ def fetch_teacher_concept_cartoons():
     finally:
         connection.close()
 
+@app.route('/api/update_concept_cartoon', methods=['POST'])
+def update_concept_cartoon():
+    data = request.get_json() or {}
+    cartoon_id = data.get('id')
+    la_subject_id = data.get('la_subject_id')
+    la_level_id = data.get('la_level_id')
+    title = data.get('title')
+    document = data.get('document')
+    status = data.get('status')
+    
+    if not cartoon_id:
+        return jsonify({'error': 'Cartoon ID is required'}), 400
 
+    try:
+        connection = get_db_connection()
+        with connection.cursor() as cursor:
+            sql = """
+                UPDATE lifeapp.la_concept_cartoons
+                SET la_subject_id = %s,
+                    la_level_id = %s,
+                    title = %s,
+                    document = %s,
+                    status = %s,
+                    updated_at = NOW()
+                WHERE id = %s
+            """
+            cursor.execute(sql, (la_subject_id, la_level_id, title, document, status, cartoon_id))
+        connection.commit()
+        return jsonify({'message': 'Concept cartoon updated successfully'})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        connection.close()
+
+@app.route('/api/add_concept_cartoon', methods=['POST'])
+def add_concept_cartoon():
+    data = request.get_json() or {}
+    la_subject_id = data.get('la_subject_id')
+    la_level_id = data.get('la_level_id')
+    title = data.get('title')
+    document = data.get('document')
+    status = data.get('status')
+
+    try:
+        connection = get_db_connection()
+        with connection.cursor() as cursor:
+            sql = """
+                INSERT INTO lifeapp.la_concept_cartoons (la_subject_id, la_level_id, title, document, status, created_at, updated_at)
+                VALUES (%s, %s, %s, %s, %s, NOW(), NOW())
+            """
+            cursor.execute(sql, (la_subject_id, la_level_id, title, document, status))
+        connection.commit()
+        return jsonify({'message': 'Concept cartoon added successfully'})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        connection.close()
+
+
+@app.route('/api/lesson_plan_language', methods=["GET"])
+def fetch_lesson_plan_language():
+    sql = """
+        SELECT id, name as title,
+            CASE WHEN status = 1
+                THEN 'Publish' 
+            ELSE 'Draft'
+            END as status
+        FROM lifeapp.la_lession_plan_languages 
+        ORDER BY created_at DESC;    
+    """
+    try:
+        connection = get_db_connection()
+        with connection.cursor() as cursor:
+            cursor.execute(sql)
+            result = cursor.fetchall()
+            return jsonify(result if result else [])
+    except Exception as e:
+        print("Error in lesson_plan_language:", str(e))
+        return jsonify({'error': str(e)}), 500
+    finally:
+        connection.close()
+
+@app.route('/api/update_lesson_plan_language', methods=['POST'])
+def update_lesson_plan_language():
+    data = request.get_json()
+    status_value = 1 if data["status"] == "Publish" else 0
+    
+    sql = "UPDATE lifeapp.la_lession_plan_languages SET name = %s, status = %s, updated_at = NOW() WHERE id = %s"
+    try:
+        connection = get_db_connection()
+        with connection.cursor() as cursor:
+            cursor.execute(sql, (data["title"], status_value, data["id"]))
+        connection.commit()
+        return jsonify({'message': 'Updated successfully'})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        connection.close()
+
+@app.route('/api/add_lesson_plan_language', methods=['POST'])
+def add_lesson_plan_language():
+    data = request.get_json()
+    status_value = 1 if data["status"] == "Publish" else 0
+    
+    sql = "INSERT INTO lifeapp.la_lession_plan_languages (name, status, created_at, updated_at) VALUES (%s, %s, NOW(), NOW())"
+    try:
+        connection = get_db_connection()
+        with connection.cursor() as cursor:
+            cursor.execute(sql, (data["title"], status_value))
+        connection.commit()
+        return jsonify({'message': 'Added successfully'})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        connection.close()
+
+@app.route('/api/lesson_plan_languages_2', methods =['GET'])
+def get_lesson_plan_langauges_2():
+    sql = """
+    select id, name from lifeapp.la_lession_plan_languages;
+    """
+    try:
+        connection = get_db_connection()
+        with connection.cursor() as cursor:
+            cursor.execute(sql)
+            result = cursor.fetchall()
+            return jsonify(result if result else [])
+    except Exception as e:
+        print("Error in lesson_plan_language:", str(e))
+        return jsonify({'error': str(e)}), 500
+    finally:
+        connection.close()
+
+@app.route('/api/lesson_plans_search', methods=['POST'])
+def fetch_lesson_plans_search():
+    filters = request.get_json() or {}
+    language = filters.get('language')
+    status = filters.get('status')
+    title = filters.get('title')
+
+    sql = """
+    SELECT 
+        lalp.id,
+        lall.name AS language,
+        CASE
+            WHEN lalp.type = 1 THEN 'Life Lab - Demo Models'
+            WHEN lalp.type = 2 THEN 'Jigyasa - Self DIY Activities'
+            WHEN lalp.type = 3 THEN 'Pragya - DIY Activities With Life Lab KITS'
+            WHEN lalp.type = 4 THEN 'Life Lab - Activities Lesson Plans'
+            ELSE 'Default type (None Mentioned)'
+        END AS type,
+        lalp.title AS title,
+        CASE
+            WHEN lalp.status = 1 THEN 'Published'
+            ELSE 'Drafted'
+        END AS status
+    FROM lifeapp.la_lession_plans lalp
+    INNER JOIN lifeapp.la_lession_plan_languages lall 
+        ON lall.id = lalp.la_lession_plan_language_id
+    """
+
+    # Build WHERE clause if filters are provided
+    where_clauses = []
+    params = []
+
+    if language and language.strip():
+        where_clauses.append("lall.name = %s")
+        params.append(language)
+    if status and status.strip():
+        # Convert 'Published'/'Drafted' to numeric
+        where_clauses.append("lalp.status = %s")
+        params.append(1 if status == "Published" else 0)
+    if title and title.strip():
+        where_clauses.append("lalp.title LIKE %s")
+        params.append(f"%{title}%")
+
+    if where_clauses:
+        sql += " WHERE " + " AND ".join(where_clauses)
+
+    # Order by most recently updated
+    sql += " ORDER BY lalp.updated_at DESC"
+
+    try:
+        connection = get_db_connection()
+        with connection.cursor() as cursor:
+            cursor.execute(sql, tuple(params))
+            result = cursor.fetchall()
+        return jsonify(result if result else [])
+    except Exception as e:
+        print("Error in fetch_lesson_plans_search:", str(e))
+        return jsonify({'error': str(e)}), 500
+    finally:
+        connection.close()
+
+
+@app.route('/api/update_lesson_plan', methods=['POST'])
+def update_lesson_plan():
+    data = request.get_json()
+    lesson_plan_id = data.get('id')
+    la_lesson_plan_language_id = data.get('la_lesson_plan_language_id')
+    title = data.get('title')
+    document = data.get('document')
+    plan_type = data.get('type')   # numeric TINYINT (0..4)
+    status = data.get('status')    # numeric TINYINT (0 or 1)
+
+    if not lesson_plan_id:
+        return jsonify({'error': 'Lesson Plan ID is required'}), 400
+
+    try:
+        connection = get_db_connection()
+        with connection.cursor() as cursor:
+            sql = """
+                UPDATE lifeapp.la_lession_plans
+                SET la_lession_plan_language_id = %s,
+                    title = %s,
+                    document = %s,
+                    `type` = %s,
+                    status = %s,
+                    updated_at = NOW()
+                WHERE id = %s
+            """
+            cursor.execute(sql, (la_lesson_plan_language_id, title, document, plan_type, status, lesson_plan_id))
+        connection.commit()
+        return jsonify({'message': 'Lesson Plan updated successfully'})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        connection.close()
+
+
+@app.route('/api/add_lesson_plan', methods=['POST'])
+def add_lesson_plan():
+    data = request.get_json()
+    la_lesson_plan_language_id = data.get('la_lesson_plan_language_id')
+    title = data.get('title')
+    document = data.get('document')
+    plan_type = data.get('type')   # numeric TINYINT
+    status = data.get('status')    # numeric TINYINT
+
+    try:
+        connection = get_db_connection()
+        with connection.cursor() as cursor:
+            sql = """
+                INSERT INTO lifeapp.la_lession_plans 
+                (la_lession_plan_language_id, title, document, `type`, status, created_at, updated_at)
+                VALUES (%s, %s, %s, %s, %s, NOW(), NOW())
+            """
+            cursor.execute(sql, (la_lesson_plan_language_id, title, document, plan_type, status))
+        connection.commit()
+        return jsonify({'message': 'Lesson Plan added successfully'})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        connection.close()
+
+
+
+##########################################
+# NEW: WORKSHEETS ENDPOINTS
+##########################################
+
+# 1) SEARCH / FILTER Worksheets
+@app.route('/api/work_sheets_search', methods=['POST'])
+def fetch_work_sheets_search():
+    """
+    Expects JSON filters, e.g.:
+    {
+      "subject": "Science" or "Maths" or "",
+      "grade": 1..12 or "" (string),
+      "status": "Published" or "Drafted" or "",
+      "title": "some partial text" or ""
+    }
+    """
+    filters = request.get_json() or {}
+    subject = filters.get('subject', '').strip()
+    grade = filters.get('grade', '').strip()
+    status = filters.get('status', '').strip()
+    title = filters.get('title', '').strip()
+
+    sql = """
+        SELECT
+            w.id,
+            CASE WHEN w.la_subject_id = 1 THEN 'Science' ELSE 'Maths' END AS subject,
+            w.la_grade_id AS grade,
+            w.title,
+            w.document,
+            CASE WHEN w.status = 1 THEN 'Published' ELSE 'Drafted' END AS status
+        FROM lifeapp.la_work_sheets w
+        WHERE 1=1
+    """
+    params = []
+
+    # Subject filter
+    if subject:
+        if subject == "Science":
+            sql += " AND w.la_subject_id = 1"
+        elif subject == "Maths":
+            sql += " AND w.la_subject_id = 2"
+
+    # Grade filter
+    if grade:
+        # ensure it's an integer, if provided
+        try:
+            grade_val = int(grade)
+            sql += " AND w.la_grade_id = %s"
+            params.append(grade_val)
+        except ValueError:
+            pass  # if it's not an integer, ignore
+
+    # Status filter
+    if status:
+        sql += " AND w.status = %s"
+        status_val = 1 if status == "Published" else 0
+        params.append(status_val)
+
+    # Title filter
+    if title:
+        sql += " AND w.title LIKE %s"
+        params.append(f"%{title}%")
+
+    # Sort by newest updated
+    sql += " ORDER BY w.updated_at DESC;"
+
+    try:
+        connection = get_db_connection()
+        with connection.cursor() as cursor:
+            cursor.execute(sql, tuple(params))
+            result = cursor.fetchall()
+        return jsonify(result if result else [])
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        connection.close()
+
+
+# 2) ADD a new Worksheet
+@app.route('/api/add_work_sheet', methods=['POST'])
+def add_work_sheet():
+    """
+    Expects JSON body like:
+    {
+      "subject": "Science" or "Maths",
+      "grade": 1..12,
+      "title": "...",
+      "document": "...",
+      "status": "Published" or "Drafted"
+    }
+    """
+    data = request.get_json() or {}
+    subject = data.get('subject')
+    grade = data.get('grade')
+    title = data.get('title', '')
+    document = data.get('document', '')
+    status_str = data.get('status', 'Drafted')
+
+    # Convert subject to la_subject_id
+    la_subject_id = 1 if subject == "Science" else 2
+
+    # Convert status to 1 or 0
+    status_val = 1 if status_str == "Published" else 0
+
+    try:
+        connection = get_db_connection()
+        with connection.cursor() as cursor:
+            sql = """
+                INSERT INTO lifeapp.la_work_sheets 
+                (la_subject_id, la_grade_id, title, document, status, created_at, updated_at)
+                VALUES (%s, %s, %s, %s, %s, NOW(), NOW())
+            """
+            cursor.execute(sql, (la_subject_id, grade, title, document, status_val))
+        connection.commit()
+        return jsonify({'message': 'Worksheet added successfully'})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        connection.close()
+
+
+# 3) UPDATE an existing Worksheet
+@app.route('/api/update_work_sheet', methods=['POST'])
+def update_work_sheet():
+    """
+    Expects JSON body like:
+    {
+      "id": <worksheet_id>,
+      "subject": "Science" or "Maths",
+      "grade": 1..12,
+      "title": "...",
+      "document": "...",
+      "status": "Published" or "Drafted"
+    }
+    """
+    data = request.get_json() or {}
+    worksheet_id = data.get('id')
+    subject = data.get('subject')
+    grade = data.get('grade')
+    title = data.get('title', '')
+    document = data.get('document', '')
+    status_str = data.get('status', 'Drafted')
+
+    if not worksheet_id:
+        return jsonify({'error': 'Worksheet ID is required'}), 400
+
+    # Convert subject to la_subject_id
+    la_subject_id = 1 if subject == "Science" else 2
+
+    # Convert status to 1 or 0
+    status_val = 1 if status_str == "Published" else 0
+
+    try:
+        connection = get_db_connection()
+        with connection.cursor() as cursor:
+            sql = """
+                UPDATE lifeapp.la_work_sheets
+                SET la_subject_id = %s,
+                    la_grade_id = %s,
+                    title = %s,
+                    document = %s,
+                    status = %s,
+                    updated_at = NOW()
+                WHERE id = %s
+            """
+            cursor.execute(sql, (la_subject_id, grade, title, document, status_val, worksheet_id))
+        connection.commit()
+        return jsonify({'message': 'Worksheet updated successfully'})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        connection.close()
+
+
+
+##########################################
+# NEW: ASSESSMENTS ENDPOINTS
+##########################################
+
+@app.route('/api/assessments_search', methods=['POST'])
+def assessments_search():
+    """
+    Expects JSON filters (all optional), for example:
+    {
+      "subject": "Science" or "Maths" or "",
+      "grade": "1" to "12" or "",
+      "title": "partial text" or "",
+      "status": "Published" or "Drafted" or ""
+    }
+    Returns the list of assessments from lifeapp.la_assessments.
+    """
+    filters = request.get_json() or {}
+    subject = filters.get('subject', '').strip()
+    grade = filters.get('grade', '').strip()
+    title = filters.get('title', '').strip()
+    status = filters.get('status', '').strip()
+
+    sql = """
+        SELECT
+            a.id,
+            CASE WHEN a.la_subject_id = 1 THEN 'Science' ELSE 'Maths' END AS subject,
+            a.la_grade_id AS grade,
+            a.title,
+            a.document,
+            CASE WHEN a.status = 1 THEN 'Published' ELSE 'Drafted' END AS status
+        FROM lifeapp.la_assessments a
+        WHERE 1=1
+    """
+    params = []
+
+    # Filter by subject
+    if subject:
+        if subject == "Science":
+            sql += " AND a.la_subject_id = 1"
+        elif subject == "Maths":
+            sql += " AND a.la_subject_id = 2"
+    # Filter by grade (if provided and is integer)
+    if grade:
+        try:
+            grade_val = int(grade)
+            sql += " AND a.la_grade_id = %s"
+            params.append(grade_val)
+        except ValueError:
+            pass
+    # Filter by title (partial match)
+    if title:
+        sql += " AND a.title LIKE %s"
+        params.append(f"%{title}%")
+    # Filter by status
+    if status:
+        status_val = 1 if status == "Published" else 0
+        sql += " AND a.status = %s"
+        params.append(status_val)
+
+    sql += " ORDER BY a.updated_at DESC;"
+
+    try:
+        connection = get_db_connection()
+        with connection.cursor() as cursor:
+            cursor.execute(sql, tuple(params))
+            result = cursor.fetchall()
+        return jsonify(result if result else [])
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        connection.close()
+
+
+@app.route('/api/add_assessment', methods=['POST'])
+def add_assessment():
+    """
+    Expects JSON body like:
+    {
+      "subject": "Science" or "Maths",
+      "grade": 1..12,
+      "title": "...",
+      "document": "...",
+      "status": "Published" or "Drafted"
+    }
+    """
+    data = request.get_json() or {}
+    subject = data.get('subject')
+    grade = data.get('grade')
+    title = data.get('title', '')
+    document = data.get('document', '')
+    status_str = data.get('status', 'Drafted')
+
+    # Map subject and status
+    la_subject_id = 1 if subject == "Science" else 2
+    status_val = 1 if status_str == "Published" else 0
+
+    try:
+        connection = get_db_connection()
+        with connection.cursor() as cursor:
+            sql = """
+                INSERT INTO lifeapp.la_assessments 
+                (la_subject_id, la_grade_id, title, document, status, created_at, updated_at)
+                VALUES (%s, %s, %s, %s, %s, NOW(), NOW())
+            """
+            cursor.execute(sql, (la_subject_id, grade, title, document, status_val))
+        connection.commit()
+        return jsonify({'message': 'Assessment added successfully'})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        connection.close()
+
+
+@app.route('/api/update_assessment', methods=['POST'])
+def update_assessment():
+    """
+    Expects JSON body like:
+    {
+      "id": <assessment_id>,
+      "subject": "Science" or "Maths",
+      "grade": 1..12,
+      "title": "...",
+      "document": "...",
+      "status": "Published" or "Drafted"
+    }
+    """
+    data = request.get_json() or {}
+    assessment_id = data.get('id')
+    subject = data.get('subject')
+    grade = data.get('grade')
+    title = data.get('title', '')
+    document = data.get('document', '')
+    status_str = data.get('status', 'Drafted')
+
+    if not assessment_id:
+        return jsonify({'error': 'Assessment ID is required'}), 400
+
+    la_subject_id = 1 if subject == "Science" else 2
+    status_val = 1 if status_str == "Published" else 0
+
+    try:
+        connection = get_db_connection()
+        with connection.cursor() as cursor:
+            sql = """
+                UPDATE lifeapp.la_assessments
+                SET la_subject_id = %s,
+                    la_grade_id = %s,
+                    title = %s,
+                    document = %s,
+                    status = %s,
+                    updated_at = NOW()
+                WHERE id = %s
+            """
+            cursor.execute(sql, (la_subject_id, grade, title, document, status_val, assessment_id))
+        connection.commit()
+        return jsonify({'message': 'Assessment updated successfully'})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        connection.close()
+
+
+# --------------------- School Data Endpoints ---------------------
+
+@app.route('/api/get_schools_data', methods=['POST'])
+def get_schools_data():
+    """
+    Returns rows from lifeapp.schools with columns:
+    id, name, state, city, district, pin_code, app_visible, is_life_lab, status.
+    Numeric flags are converted to user-friendly text.
+    """
+    data = request.get_json() or {}
+    name = data.get('name')
+    state = data.get('state')
+    city = data.get('city')
+    district = data.get('district')
+    status = data.get('status')
+    try:
+        connection = get_db_connection()
+        with connection.cursor() as cursor:
+            sql = """
+                SELECT 
+                    id, 
+                    name, 
+                    state, 
+                    city, 
+                    district, 
+                    pin_code,
+                    app_visible,
+                    is_life_lab,
+                    status
+                FROM lifeapp.schools
+                WHERE deleted_at IS NULL
+            """
+            params = []
+            if status:
+                status_val = 1 if status == "Active" else 0
+                sql += " AND status = %s"
+                params.append(status_val)
+
+            if district:
+                sql += " AND district = %s"
+                params.append(district)
+            
+            if city:
+                sql += " AND city = %s"
+                params.append(city)
+
+            if state:
+                sql += " AND state = %s"
+                params.append(state)
+
+            if name:
+                sql += " AND name = %s"
+                params.append(name)
+
+            # connection = get_db_connection()
+
+            cursor.execute(sql, tuple(params))
+            rows = cursor.fetchall()
+            for row in rows:
+                row["app_visible"] = "Yes" if row["app_visible"] == 1 else "No"
+                row["is_life_lab"] = "Yes" if row["is_life_lab"] == 1 else "No"
+                row["status"] = "Active" if row["status"] == 1 else "Inactive"
+            return jsonify(rows), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    finally:
+        connection.close()
+
+@app.route('/api/schools_data', methods=['POST'])
+def add_school_data():
+    """
+    Adds a new school row.
+    Expected JSON keys: name, state, city, district, pin_code, app_visible, is_life_lab, status.
+    app_visible and is_life_lab are "Yes"/"No", and status "Active"/"Inactive".
+    """
+    data = request.get_json() or {}
+    try:
+        connection = get_db_connection()
+        with connection.cursor() as cursor:
+            name = data.get("name")
+            state = data.get("state")
+            city = data.get("city")
+            district = data.get("district")
+            pin_code = data.get("pin_code")
+            app_visible_val = 1 if data.get("app_visible") == "Yes" else 0
+            is_life_lab_val = 1 if data.get("is_life_lab") == "Yes" else 0
+            status_val = 1 if data.get("status") == "Active" else 0
+            sql = """
+                INSERT INTO lifeapp.schools 
+                (name, state, city, district, pin_code, app_visible, is_life_lab, status, created_at, updated_at)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, NOW(), NOW())
+            """
+            cursor.execute(sql, (name, state, city, district, pin_code, app_visible_val, is_life_lab_val, status_val))
+            connection.commit()
+        return jsonify({"message": "School added successfully"}), 201
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    finally:
+        connection.close()
+
+@app.route('/api/schools_data/<int:school_id>', methods=['PUT'])
+def update_school_data(school_id):
+    """
+    Updates an existing school row.
+    Expected JSON keys: name, state, city, district, pin_code, app_visible, is_life_lab, status.
+    """
+    data = request.get_json() or {}
+    try:
+        connection = get_db_connection()
+        with connection.cursor() as cursor:
+            name = data.get("name")
+            state = data.get("state")
+            city = data.get("city")
+            district = data.get("district")
+            pin_code = data.get("pin_code")
+            app_visible_val = 1 if data.get("app_visible") == "Yes" else 0
+            is_life_lab_val = 1 if data.get("is_life_lab") == "Yes" else 0
+            status_val = 1 if data.get("status") == "Active" else 0
+            sql = """
+                UPDATE lifeapp.schools
+                SET 
+                    name = %s,
+                    state = %s,
+                    city = %s,
+                    district = %s,
+                    pin_code = %s,
+                    app_visible = %s,
+                    is_life_lab = %s,
+                    status = %s,
+                    updated_at = NOW()
+                WHERE id = %s
+            """
+            cursor.execute(sql, (name, state, city, district, pin_code, app_visible_val, is_life_lab_val, status_val, school_id))
+            connection.commit()
+        return jsonify({"message": "School updated successfully"}), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    finally:
+        connection.close()
+
+@app.route('/api/schools_data/<int:school_id>', methods=['DELETE'])
+def delete_school_data(school_id):
+    """
+    Soft-deletes a school row by setting deleted_at.
+    """
+    try:
+        connection = get_db_connection()
+        with connection.cursor() as cursor:
+            sql = """
+                UPDATE lifeapp.schools
+                SET deleted_at = NOW()
+                WHERE id = %s
+            """
+            cursor.execute(sql, (school_id,))
+            connection.commit()
+        return jsonify({"message": "School deleted successfully"}), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    finally:
+        connection.close()
+
+# @app.route('/api/state_list', methods=['GET'])
+# def get_state_list():
+#     """
+#     Returns distinct states from the schools table.
+#     """
+#     try:
+#         connection = get_db_connection()
+#         with connection.cursor() as cursor:
+#             sql = """
+#                 SELECT DISTINCT(state) 
+#                 FROM lifeapp.schools 
+#                 WHERE state IS NOT NULL AND state != '' AND state != '2'
+#             """
+#             cursor.execute(sql)
+#             result = cursor.fetchall()
+#             states = [row['state'] for row in result]
+#         return jsonify(states)
+#     except Exception as e:
+#         return jsonify({"error": str(e)}), 500
+#     finally:
+#         connection.close()
+
+@app.route('/api/cities_for_state', methods=['GET'])
+def get_cities_for_state():
+    """
+    Returns distinct city values for the given state.
+    Example: GET /api/cities_for_state?state=Maharashtra
+    """
+    state = request.args.get('state')
+    if not state:
+        return jsonify({"error": "Query param 'state' is required"}), 400
+    try:
+        connection = get_db_connection()
+        with connection.cursor() as cursor:
+            sql = """
+                SELECT DISTINCT city 
+                FROM lifeapp.schools
+                WHERE state = %s 
+                  AND deleted_at IS NULL
+                  AND city IS NOT NULL AND city != ''
+            """
+            cursor.execute(sql, (state,))
+            result = cursor.fetchall()
+            cities = [row['city'] for row in result]
+        return jsonify(cities), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    finally:
+        connection.close()
 if __name__ == '__main__':
     app.run(debug=True)
