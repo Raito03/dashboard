@@ -32,6 +32,10 @@ def get_db_connection():
         cursorclass=pymysql.cursors.DictCursor
     )
 
+@app.route('/')
+def backup():
+    return "Heya, thanks for checking"
+
 @app.route('/api/user-signups', methods=['GET'])
 def get_user_signups():
     try:
