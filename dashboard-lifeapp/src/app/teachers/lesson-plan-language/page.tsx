@@ -20,6 +20,8 @@ interface LessonPlanLanguage {
     status: string;
 }
 
+const api_startpoint = 'https://lifeapp-api-vv1.vercel.app'
+
 export default function LessonPlanLanguage() {
     const [tableData, setTableData] = useState<LessonPlanLanguage[]>([]);
     const [currentPage, setCurrentPage] = useState<number>(0);
@@ -42,7 +44,7 @@ export default function LessonPlanLanguage() {
     async function fetchLessonPlanLanguages() {
         try {
             setIsTableLoading(true);
-            const res = await fetch('http://127.0.0.1:5000/api/lesson_plan_language');
+            const res = await fetch(`${api_startpoint}/api/lesson_plan_language`);
             const data: LessonPlanLanguage[] = await res.json();
             setTableData(data);
         } catch (error) {
@@ -74,7 +76,7 @@ export default function LessonPlanLanguage() {
         if (!editingRow) return;
 
         try {
-            const res = await fetch('http://127.0.0.1:5000/api/update_lesson_plan_language', {
+            const res = await fetch(`${api_startpoint}/api/update_lesson_plan_language`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -98,7 +100,7 @@ export default function LessonPlanLanguage() {
 
     const handleAddLesson = async () => {
         try {
-            const res = await fetch('http://127.0.0.1:5000/api/add_lesson_plan_language', {
+            const res = await fetch(`${api_startpoint}/api/add_lesson_plan_language`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({

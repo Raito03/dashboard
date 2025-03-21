@@ -29,6 +29,8 @@ interface CartoonData {
     id?: number; // Adding ID for update operations
 }
 
+const api_startpoint = 'https://lifeapp-api-vv1.vercel.app'
+
 export default function conceptCartoons() {
     const [tableData, setTableData] = useState<any[]>([]);
     const [currentPage, setCurrentPage] = useState<number>(0);
@@ -67,7 +69,7 @@ export default function conceptCartoons() {
         setIsTableLoading(true);
     
         try {
-            const res = await fetch('http://127.0.0.1:5000/api/teacher_concept_cartoons', {
+            const res = await fetch(`${api_startpoint}/api/teacher_concept_cartoons`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(filters)
@@ -150,7 +152,7 @@ export default function conceptCartoons() {
         if (!editingRow) return;
         
         try {
-            const res = await fetch('http://127.0.0.1:5000/api/update_concept_cartoon', {
+            const res = await fetch(`${api_startpoint}/api/update_concept_cartoon`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -191,7 +193,7 @@ export default function conceptCartoons() {
     // Handle adding a new cartoon
     const handleAddCartoon = async () => {
         try {
-            const res = await fetch('http://127.0.0.1:5000/api/add_concept_cartoon', {
+            const res = await fetch(`${api_startpoint}/api/add_concept_cartoon`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({

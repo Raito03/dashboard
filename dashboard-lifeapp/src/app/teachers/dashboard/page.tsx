@@ -213,7 +213,9 @@ function SearchableDropdown({
         </div>
     );
 }
-  
+
+const api_startpoint = 'https://lifeapp-api-vv1.vercel.app'
+
 
 export default function teachersDashboard() {
     const [states, setStates] = useState<string[]>([]);
@@ -230,7 +232,7 @@ export default function teachersDashboard() {
             
             setIsStatesLoading(true);
             try {
-                const res = await fetch('http://127.0.0.1:5000/api/state_list');
+                const res = await fetch(`${api_startpoint}/api/state_list`);
                 const data: { state: string }[] = await res.json();
                 
                 if (Array.isArray(data)) {
@@ -271,7 +273,7 @@ export default function teachersDashboard() {
             
             setIsCitiesLoading(true);
             try {
-                const res = await fetch('http://127.0.0.1:5000/api/city_list');
+                const res = await fetch(`${api_startpoint}/api/city_list`);
                 const data: { city: string }[] = await res.json();
                 
                 if (Array.isArray(data)) {
@@ -330,7 +332,7 @@ export default function teachersDashboard() {
         setIsTableLoading(true);
     
         try {
-            const res = await fetch('http://127.0.0.1:5000/api/teacher_dashboard_search', {
+            const res = await fetch(`${api_startpoint}/api/teacher_dashboard_search`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(filters)

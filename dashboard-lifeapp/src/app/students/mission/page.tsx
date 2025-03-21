@@ -13,6 +13,8 @@ const poppins = Poppins({
     weight: ['400', '600', '700'],
     variable: '--font-poppins',
 });
+  
+const api_startpoint = 'https://lifeapp-api-vv1.vercel.app'
 
 export default function mission_page() {
     const [selectedFromDate, setSelectedFromDate] = useState(""); // New state for From Date
@@ -36,7 +38,7 @@ export default function mission_page() {
         setIsTableLoading(true); // Set loading to true when search starts
 
         try {
-            const res = await fetch('http://127.0.0.1:5000/api/student_mission_search', {
+            const res = await fetch(`${api_startpoint}/api/student_mission_search`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(filters)

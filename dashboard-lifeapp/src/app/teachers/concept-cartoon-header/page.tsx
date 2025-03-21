@@ -14,6 +14,8 @@ const poppins = Poppins({
     variable: '--font-poppins',
 });
 
+const api_startpoint = 'https://lifeapp-api-vv1.vercel.app'
+
 export default function ConceptCartoonForm() {
     const [formData, setFormData] = useState({
         heading: '',
@@ -68,7 +70,7 @@ export default function ConceptCartoonForm() {
         }
 
         try {
-            const response = await fetch('/api/concept-cartoons', {
+            const response = await fetch(`${api_startpoint}/api/concept-cartoons`, {
                 method: 'POST',
                 body: data,
                 // Don't set Content-Type header when using FormData

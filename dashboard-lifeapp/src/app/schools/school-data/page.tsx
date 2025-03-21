@@ -157,6 +157,8 @@ function SearchableDropdown({
   );
 }
 
+const api_startpoint = 'https://lifeapp-api-vv1.vercel.app'
+
 // ------------------- MAIN COMPONENT -------------------
 export default function SchoolData() {
   // ---------- State Variables ----------
@@ -207,7 +209,7 @@ export default function SchoolData() {
     try {
       // For this example, we simply fetch all schools. 
       // You can extend your API to accept query parameters for filtering.
-      const res = await fetch("http://127.0.0.1:5000/api/get_schools_data",{
+      const res = await fetch(`${api_startpoint}/api/get_schools_data`,{
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(filters)
@@ -255,7 +257,7 @@ export default function SchoolData() {
 
   const fetchStates = async () => {
     try {
-      const res = await fetch("http://127.0.0.1:5000/api/state_list");
+      const res = await fetch(`${api_startpoint}/api/state_list`);
       const data = await res.json();
       // Map the objects to their 'state' property if needed:
       const statesArray = data.map((item: any) => item.state || item);
@@ -272,7 +274,7 @@ export default function SchoolData() {
       return;
     }
     try {
-      const res = await fetch(`http://127.0.0.1:5000/api/cities_for_state?state=${encodeURIComponent(st)}`);
+      const res = await fetch(`${api_startpoint}/api/cities_for_state?state=${encodeURIComponent(st)}`);
       const data = await res.json();
       setCities(data);
     } catch (error) {
@@ -303,7 +305,7 @@ export default function SchoolData() {
 
   const handleEditModalSave = async () => {
     try {
-      const res = await fetch(`http://127.0.0.1:5000/api/schools_data/${editSchoolData.id}`, {
+      const res = await fetch(`${api_startpoint}/api/schools_data/${editSchoolData.id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(editSchoolData),
@@ -327,7 +329,7 @@ export default function SchoolData() {
   const handleDeleteConfirm = async () => {
     if (!deleteSchoolId) return;
     try {
-      const res = await fetch(`http://127.0.0.1:5000/api/schools_data/${deleteSchoolId}`, {
+      const res = await fetch(`${api_startpoint}/api/schools_data/${deleteSchoolId}`, {
         method: "DELETE",
       });
       if (!res.ok) {
@@ -343,7 +345,7 @@ export default function SchoolData() {
 
   const handleAddSchool = async () => {
     try {
-      const res = await fetch("http://127.0.0.1:5000/api/schools_data", {
+      const res = await fetch(`${api_startpoint}/api/schools_data`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(addSchoolData),

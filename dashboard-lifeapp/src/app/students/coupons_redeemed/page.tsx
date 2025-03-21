@@ -27,6 +27,8 @@ interface CouponRedemption {
     'Coupon Redeemed Date': string;
 }
 
+const api_startpoint = 'https://lifeapp-api-vv1.vercel.app'
+
 export default function CouponsRedeemed() {
     const [isClient, setIsClient] = useState(false);
     const [coupons, setCoupons] = useState<CouponRedemption[]>([]);
@@ -45,7 +47,7 @@ export default function CouponsRedeemed() {
     const fetchCoupons = async (query: string) => {
         setLoading(true);
         try {
-            const response = await fetch(`http://localhost:5000/api/coupon_redeem_search?search=${encodeURIComponent(query)}`);
+            const response = await fetch(`${api_startpoint}/api/coupon_redeem_search?search=${encodeURIComponent(query)}`);
             if (!response.ok) {
                 throw new Error('Network response was not ok');
             }

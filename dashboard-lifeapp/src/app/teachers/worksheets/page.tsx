@@ -23,6 +23,8 @@ interface Worksheet {
   status: string;    // "Published" or "Drafted"
 }
 
+const api_startpoint = 'https://lifeapp-api-vv1.vercel.app'
+
 export default function teacherWorkSheets() {
   // Table & filter states
   const [tableData, setTableData] = useState<Worksheet[]>([]);
@@ -54,7 +56,7 @@ export default function teacherWorkSheets() {
     };
     setIsTableLoading(true);
     try {
-      const res = await fetch('http://127.0.0.1:5000/api/work_sheets_search', {
+      const res = await fetch(`${api_startpoint}/api/work_sheets_search`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(filters)
@@ -97,7 +99,7 @@ export default function teacherWorkSheets() {
     };
 
     try {
-      await fetch('http://127.0.0.1:5000/api/update_work_sheet', {
+      await fetch(`${api_startpoint}/api/update_work_sheet`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
@@ -120,7 +122,7 @@ export default function teacherWorkSheets() {
     };
 
     try {
-      await fetch('http://127.0.0.1:5000/api/add_work_sheet', {
+      await fetch(`${api_startpoint}/api/add_work_sheet`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)

@@ -52,6 +52,8 @@ const poppins = Poppins({
   weight: ['400', '600', '700'], // Choose needed weights
   variable: '--font-poppins', // Matches the CSS variable
 });
+
+const api_startpoint = 'https://lifeapp-api-vv1.vercel.app'
 export default function UserAnalyticsDashboard() {
   const [mounted, setMounted] = useState(false)
   const [chartData, setChartData] = useState<SignupData[]>([])
@@ -65,7 +67,7 @@ export default function UserAnalyticsDashboard() {
   useEffect(() => {
     async function fetchData() {
       try {
-        const res = await fetch('http://127.0.0.1:5000/api/user-signups')
+        const res = await fetch(`${api_startpoint}/api/user-signups`)
         const data = (await res.json()) as SignupData[]
         setChartData(data)
 
@@ -108,7 +110,7 @@ export default function UserAnalyticsDashboard() {
   useEffect(() => {
     async function fetchUserCount() {
       try {
-        const res = await fetch('http://127.0.0.1:5000/api/user-count')
+        const res = await fetch(`${api_startpoint}/api/user-count`)
         const data = await res.json()
         if (data && data.length > 0) {
           setTotalUsers(data[0].count)
@@ -124,7 +126,7 @@ export default function UserAnalyticsDashboard() {
   useEffect(() => {
     async function fetchActiveUserCount() {
       try {
-        const res = await fetch('http://127.0.0.1:5000/api/active-user-count')
+        const res = await fetch(`${api_startpoint}/api/active-user-count`)
         const data = await res.json()
         if (data && data.length > 0 && data[0].active_users !== undefined) {
           setActiveUsers(data[0].active_users)
@@ -143,7 +145,7 @@ export default function UserAnalyticsDashboard() {
   useEffect(() => {
     async function fetchNewSignups() {
       try {
-        const res = await fetch('http://127.0.0.1:5000/api/new-signups')
+        const res = await fetch(`${api_startpoint}/api/new-signups`)
         const data = await res.json()
         if (data && data.length > 0 && data[0].count !== undefined) {
           setNewSignups(data[0].count)
@@ -162,7 +164,7 @@ export default function UserAnalyticsDashboard() {
   useEffect(() => {
     async function fetchApprovalRate() {
       try {
-        const res = await fetch('http://127.0.0.1:5000/api/approval-rate')
+        const res = await fetch(`${api_startpoint}/api/approval-rate`)
         const data = await res.json()
         if (data && data.length > 0 && data[0].Approval_Rate !== undefined) {
           setApprovalRate(data[0].Approval_Rate)
@@ -227,7 +229,7 @@ export default function UserAnalyticsDashboard() {
   useEffect(() => {
     async function fetchCouponRedeemCount() {
       try {
-        const res = await fetch('http://127.0.0.1:5000/api/coupons-used-count')
+        const res = await fetch(`${api_startpoint}/api/coupons-used-count`)
         const data = await res.json()
         if (data && Array.isArray(data) && data.length > 0) {
           setCouponRedeemCount(data)
@@ -273,7 +275,7 @@ export default function UserAnalyticsDashboard() {
   useEffect(() => {
     async function fetchTeacherAssignCounts() {
       try {
-        const res = await fetch('http://127.0.0.1:5000/api/teacher-assign-count')
+        const res = await fetch(`${api_startpoint}/api/teacher-assign-count`)
         const data = await res.json()
         const counts = data.map((item: { assign_count: number }) => item.assign_count)
         setAssignCounts(counts)
@@ -346,7 +348,7 @@ export default function UserAnalyticsDashboard() {
   useEffect(() => {
     async function fetchSchoolStateCounts() {
       try {
-        const res = await fetch('http://127.0.0.1:5000/api/count-school-state');
+        const res = await fetch(`${api_startpoint}/api/count-school-state`);
         const data = await res.json();
         
         // Check if data exists and is an array with valid structure

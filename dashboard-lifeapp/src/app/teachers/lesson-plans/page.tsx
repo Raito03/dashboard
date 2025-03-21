@@ -43,6 +43,8 @@ function labelToTypeValue(label: string): number {
   return found ? found.value : 0;
 }
 
+const api_startpoint = 'https://lifeapp-api-vv1.vercel.app'
+
 export default function LessonPlans() {
     const [tableData, setTableData] = useState<LessonPlan[]>([]);
     const [languages, setLanguages] = useState<Language[]>([]);
@@ -82,7 +84,7 @@ export default function LessonPlans() {
     // Fetch available languages
     async function fetchLanguages() {
         try {
-        const res = await fetch('http://127.0.0.1:5000/api/lesson_plan_languages_2');
+        const res = await fetch(`${api_startpoint}/api/lesson_plan_languages_2`);
         const data: Language[] = await res.json();
         setLanguages(data);
         } catch (error) {
@@ -95,7 +97,7 @@ export default function LessonPlans() {
         setIsTableLoading(true);
 
         try {
-        const res = await fetch('http://127.0.0.1:5000/api/lesson_plans_search', {
+        const res = await fetch(`${api_startpoint}/api/lesson_plans_search`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(filters)
@@ -150,7 +152,7 @@ export default function LessonPlans() {
         };
 
         try {
-        await fetch('http://127.0.0.1:5000/api/update_lesson_plan', {
+        await fetch(`${api_startpoint}/api/update_lesson_plan`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)
@@ -182,7 +184,7 @@ export default function LessonPlans() {
         };
 
         try {
-        await fetch('http://127.0.0.1:5000/api/add_lesson_plan', {
+        await fetch(`${api_startpoint}/api/add_lesson_plan`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)

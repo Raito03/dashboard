@@ -23,6 +23,8 @@ interface Assessment {
   status: string;    // "Published" or "Drafted"
 }
 
+const api_startpoint = 'https://lifeapp-api-vv1.vercel.app'
+
 export default function teacherAssessment() {
   // State for table data and pagination
   const [tableData, setTableData] = useState<Assessment[]>([]);
@@ -59,7 +61,7 @@ export default function teacherAssessment() {
     };
     setIsTableLoading(true);
     try {
-      const res = await fetch('http://127.0.0.1:5000/api/assessments_search', {
+      const res = await fetch(`${api_startpoint}/api/assessments_search`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(filters)
@@ -102,7 +104,7 @@ export default function teacherAssessment() {
       status: editingAssessment.status
     };
     try {
-      await fetch('http://127.0.0.1:5000/api/update_assessment', {
+      await fetch(`${api_startpoint}/api/update_assessment`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
@@ -124,7 +126,7 @@ export default function teacherAssessment() {
       status: newAssessment.status
     };
     try {
-      await fetch('http://127.0.0.1:5000/api/add_assessment', {
+      await fetch(`${api_startpoint}/api/add_assessment`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
