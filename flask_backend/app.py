@@ -13,15 +13,24 @@ from dotenv import load_dotenv
 # Load environment variables from .env file
 load_dotenv()
 
+# def get_db_connection():
+#     return pymysql.connect(
+#         host=os.getenv('DB_HOST', 'localhost'),
+#         user=os.getenv('DB_USER', 'root'),
+#         password=os.getenv('DB_PASSWORD', ''),
+#         database=os.getenv('DB_NAME', 'lifeapp'),
+#         cursorclass=pymysql.cursors.DictCursor
+#     )
+
 def get_db_connection():
     return pymysql.connect(
         host=os.getenv('DB_HOST', 'localhost'),
-        user=os.getenv('DB_USER', 'root'),
+        port=int(os.getenv('DB_PORT', 3306)),
+        user=os.getenv('DB_USERNAME', 'root'),
         password=os.getenv('DB_PASSWORD', ''),
-        database=os.getenv('DB_NAME', 'lifeapp'),
+        database=os.getenv('DB_DATABASE', 'lifeapp'),
         cursorclass=pymysql.cursors.DictCursor
     )
-
 
 @app.route('/api/user-signups', methods=['GET'])
 def get_user_signups():
