@@ -217,7 +217,7 @@ function SearchableDropdown({
 const api_startpoint = 'https://lifeapp-api-vv1.vercel.app'
 
 
-export default function teachersDashboard() {
+export default function TeachersDashboard() {
     const [states, setStates] = useState<string[]>([]);
     const [isStatesLoading, setIsStatesLoading] = useState(false);
     const [selectedState, setSelectedState] = useState("");

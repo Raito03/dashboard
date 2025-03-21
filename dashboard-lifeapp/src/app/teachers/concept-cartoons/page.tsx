@@ -31,7 +31,7 @@ interface CartoonData {
 
 const api_startpoint = 'https://lifeapp-api-vv1.vercel.app'
 
-export default function conceptCartoons() {
+export default function ConceptCartoons() {
     const [tableData, setTableData] = useState<any[]>([]);
     const [currentPage, setCurrentPage] = useState<number>(0);
     const rowsPerPage = 50;

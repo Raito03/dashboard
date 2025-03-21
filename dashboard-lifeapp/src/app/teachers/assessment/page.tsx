@@ -25,7 +25,7 @@ interface Assessment {
 
 const api_startpoint = 'https://lifeapp-api-vv1.vercel.app'
 
-export default function teacherAssessment() {
+export default function TeacherAssessment() {
   // State for table data and pagination
   const [tableData, setTableData] = useState<Assessment[]>([]);
   const [currentPage, setCurrentPage] = useState<number>(0);

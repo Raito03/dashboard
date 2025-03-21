@@ -25,7 +25,7 @@ interface Worksheet {
 
 const api_startpoint = 'https://lifeapp-api-vv1.vercel.app'
 
-export default function teacherWorkSheets() {
+export default function TeacherWorkSheets() {
   // Table & filter states
   const [tableData, setTableData] = useState<Worksheet[]>([]);
   const [currentPage, setCurrentPage] = useState<number>(0);

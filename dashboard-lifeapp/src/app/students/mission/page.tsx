@@ -16,7 +16,7 @@ const poppins = Poppins({
   
 const api_startpoint = 'https://lifeapp-api-vv1.vercel.app'
 
-export default function mission_page() {
+export default function MissionPage() {
     const [selectedFromDate, setSelectedFromDate] = useState(""); // New state for From Date
     const [selectedToDate, setSelectedToDate] = useState("");     // New state for To Date
     const [selectedMissionAcceptance, setSelectedMissionAcceptance] = useState("")
