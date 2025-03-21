@@ -3,7 +3,7 @@ from binascii import Error
 from flask import Flask, jsonify, request
 from flask_cors import CORS
 import pymysql.cursors
-
+from pathlib import Path
 app = Flask(__name__)
 CORS(app)  # Enable CORS
 
@@ -11,26 +11,54 @@ import os
 from dotenv import load_dotenv
 
 # Load environment variables from .env file
+env_path = Path('.') / '.env'
 load_dotenv()
-
 # def get_db_connection():
 #     return pymysql.connect(
-#         host=os.getenv('DB_HOST', 'localhost'),
-#         user=os.getenv('DB_USER', 'root'),
-#         password=os.getenv('DB_PASSWORD', ''),
-#         database=os.getenv('DB_NAME', 'lifeapp'),
+#         host='localhost',  # Your MySQL host
+#         port=3306,             # MySQL port
+#         user='root',           # MySQL username
+#         password='Diamond0606***',  # MySQL password
+#         database='lifeapp',    # Database name
 #         cursorclass=pymysql.cursors.DictCursor
 #     )
 
 def get_db_connection():
+    host=os.getenv('DB_HOST', 'localhost')
+    port=int(os.getenv('DB_PORT', 3306))
+    user=os.getenv('DB_USERNAME', 'root')
+    password=os.getenv('DB_PASSWORD', '')
+    database=os.getenv('DB_DATABASE', 'lifeapp')
+    print(host,port,user,password,database)
     return pymysql.connect(
-        host=os.getenv('DB_HOST', 'localhost'),
-        port=int(os.getenv('DB_PORT', 3306)),
-        user=os.getenv('DB_USERNAME', 'root'),
-        password=os.getenv('DB_PASSWORD', ''),
-        database=os.getenv('DB_DATABASE', 'lifeapp'),
+        host = host,  # Fallback to 'localhost'
+        port = port,     # Fallback to 3306
+        user = user,        # Fallback to 'root'
+        password=password,    # Fallback to empty
+        database=database,
         cursorclass=pymysql.cursors.DictCursor
     )
+
+# def get_db_connection():
+#     return pymysql.connect(
+#         host=os.getenv('DB_HOST', 'localhost'),
+#         port=int(os.getenv('DB_PORT', 3306)),
+#         user=os.getenv('DB_USERNAME', 'root'),
+#         password=os.getenv('DB_PASSWORD', ''),
+#         database=os.getenv('DB_DATABASE', 'lifeapp'),
+#         cursorclass=pymysql.cursors.DictCursor
+#     )
+
+@app.route('/debug-env', methods = ['GET'])
+def debug_env():
+    host = os.getenv('DB_HOST')
+    user = os.getenv('DB_USERNAME')
+    password = os.getenv('DB_PASSWORD')
+    return jsonify({
+        'host': host,
+        'user': user,
+        'password': password
+    })
 
 @app.route('/')
 def backup():
@@ -200,11 +228,12 @@ def get_coupons_used_count():
 
 @app.route('/api/total-student-count', methods=['GET'])
 def get_total_student_count():
+    connection = None  # Initialize connection to None
     try:
         connection = get_db_connection()
         with connection.cursor() as cursor:
             sql = """
-                select count(*) as count from lifeapp.users where type = 3;
+                SELECT count(*) as count from lifeapp.users where `type` = 3;
             """
             cursor.execute(sql)
             result = cursor.fetchall()
@@ -213,7 +242,9 @@ def get_total_student_count():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
     finally:
-        connection.close()
+        if connection:  # Only close connection if it was established
+            connection.close()
+
 
 
 @app.route('/api/school_list', methods=['GET'])
