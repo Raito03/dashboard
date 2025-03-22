@@ -36,13 +36,13 @@ export const SIDENAV_ITEMS: SideNavItem[] = [
     submenu: true,
     subMenuItems: [
       { title: 'Dashboard', path: '/teachers/dashboard' },
-      { title: 'Competencies', path: '/teachers/competencies' },
-      { title: 'Concept Cartoon Header', path: '/teachers/concept-cartoon-header' },
-      { title: 'Concept Cartoons', path: '/teachers/concept-cartoons' },
-      { title: 'Assessment', path: '/teachers/assessment' },
-      { title: 'Work Sheets', path: '/teachers/worksheets' },
-      { title: 'Lesson Plan Language', path: '/teachers/lesson-plan-language' },
-      { title: 'Lesson Plans', path: '/teachers/lesson-plans' }
+      // { title: 'Competencies', path: '/teachers/competencies' },
+      // { title: 'Concept Cartoon Header', path: '/teachers/concept-cartoon-header' },
+      // { title: 'Concept Cartoons', path: '/teachers/concept-cartoons' },
+      // { title: 'Assessment', path: '/teachers/assessment' },
+      // { title: 'Work Sheets', path: '/teachers/worksheets' },
+      // { title: 'Lesson Plan Language', path: '/teachers/lesson-plan-language' },
+      // { title: 'Lesson Plans', path: '/teachers/lesson-plans' }
     ]
   },
   {
@@ -72,7 +72,18 @@ export const SIDENAV_ITEMS: SideNavItem[] = [
     submenu: true,
     subMenuItems: [
       { title: 'Student/Related', path: '#' },
-      { title: 'Teacher/Mentor Related', path: '#' },
+      { title: 'Teacher', path: '#', 
+        submenu: true,
+        subMenuItems: [
+          { title: 'Competencies', path: '/teachers/competencies' },
+          { title: 'Concept Cartoon Header', path: '/teachers/concept-cartoon-header' },
+          { title: 'Concept Cartoons', path: '/teachers/concept-cartoons' },
+          { title: 'Assessment', path: '/teachers/assessment' },
+          { title: 'Work Sheets', path: '/teachers/worksheets' },
+          { title: 'Lesson Plan Language', path: '/teachers/lesson-plan-language' },
+          { title: 'Lesson Plans', path: '/teachers/lesson-plans' }
+        ]
+      },
     ],
   },
   {
