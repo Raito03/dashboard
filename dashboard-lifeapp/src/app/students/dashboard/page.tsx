@@ -426,7 +426,7 @@ export default function SchoolDashboard() {
             school: selectedSchools,
             city: selectedCity,
             grade: selectedGrade,
-            mission_type: selectedMissionType,
+            mission_type: '',
             mission_acceptance: selectedMissionAcceptance,
             mission_requested_no: selectedMissionRequestedNo, // Add these filters
             mission_accepted_no: selectedMissionAcceptedNo,    // Add these filters
@@ -462,7 +462,7 @@ export default function SchoolDashboard() {
         setSelectedCity("");
         setSelectedSchools("");
         setSelectedGrade("");
-        setSelectedMissionType("");
+        // setSelectedMissionType("");
         setSelectedMissionAcceptance("");
         setSelectedMissionAcceptedNo("");
         setSelectedMissionRequestedNo("");
@@ -590,14 +590,14 @@ export default function SchoolDashboard() {
                             <h5 className="card-title mb-4">Search & Filter</h5>
                             <div className="row g-3">
                                 {/* Dropdowns Row 1 */}
-                                <div className="col-12 col-md-6 col-lg-3">
+                                {/* <div className="col-12 col-md-6 col-lg-3">
                                     <select className="form-select" value={selectedMissionType} onChange={(e) => setSelectedMissionType(e.target.value)}>
                                         <option value="">All Missions Types</option>
                                         <option value="Mission">Mission</option>
                                         <option value="Jigyasa">Jigyasa</option>
                                         <option value="Pragya">Pragya</option>
                                     </select>
-                                </div>
+                                </div> */}
                                 <div className="col-12 col-md-6 col-lg-3">
                                     <select className="form-select" value={selectedMissionAcceptance} onChange={(e) => setSelectedMissionAcceptance(e.target.value)} >
                                         <option value="">All Missions</option>

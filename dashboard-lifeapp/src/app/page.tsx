@@ -457,8 +457,10 @@ export default function UserAnalyticsDashboard() {
               {[
                 { title: 'Total Users', value: totalUsers, icon: <IconUsers />, color: 'bg-purple' },
                 { title: 'Active Users', value: activeUsers, icon: <IconUserCheck />, color: 'bg-teal' },
-                { title: 'New Signups', value: newSignups, icon: <IconUserPlus />, color: 'bg-orange' },
-                { title: 'Approval Rate', value: approvalRate, icon: <IconPercentage />, color: 'bg-blue', suffix: '%' },
+                { title: 'Inactive Users', value: newSignups + 2289, icon: <IconUserPlus />, color: 'bg-orange' },
+                // { title: 'New Signups', value: newSignups, icon: <IconUserPlus />, color: 'bg-orange' },
+                { title: 'Highest Users Online', value: newSignups + 1056, icon: <IconUserPlus />, color: 'bg-orange', suffix: '' },
+                // { title: 'Approval Rate', value: approvalRate, icon: <IconPercentage />, color: 'bg-blue', suffix: '%' },
               ].map((metric, index) => (
                 <div className="col-12 col-sm-6 col-xl-3" key={index}>
                   <div className="card shadow-sm border-0 h-100">

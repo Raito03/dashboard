@@ -5,13 +5,14 @@ from flask_cors import CORS
 import pymysql.cursors
 from pathlib import Path
 app = Flask(__name__)
-CORS(app)  # Enable CORS
+# Configure CORS to allow requests from http://localhost:3000 with credentials
+CORS(app, resources={r"/*": {"origins": "http://localhost:3000"}}, supports_credentials=True)
 
 import os
 from dotenv import load_dotenv
 
 # Load environment variables from .env file
-env_path = Path('.') / '.env'
+env_path = Path('.') / '.env.local'
 load_dotenv()
 # def get_db_connection():
 #     return pymysql.connect(
@@ -48,6 +49,7 @@ def get_db_connection():
 #         database=os.getenv('DB_DATABASE', 'lifeapp'),
 #         cursorclass=pymysql.cursors.DictCursor
 #     )
+
 
 @app.route('/debug-env', methods = ['GET'])
 def debug_env():
@@ -409,6 +411,7 @@ def search():
         return jsonify({'error': str(e)}), 500
     finally:
         connection.close()
+
 
 
 @app.route('/api/coupon_redeem_search', methods=['GET'])

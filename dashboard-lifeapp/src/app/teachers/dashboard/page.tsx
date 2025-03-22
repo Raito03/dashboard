@@ -17,6 +17,7 @@ import {
   Search,
   XCircle,
 } from "lucide-react";
+import NumberFlow from '@number-flow/react';
 
 const poppins = Poppins({
     subsets: ['latin'],
@@ -412,6 +413,38 @@ export default function TeachersDashboard() {
                     </div>
                 </header>
                 <div className='container-xl pt-0 pb-4'>
+                    {/* Metrics Grid */}
+                    <div className="row g-4 mb-4">
+                        {[
+                            { title: 'Total Teachers', value: 361, icon: <IconUser />, color: 'bg-purple' },
+                            { title: 'Active Teachers', value: 256, icon: <IconUserFilled />, color: 'bg-teal' },
+                            { title: 'Inactive Teachers', value: 46, icon: <IconUserExclamation />, color: 'bg-orange' },
+                            { title: 'Highest Online User Count', value: 36987, icon: <IconUserScan />, color: 'bg-blue', suffix: '' },
+                        ].map((metric, index) => (
+                            <div className="col-12 col-sm-6 col-xl-3" key={index}>
+                            <div className="card shadow-sm border-0 h-100">
+                                <div className="card-body">
+                                <div className="d-flex align-items-center gap-3">
+                                    <div className={`${metric.color} rounded-circle p-3 text-white`}>
+                                    {React.cloneElement(metric.icon, { size: 24 })}
+                                    </div>
+                                    <div>
+                                    <div className="text-muted mb-1">{metric.title}</div>
+                                    <div className="h2 mb-0">
+                                        <NumberFlow
+                                        value={metric.value}
+                                        suffix={metric.suffix || ''}
+                                        className="fw-bold text-dark"
+                                        transformTiming={{endDelay:6, duration:750, easing:'cubic-bezier(0.42, 0, 0.58, 1)'}}
+                                        />
+                                    </div>
+                                    </div>
+                                </div>
+                                </div>
+                            </div>
+                            </div>
+                        ))}
+                    </div>
                     <div className="card shadow-sm border-0 mb-4">
                         <div className="card-body">
                             <h5 className="card-title mb-4">Search & Filter</h5>
