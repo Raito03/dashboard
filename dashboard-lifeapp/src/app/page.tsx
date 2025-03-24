@@ -55,7 +55,7 @@ import { Sidebar } from '@/components/ui/sidebar';
 import { Inter } from 'next/font/google';
 const inter = Inter({ subsets: ['latin'] });
 
- const api_startpoint = 'https://lifeapp-api-vv1.vercel.app'
+const api_startpoint = 'https://lifeapp-api-vv1.vercel.app'
 //const api_startpoint = 'http://127.0.0.1:5000'
 
 interface EchartSignup {
@@ -77,7 +77,7 @@ export default function UserAnalyticsDashboard() {
       // end_date: '2023-12-31'
     });
 
-    fetch(`${api_startpoint}/api/user-signups2?${params.toString()}`)
+    fetch(`${api_startpoint}/api/signing-user?${params.toString()}`)
       .then(response => {
         if (!response.ok) {
           throw new Error('Network response was not ok');

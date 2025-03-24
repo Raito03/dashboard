@@ -119,7 +119,7 @@ def execute_query(query: str, params: tuple = None) -> List[Dict[str, Any]]:
     finally:
         if connection:
             connection.close()
-@app.route('/api/user-signups2', methods=['GET'])
+@app.route('/api/signing-user', methods=['GET'])
 def get_user_signups2():
     """
     Get user signup statistics grouped by different time periods.
