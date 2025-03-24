@@ -153,9 +153,9 @@ def get_user_signups2():
 
         # Define date format based on grouping
         date_formats = {
-            'daily': "DATE_FORMAT(created_at, '%Y-%m-%d')",
-            'weekly': "DATE_FORMAT(created_at, '%Y-%u')", # ISO week number
-            'monthly': "DATE_FORMAT(created_at, '%Y-%m')",
+            'daily': "DATE_FORMAT(created_at, '%%Y-%%m-%%d')",
+            'weekly': "DATE_FORMAT(created_at, '%%Y-%%u')",  # ISO week number
+            'monthly': "DATE_FORMAT(created_at, '%%Y-%%m')",
             'quarterly': "CONCAT(YEAR(created_at), '-Q', QUARTER(created_at))",
             'yearly': "YEAR(created_at)",
             'lifetime': "'Lifetime'"

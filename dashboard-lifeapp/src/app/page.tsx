@@ -44,169 +44,112 @@ interface SignupData {
   month: string | null
   count: number
 }
-import { Poppins } from 'next/font/google';
+
+import ReactECharts from 'echarts-for-react';
+
+const groupings = ['daily', 'weekly', 'monthly', 'quarterly', 'yearly', 'lifetime'];
+
 // import Sidebar from './sidebar';
 import { title } from 'process';
 import { Sidebar } from '@/components/ui/sidebar';
 import { Inter } from 'next/font/google';
 const inter = Inter({ subsets: ['latin'] });
 
-const api_startpoint = 'https://lifeapp-api-vv1.vercel.app'
-// const api_startpoint = 'http://127.0.0.1:5000'
+ const api_startpoint = 'https://lifeapp-api-vv1.vercel.app'
+//const api_startpoint = 'http://127.0.0.1:5000'
 
-
-// import { format } from 'date-fns';
-
-// import ApexCharts from 'apexcharts'
-
-
-import dynamic from "next/dynamic";
-
-// const ApexChart = dynamic(() => import("react-apexcharts"), { ssr: false });
-
-
-interface SignupData2 {
-  x: string;
-  y: number;
+interface EchartSignup {
+  period: string | null,
+  count: number
 }
-
 export default function UserAnalyticsDashboard() {
-  // const [data, setData] = useState<SignupData2[]>([]);
-  // const [isLoading, setIsLoading] = useState(true);
-  // const [error, setError] = useState<string | null>(null);
+  const [EchartData, setEChartData] = useState<EchartSignup[]>([]);
+  const [grouping, setGrouping] = useState('monthly');
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  // Function to fetch data from the API based on the selected grouping
+  const fetchDataEcharts = (selectedGrouping: string) => {
+    setLoading(true);
+    const params = new URLSearchParams({
+      grouping: selectedGrouping,
+      // Uncomment and set these if you want to filter by date:
+      // start_date: '2023-01-01',
+      // end_date: '2023-12-31'
+    });
 
-  // const fetchSignupData  = async () => {
-  //   try {
-  //     setIsLoading(true);
-  //     const response = await fetch(`${api_startpoint}/api/user-signups2`);
-  //     const json = await response.json();
-  //     setData(json.data);
-  //     setError(null);
-  //   } catch (err) {
-  //     setError('Failed to load signup data');
-  //   } finally {
-  //     setIsLoading(false);
-  //   }
-  // };
+    fetch(`${api_startpoint}/api/user-signups2?${params.toString()}`)
+      .then(response => {
+        if (!response.ok) {
+          throw new Error('Network response was not ok');
+        }
+        return response.json();
+      })
+      .then(data => {
+        // Assume API returns data in a { data: [{ period, count }, ...] } format
+        setEChartData(data.data);
+        setLoading(false);
+      })
+      .catch(err => {
+        setError(err.message);
+        setLoading(false);
+      });
+  };
 
-  // useEffect(() => {
-  //   fetchSignupData ();
-  // }, []);
+  // Fetch new data whenever the grouping changes
+  useEffect(() => {
+    fetchDataEcharts(grouping);
+  }, [grouping]);
+  // Configure the ECharts option
+  const EchartOption = {
+    title: {
+      text: 'User Signups Over Time',
+      left: 'center'
+    },
+    tooltip: {
+      trigger: 'axis'
+    },
+    xAxis: {
+      type: 'category',
+      data: EchartData.map(item => item.period),
+      boundaryGap: grouping === 'lifetime' ? true : false,
+      axisLabel: {
+        // Rotate labels for daily grouping for better readability
+        rotate: grouping === 'daily' ? 45 : 0
+      }
+    },
+    yAxis: {
+      type: 'value'
+    },
+    // Data zoom enables efficient panning and zooming on the chart
+    dataZoom: [
+      {
+        type: 'inside',
+        start: 0,
+        end: 100
+      },
+      {
+        type: 'slider',
+        start: 0,
+        end: 100
+      }
+    ],
+    series: [
+      {
+        name: 'Signups',
+        type: 'bar',
+        data: EchartData.map(item => item.count),
+        barMaxWidth: '50%',
+        itemStyle: {
+          color: '#5470C6'
+        }
+      }
+    ]
+  };
 
-  // const chartOptions: ApexCharts.ApexOptions = {
-  //   chart: {
-  //     type: 'area' as const,
-  //     height: 350,
-  //     zoom: {
-  //       enabled: true,
-  //       type: 'x' as const,
-  //     },
-  //     toolbar: {
-  //       show: true,
-  //       tools: {
-  //         download: true,
-  //         selection: true,
-  //         zoom: true,
-  //         zoomin: true,
-  //         zoomout: true,
-  //         pan: true,
-  //         reset: true,
-  //       },
-  //     },
-  //     animations: {
-  //       enabled: true,
-  //       easing: 'easeinout', // ✅ Fixed: Use one of the allowed values
-  //       speed: 800,
-  //       animateGradually: {
-  //         enabled: true,
-  //         delay: 150,
-  //       },
-  //       dynamicAnimation: {
-  //         enabled: true,
-  //         speed: 350,
-  //       },
-  //     },
-  //   },
-  //   dataLabels: {
-  //     enabled: false,
-  //   },
-  //   stroke: {
-  //     curve: 'smooth' as const,
-  //     width: 2,
-  //   },
-  //   fill: {
-  //     type: 'gradient',
-  //     gradient: {
-  //       shadeIntensity: 1,
-  //       opacityFrom: 0.7,
-  //       opacityTo: 0.3,
-  //       stops: [0, 90, 100],
-  //     },
-  //   },
-  //   xaxis: {
-  //     type: 'datetime' as const,
-  //     labels: {
-  //       formatter: function (val: string) {
-  //         return format(new Date(val), 'MMM dd');
-  //       },
-  //     },
-  //     title: {
-  //       text: 'Date',
-  //     },
-  //   },
-  //   yaxis: {
-  //     title: {
-  //       text: 'Number of Signups',
-  //     },
-  //     min: 0,
-  //   },
-  //   tooltip: {
-  //     x: {
-  //       format: 'dd MMM yyyy',
-  //     },
-  //     y: {
-  //       formatter: function (val: number) {
-  //         return val.toString();
-  //       },
-  //     },
-  //   },
-  //   theme: {
-  //     mode: 'light' as const,
-  //     palette: 'palette1',
-  //   },
-  // };
-  
-
-  // const series = [
-  //   {
-  //     name: 'User Signups',
-  //     data: data,
-  //   },
-  // ];
-  // if (isLoading) {
-  //   return (
-  //     <div className='card'>
-  //       <div className=" card-body pt-6">
-  //         <div className="flex items-center justify-center h-[400px]">
-  //           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-  //         </div>
-  //       </div>
-  //     </div>
-  //   );
-  // }
-
-  // if (error) {
-  //   return (
-  //     <div className='card'>
-  //       <div className=" card-body pt-6">
-  //         <div className="flex flex-col items-center justify-center h-[400px] gap-4">
-  //           <p className="text-destructive">{error}</p>
-  //           <button onClick={fetchSignupData }>Retry</button>
-  //         </div>
-  //       </div>
-  //     </div>
-  //   );
-  // }
+  // Handle dropdown change to update the grouping
+  const handleGroupingChange = (e: { target: { value: React.SetStateAction<string>; }; }) => {
+    setGrouping(e.target.value);
+  };
 
 
 
@@ -655,17 +598,28 @@ export default function UserAnalyticsDashboard() {
 
             {/* Charts Section */}
             {mounted && (
-              
+
+                
                 <div className="row g-4">
-                  {/* <div className="h-[400px] w-full">
-                <ApexChart
-                  options={chartOptions}
-                  series={series}
-                  type="area"
-                  height="100%"
-                  width="100%"
-                />
-              </div> */}
+                  <div className='w-full h-45'>
+                    <div style={{ marginBottom: '20px' }}>
+                      <label htmlFor="grouping-select">Select Time Grouping: </label>
+                      <select id="grouping-select" value={grouping} onChange={handleGroupingChange}>
+                        {groupings.map(g => (
+                          <option key={g} value={g}>
+                            {g.charAt(0).toUpperCase() + g.slice(1)}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    {loading ? (
+                      <div>Loading chart...</div>
+                    ) : error ? (
+                      <div>Error: {error}</div>
+                    ) : (
+                      <ReactECharts option={EchartOption} style={{ height: '400px', width: '100%' }} />
+                    )}
+                  </div>
                 {/* Signups Chart */}
                 <div className="col-12 col-xl-6">
                   <div className="card shadow-sm border-0 h-100">
