@@ -1,11 +1,12 @@
 'use client'
 import '@tabler/core/dist/css/tabler.min.css';
-import 'bootstrap/dist/css/bootstrap.min.css';
+// import 'bootstrap/dist/css/bootstrap.min.css';
 import { useState, useEffect, useRef, useMemo, useCallback  } from 'react'
 // import NumberFlow from '@number-flow/react'
 import React from 'react';
-import { Poppins } from 'next/font/google';
-import Sidebar from '../../sidebar';
+import { Inter } from 'next/font/google';
+const inter = Inter({ subsets: ['latin'] });
+import { Sidebar } from '@/components/ui/sidebar';
 import { IconSearch, IconBell, IconSettings, IconUserFilled, IconUserExclamation, IconUser, IconUserScan } from '@tabler/icons-react';
 
 
@@ -19,11 +20,7 @@ import {
 } from "lucide-react";
 import NumberFlow from '@number-flow/react';
 
-const poppins = Poppins({
-    subsets: ['latin'],
-    weight: ['400', '600', '700'], // Choose needed weights
-    variable: '--font-poppins', // Matches the CSS variable
-});
+
 interface SearchableDropdownProps {
     options: string[];
     placeholder: string;
@@ -386,13 +383,13 @@ export default function TeachersDashboard() {
     };
 
     return (
-        <div className={`page bg-light ${poppins.variable} font-sans`}>
+        <div className={`page bg-light ${inter.className} font-sans`}>
             <Sidebar />
 
             {/* Main Content */}
             <div className="page-wrapper" style={{ marginLeft: '250px' }}>
                 {/* Top Navigation */}
-                <header className="navbar navbar-expand-md navbar-light bg-white shadow-sm border-bottom mb-3">
+                {/* <header className="navbar navbar-expand-md navbar-light bg-white shadow-sm border-bottom mb-3">
                     <div className="container-fluid">
                         <div className="d-flex align-items-center w-full">
                         <span className='font-bold text-xl text-black '>LifeAppDashBoard</span>
@@ -411,173 +408,175 @@ export default function TeachersDashboard() {
                         </div>
                         </div>
                     </div>
-                </header>
-                <div className='container-xl pt-0 pb-4'>
-                    {/* Metrics Grid */}
-                    <div className="row g-4 mb-4">
-                        {[
-                            { title: 'Total Teachers', value: 361, icon: <IconUser />, color: 'bg-purple' },
-                            { title: 'Active Teachers', value: 256, icon: <IconUserFilled />, color: 'bg-teal' },
-                            { title: 'Inactive Teachers', value: 46, icon: <IconUserExclamation />, color: 'bg-orange' },
-                            { title: 'Highest Online User Count', value: 36987, icon: <IconUserScan />, color: 'bg-blue', suffix: '' },
-                        ].map((metric, index) => (
-                            <div className="col-12 col-sm-6 col-xl-3" key={index}>
-                            <div className="card shadow-sm border-0 h-100">
-                                <div className="card-body">
-                                <div className="d-flex align-items-center gap-3">
-                                    <div className={`${metric.color} rounded-circle p-3 text-white`}>
-                                    {React.cloneElement(metric.icon, { size: 24 })}
+                </header> */}
+                <div className='page-body'>
+                    <div className='container-xl pt-0 pb-4'>
+                        {/* Metrics Grid */}
+                        <div className="row g-4 mb-4">
+                            {[
+                                { title: 'Total Teachers', value: 361, icon: <IconUser />, color: 'bg-purple' },
+                                { title: 'Active Teachers', value: 256, icon: <IconUserFilled />, color: 'bg-teal' },
+                                { title: 'Inactive Teachers', value: 46, icon: <IconUserExclamation />, color: 'bg-orange' },
+                                { title: 'Highest Online User Count', value: 36987, icon: <IconUserScan />, color: 'bg-blue', suffix: '' },
+                            ].map((metric, index) => (
+                                <div className="col-sm-6 col-lg-3" key={index}>
+                                    <div className="card">
+                                        <div className="card-body">
+                                            <div className="d-flex align-items-center">
+                                                {/* <div className={`${metric.color} rounded-circle p-3 text-white`}>
+                                                {React.cloneElement(metric.icon, { size: 24 })}
+                                                </div> */}
+                                                <div>
+                                                <div className="subheader">{metric.title}</div>
+                                                    <div className="h1 mb-3">
+                                                        <NumberFlow
+                                                        value={metric.value}
+                                                        suffix={metric.suffix || ''}
+                                                        className="fw-semi-bold text-dark"
+                                                        transformTiming={{endDelay:6, duration:750, easing:'cubic-bezier(0.42, 0, 0.58, 1)'}}
+                                                        />
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
                                     </div>
-                                    <div>
-                                    <div className="text-muted mb-1">{metric.title}</div>
-                                    <div className="h2 mb-0">
-                                        <NumberFlow
-                                        value={metric.value}
-                                        suffix={metric.suffix || ''}
-                                        className="fw-bold text-dark"
-                                        transformTiming={{endDelay:6, duration:750, easing:'cubic-bezier(0.42, 0, 0.58, 1)'}}
+                                </div>
+                            ))}
+                        </div>
+                        <div className="card shadow-sm border-0 mb-4">
+                            <div className="card-body">
+                                <h5 className="card-title mb-4">Search & Filter</h5>
+                                <div className="row g-3">
+                                    <div className="col-12 col-md-6 col-lg-3">
+                                        <SearchableDropdown
+                                            options={states}
+                                            placeholder="Select States"
+                                            value={selectedState}
+                                            onChange={setSelectedState}
+                                            isLoading={isStatesLoading}
+                                            maxDisplayItems={200}
                                         />
                                     </div>
+                                    <div className="col-12 col-md-6 col-lg-3">
+                                        <SearchableDropdown
+                                            options={cities}
+                                            placeholder="Select City"
+                                            value={selectedCity}
+                                            onChange={setSelectedCity}
+                                            isLoading={isCitiesLoading}
+                                            maxDisplayItems={200}
+                                            
+                                        />
+                                    </div>
+                                    <div className="col-12 col-md-6 col-lg-3">
+                                        <input 
+                                            type="text" 
+                                            className="form-control" 
+                                            placeholder="Enter School Code" 
+                                            value={selectedSchoolCode}
+                                            onChange={(e) => setSelectedSchoolCode(e.target.value)}
+                                        />
+                                    </div>
+                                    
+                                    <div className="col-12 col-md-6 col-lg-3">
+                                        <select className='form-select' value={selectedLifeLab} onChange={(e) => setSelectedLifeLab(e.target.value)}>
+                                            <option value="">Life Lab User</option>
+                                            <option value="Yes">Yes</option>
+                                            <option value="No">No</option> 
+
+                                        </select>
                                     </div>
                                 </div>
+                                {/* Action Buttons */}
+                                <div className="d-flex flex-wrap gap-2 mt-4">
+                                    <button className="btn btn-success d-inline-flex align-items-center" onClick={handleSearch}>
+                                        <Search className="me-2" size={16} />
+                                        Search
+                                    </button>
+                                    
+                                    <button className="btn btn-warning d-inline-flex align-items-center text-dark" onClick={handleClear}>
+                                        <XCircle className="me-2" size={16} />
+                                        Clear
+                                    </button>
                                 </div>
                             </div>
-                            </div>
-                        ))}
-                    </div>
-                    <div className="card shadow-sm border-0 mb-4">
-                        <div className="card-body">
-                            <h5 className="card-title mb-4">Search & Filter</h5>
-                            <div className="row g-3">
-                                <div className="col-12 col-md-6 col-lg-3">
-                                    <SearchableDropdown
-                                        options={states}
-                                        placeholder="Select States"
-                                        value={selectedState}
-                                        onChange={setSelectedState}
-                                        isLoading={isStatesLoading}
-                                        maxDisplayItems={200}
-                                    />
-                                </div>
-                                <div className="col-12 col-md-6 col-lg-3">
-                                    <SearchableDropdown
-                                        options={cities}
-                                        placeholder="Select City"
-                                        value={selectedCity}
-                                        onChange={setSelectedCity}
-                                        isLoading={isCitiesLoading}
-                                        maxDisplayItems={200}
-                                        
-                                    />
-                                </div>
-                                <div className="col-12 col-md-6 col-lg-3">
-                                    <input 
-                                        type="text" 
-                                        className="form-control" 
-                                        placeholder="Enter School Code" 
-                                        value={selectedSchoolCode}
-                                        onChange={(e) => setSelectedSchoolCode(e.target.value)}
-                                    />
-                                </div>
-                                
-                                <div className="col-12 col-md-6 col-lg-3">
-                                    <select className='form-select' value={selectedLifeLab} onChange={(e) => setSelectedLifeLab(e.target.value)}>
-                                        <option value="">Life Lab User</option>
-                                        <option value="Yes">Yes</option>
-                                        <option value="No">No</option> 
-
-                                    </select>
-                                </div>
-                            </div>
-                            {/* Action Buttons */}
-                            <div className="d-flex flex-wrap gap-2 mt-4">
-                                <button className="btn btn-success d-inline-flex align-items-center" onClick={handleSearch}>
-                                    <Search className="me-2" size={16} />
-                                    Search
-                                </button>
-                                
-                                <button className="btn btn-warning d-inline-flex align-items-center text-dark" onClick={handleClear}>
-                                    <XCircle className="me-2" size={16} />
-                                    Clear
-                                </button>
-                            </div>
-                        </div>
-                        {/* Paginated Results Table */}
-                        <div className="card shadow-sm border-0 mt-2">
-                                <div className="card-body overflow-x-scroll">
-                                    <h5 className="card-title mb-4">Results</h5>
-                                    {isTableLoading ? (
-                                            <div className="text-center p-5">
-                                                <div className="spinner-border text-purple" role="status" style={{ width: "3rem", height: "3rem" }}>
-                                                    <span className="visually-hidden">Loading...</span>
-                                                </div>
-                                                <p className="mt-3 text-muted">Loading data, please wait...</p>
-                                            </div>
-                                        ) : tableData.length === 0 ? (
-                                            <div className="text-center p-5">
-                                                <div className="text-muted justify-items-center">
-                                                    <IconSearch size={48} className="mb-3 opacity-50 " />
-                                                    <p>No data to display. Please use the search filters above and click Search.</p>
-                                                </div>
-                                            </div>
-                                        ) : (
-                                            <>
-                                                <table className="table table-striped">
-                                                    <thead>
-                                                        <tr>
-                                                            <th>Name</th>
-                                                            <th>Email</th>
-                                                            <th>Mobile</th>
-                                                            <th>City</th>
-                                                            <th>State</th>
-                                                            <th>School ID</th>
-                                                            <th>Is Life Lab</th>
-                                                        </tr>
-                                                    </thead>
-                                                    <tbody>
-                                                        {paginatedData.map((row, index) => (
-                                                            <tr key={index}>
-                                                                <td>{row.name}</td>
-                                                                <td>{row.email}</td>
-                                                                <td>{row.mobile_no}</td>
-                                                                <td>{row.city}</td>
-                                                                <td>{row.state}</td>
-                                                                <td>{row.school_id}</td>
-                                                                <td>{row.is_life_lab}</td>
-                                                            </tr>
-                                                        ))}
-                                                    </tbody>
-                                                </table>
-                                                
-                                                {/* Pagination Controls */}
-                                                <div className="d-flex justify-content-between mt-3">
-                                                    <button 
-                                                        className="btn btn-secondary"
-                                                        onClick={() => setCurrentPage(prev => Math.max(prev - 1, 0))}
-                                                        disabled={currentPage === 0}
-                                                    >
-                                                        Previous
-                                                    </button>
-                                                    <div className="d-flex align-items-center">
-                                                        <span className="mx-2">
-                                                            Page {currentPage + 1} of {Math.ceil(tableData.length / rowsPerPage) || 1}
-                                                        </span>
+                            {/* Paginated Results Table */}
+                            <div className="card shadow-sm border-0 mt-2">
+                                    <div className="card-body overflow-x-scroll">
+                                        <h5 className="card-title mb-4">Results</h5>
+                                        {isTableLoading ? (
+                                                <div className="text-center p-5">
+                                                    <div className="spinner-border text-purple" role="status" style={{ width: "3rem", height: "3rem" }}>
+                                                        <span className="visually-hidden">Loading...</span>
                                                     </div>
-                                                    <button 
-                                                        className="btn btn-secondary"
-                                                        onClick={() => setCurrentPage(prev => (prev + 1) * rowsPerPage < tableData.length ? prev + 1 : prev)}
-                                                        disabled={(currentPage + 1) * rowsPerPage >= tableData.length}
-                                                    >
-                                                        Next
-                                                    </button>
+                                                    <p className="mt-3 text-muted">Loading data, please wait...</p>
                                                 </div>
-                                            </>
-                                        )}
-                                </div>
-                            </div> 
+                                            ) : tableData.length === 0 ? (
+                                                <div className="text-center p-5">
+                                                    <div className="text-muted justify-items-center">
+                                                        <IconSearch size={48} className="mb-3 opacity-50 " />
+                                                        <p>No data to display. Please use the search filters above and click Search.</p>
+                                                    </div>
+                                                </div>
+                                            ) : (
+                                                <>
+                                                    <table className="table table-striped">
+                                                        <thead>
+                                                            <tr>
+                                                                <th>Name</th>
+                                                                <th>Email</th>
+                                                                <th>Mobile</th>
+                                                                <th>City</th>
+                                                                <th>State</th>
+                                                                <th>School ID</th>
+                                                                <th>Is Life Lab</th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody>
+                                                            {paginatedData.map((row, index) => (
+                                                                <tr key={index}>
+                                                                    <td>{row.name}</td>
+                                                                    <td>{row.email}</td>
+                                                                    <td>{row.mobile_no}</td>
+                                                                    <td>{row.city}</td>
+                                                                    <td>{row.state}</td>
+                                                                    <td>{row.school_id}</td>
+                                                                    <td>{row.is_life_lab}</td>
+                                                                </tr>
+                                                            ))}
+                                                        </tbody>
+                                                    </table>
+                                                    
+                                                    {/* Pagination Controls */}
+                                                    <div className="d-flex justify-content-between mt-3">
+                                                        <button 
+                                                            className="btn btn-secondary"
+                                                            onClick={() => setCurrentPage(prev => Math.max(prev - 1, 0))}
+                                                            disabled={currentPage === 0}
+                                                        >
+                                                            Previous
+                                                        </button>
+                                                        <div className="d-flex align-items-center">
+                                                            <span className="mx-2">
+                                                                Page {currentPage + 1} of {Math.ceil(tableData.length / rowsPerPage) || 1}
+                                                            </span>
+                                                        </div>
+                                                        <button 
+                                                            className="btn btn-secondary"
+                                                            onClick={() => setCurrentPage(prev => (prev + 1) * rowsPerPage < tableData.length ? prev + 1 : prev)}
+                                                            disabled={(currentPage + 1) * rowsPerPage >= tableData.length}
+                                                        >
+                                                            Next
+                                                        </button>
+                                                    </div>
+                                                </>
+                                            )}
+                                    </div>
+                                </div> 
+                        </div>
+
+
                     </div>
-
-
                 </div>
             </div>
         </div>

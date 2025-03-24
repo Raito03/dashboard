@@ -1,18 +1,19 @@
 'use client'
 import '@tabler/core/dist/css/tabler.min.css';
-import 'bootstrap/dist/css/bootstrap.min.css';
+// import 'bootstrap/dist/css/bootstrap.min.css';
 import { useEffect, useState } from 'react';
 import React from 'react';
-import { Poppins } from 'next/font/google';
-import Sidebar from '../../sidebar';
+import { Inter } from 'next/font/google';
+const inter = Inter({ subsets: ['latin'] });
+import { Sidebar } from '@/components/ui/sidebar';
 import { IconSearch, IconBell, IconSettings, IconEdit } from '@tabler/icons-react';
 import { Plus, XCircle } from "lucide-react";
 
-const poppins = Poppins({
-    subsets: ['latin'],
-    weight: ['400', '600', '700'],
-    variable: '--font-poppins',
-});
+// const poppins = Poppins({
+//     subsets: ['latin'],
+//     weight: ['400', '600', '700'],
+//     variable: '--font-poppins',
+// });
 
 interface LessonPlanLanguage {
     id?: number;
@@ -122,10 +123,10 @@ export default function LessonPlanLanguage() {
     };
 
     return (
-        <div className={`page bg-light ${poppins.variable} font-sans`}>
+        <div className={`page bg-light ${inter.className} font-sans`}>
             <Sidebar />
             <div className="page-wrapper" style={{ marginLeft: '250px' }}>
-                <header className="navbar navbar-expand-md navbar-light bg-white shadow-sm border-bottom mb-3">
+                {/* <header className="navbar navbar-expand-md navbar-light bg-white shadow-sm border-bottom mb-3">
                     <div className="container-fluid">
                         <div className="d-flex flex-grow-0 align-items-center w-full">
                             <span className='font-bold text-xl text-black '>LifeAppDashBoard</span>
@@ -137,43 +138,45 @@ export default function LessonPlanLanguage() {
                             </div>
                         </div>
                     </div>
-                </header>
-                <div className='container-xl pt-0 pb-4'>
-                    <button className="btn btn-success" onClick={() => setShowAddModal(true)}>
-                        <Plus size={16} className="me-2" />
-                        Add Lesson Plan Language
-                    </button>
+                </header> */}
+                <div className="page-body">
+                    <div className='container-xl pt-0 pb-4'>
+                        <button className="btn btn-success" onClick={() => setShowAddModal(true)}>
+                            <Plus size={16} className="me-2" />
+                            Add Lesson Plan Language
+                        </button>
 
-                    <div className='card shadow-sm border-0 mt-2 mb-4'>
-                        <div className='card-body overflow-x-scroll'>
-                            {isTableLoading ? (
-                                <div className="text-center p-5">
-                                    <span>Loading...</span>
-                                </div>
-                            ) : (
-                                <table className="table table-striped">
-                                    <thead>
-                                        <tr>
-                                            <th>Title</th>
-                                            <th>Status</th>
-                                            <th>Actions</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {paginatedData.map((row, index) => (
-                                            <tr key={index}>
-                                                <td>{row.title}</td>
-                                                <td>{row.status}</td>
-                                                <td>
-                                                    <button className="btn btn-sm btn-info" onClick={() => handleEditClick(row)}>
-                                                        <IconEdit size={16} />
-                                                    </button>
-                                                </td>
+                        <div className='card shadow-sm border-0 mt-2 mb-4'>
+                            <div className='card-body overflow-x-scroll'>
+                                {isTableLoading ? (
+                                    <div className="text-center p-5">
+                                        <span>Loading...</span>
+                                    </div>
+                                ) : (
+                                    <table className="table table-striped">
+                                        <thead>
+                                            <tr>
+                                                <th>Title</th>
+                                                <th>Status</th>
+                                                <th>Actions</th>
                                             </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
-                            )}
+                                        </thead>
+                                        <tbody>
+                                            {paginatedData.map((row, index) => (
+                                                <tr key={index}>
+                                                    <td>{row.title}</td>
+                                                    <td>{row.status}</td>
+                                                    <td>
+                                                        <button className="btn btn-sm btn-info" onClick={() => handleEditClick(row)}>
+                                                            <IconEdit size={16} />
+                                                        </button>
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                )}
+                            </div>
                         </div>
                     </div>
                 </div>

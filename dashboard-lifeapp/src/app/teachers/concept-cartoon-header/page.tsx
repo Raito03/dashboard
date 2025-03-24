@@ -1,18 +1,19 @@
 'use client'
 import '@tabler/core/dist/css/tabler.min.css';
-import 'bootstrap/dist/css/bootstrap.min.css';
+// import 'bootstrap/dist/css/bootstrap.min.css';
 import { useEffect, useState } from 'react';
 import React from 'react';
-import { Poppins } from 'next/font/google';
-import Sidebar from '../../sidebar';
+import { Inter } from 'next/font/google';
+const inter = Inter({ subsets: ['latin'] });
+import { Sidebar } from '@/components/ui/sidebar';
 import { IconSearch, IconBell, IconSettings, IconEdit } from '@tabler/icons-react';
 import { Plus, Search, XCircle } from "lucide-react";
 
-const poppins = Poppins({
-    subsets: ['latin'],
-    weight: ['400', '600', '700'],
-    variable: '--font-poppins',
-});
+// const poppins = Poppins({
+//     subsets: ['latin'],
+//     weight: ['400', '600', '700'],
+//     variable: '--font-poppins',
+// });
 
 const api_startpoint = 'https://lifeapp-api-vv1.vercel.app'
 
@@ -105,10 +106,10 @@ export default function ConceptCartoonForm() {
     };
 
     return (
-        <div className={`page bg-light ${poppins.variable} font-sans`}>
+        <div className={`page bg-light ${inter.className} font-sans`}>
             <Sidebar />
             <div className="page-wrapper" style={{ marginLeft: '250px' }}>
-                <header className="navbar navbar-expand-md navbar-light bg-white shadow-sm border-bottom mb-3">
+                {/* <header className="navbar navbar-expand-md navbar-light bg-white shadow-sm border-bottom mb-3">
                     <div className="container-fluid">
                         <div className="d-flex align-items-center w-full">
                             <span className='font-bold text-xl text-black'>LifeAppDashBoard</span>
@@ -120,137 +121,139 @@ export default function ConceptCartoonForm() {
                             </div>
                         </div>
                     </div>
-                </header>
-                <div className="container-xl pt-0 pb-4">
-                    <div className="card shadow-sm border-0 mb-4">
-                        <div className="card-body">
-                            <h5 className="card-title mb-4">Create Concept Cartoon</h5>
-                            
-                            {message.text && (
-                                <div className={`alert alert-${message.type === 'success' ? 'success' : 'danger'} mb-4`}>
-                                    {message.text}
-                                </div>
-                            )}
-                            
-                            <form onSubmit={handleSubmit}>
-                                <div className="mb-3">
-                                    <label htmlFor="heading" className="form-label">Heading<span className="text-danger">*</span></label>
-                                    <input 
-                                        type="text" 
-                                        className="form-control" 
-                                        id="heading" 
-                                        name="heading"
-                                        placeholder="What is a concept cartoon?" 
-                                        value={formData.heading}
-                                        onChange={handleInputChange}
-                                        required
-                                    />
-                                </div>
+                </header> */}
+                <div className='page-body'>
+                    <div className="container-xl pt-0 pb-4">
+                        <div className="card shadow-sm border-0 mb-4">
+                            <div className="card-body">
+                                <h5 className="card-title mb-4">Create Concept Cartoon</h5>
                                 
-                                <div className="mb-3">
-                                    <label htmlFor="description" className="form-label">Description<span className="text-danger">*</span></label>
-                                    <textarea 
-                                        className="form-control" 
-                                        id="description" 
-                                        name="description"
-                                        placeholder="A concept cartoon is an instructional strategy used in science education..." 
-                                        rows={5}
-                                        value={formData.description}
-                                        onChange={handleInputChange}
-                                        required
-                                    ></textarea>
-                                </div>
+                                {message.text && (
+                                    <div className={`alert alert-${message.type === 'success' ? 'success' : 'danger'} mb-4`}>
+                                        {message.text}
+                                    </div>
+                                )}
                                 
-                                <div className="row mb-3">
-                                    <div className="col-md-6">
-                                        <label htmlFor="button_one_text" className="form-label">Button One Text<span className="text-danger">*</span></label>
+                                <form onSubmit={handleSubmit}>
+                                    <div className="mb-3">
+                                        <label htmlFor="heading" className="form-label">Heading<span className="text-danger">*</span></label>
                                         <input 
                                             type="text" 
                                             className="form-control" 
-                                            id="button_one_text" 
-                                            name="button_one_text"
-                                            placeholder="Blog" 
-                                            value={formData.button_one_text}
+                                            id="heading" 
+                                            name="heading"
+                                            placeholder="What is a concept cartoon?" 
+                                            value={formData.heading}
                                             onChange={handleInputChange}
                                             required
                                         />
                                     </div>
-                                    <div className="col-md-6">
-                                        <label htmlFor="button_one_link" className="form-label">Button One Link<span className="text-danger">*</span></label>
-                                        <input 
-                                            type="url" 
+                                    
+                                    <div className="mb-3">
+                                        <label htmlFor="description" className="form-label">Description<span className="text-danger">*</span></label>
+                                        <textarea 
                                             className="form-control" 
-                                            id="button_one_link" 
-                                            name="button_one_link"
-                                            placeholder="https://www.sciencelearn.org.nz/resources/2566-using-concept-cartoons" 
-                                            value={formData.button_one_link}
+                                            id="description" 
+                                            name="description"
+                                            placeholder="A concept cartoon is an instructional strategy used in science education..." 
+                                            rows={5}
+                                            value={formData.description}
                                             onChange={handleInputChange}
                                             required
-                                        />
+                                        ></textarea>
                                     </div>
-                                </div>
-                                
-                                <div className="row mb-3">
-                                    <div className="col-md-6">
-                                        <label htmlFor="button_two_text" className="form-label">Button Two Text<span className="text-danger">*</span></label>
-                                        <input 
-                                            type="text" 
-                                            className="form-control" 
-                                            id="button_two_text" 
-                                            name="button_two_text"
-                                            placeholder="Video" 
-                                            value={formData.button_two_text}
-                                            onChange={handleInputChange}
-                                            required
-                                        />
-                                    </div>
-                                    <div className="col-md-6">
-                                        <label htmlFor="button_two_link" className="form-label">Button Two Link<span className="text-danger">*</span></label>
-                                        <input 
-                                            type="url" 
-                                            className="form-control" 
-                                            id="button_two_link" 
-                                            name="button_two_link"
-                                            placeholder="https://www.youtube.com/watch?v=9GdZfpT6BVw" 
-                                            value={formData.button_two_link}
-                                            onChange={handleInputChange}
-                                            required
-                                        />
-                                    </div>
-                                </div>
-                                
-                                <div className="mb-4">
-                                    <label htmlFor="media" className="form-label">Select Image</label>
-                                    <input 
-                                        type="file" 
-                                        className="form-control" 
-                                        id="media" 
-                                        name="media"
-                                        accept="image/*"
-                                        // onChange={handleFileChange}
-                                    />
-                                    {previewUrl && (
-                                        <div className="mt-2">
-                                            <img 
-                                                src={previewUrl} 
-                                                alt="Selected image preview" 
-                                                className="img-thumbnail" 
-                                                style={{ maxHeight: '200px' }} 
+                                    
+                                    <div className="row mb-3">
+                                        <div className="col-md-6">
+                                            <label htmlFor="button_one_text" className="form-label">Button One Text<span className="text-danger">*</span></label>
+                                            <input 
+                                                type="text" 
+                                                className="form-control" 
+                                                id="button_one_text" 
+                                                name="button_one_text"
+                                                placeholder="Blog" 
+                                                value={formData.button_one_text}
+                                                onChange={handleInputChange}
+                                                required
                                             />
                                         </div>
-                                    )}
-                                </div>
-                                
-                                <div className="d-flex justify-content-end">
-                                    <button 
-                                        type="submit" 
-                                        className="btn btn-primary"
-                                        disabled={isSubmitting}
-                                    >
-                                        {isSubmitting ? 'Submitting...' : 'Submit'}
-                                    </button>
-                                </div>
-                            </form>
+                                        <div className="col-md-6">
+                                            <label htmlFor="button_one_link" className="form-label">Button One Link<span className="text-danger">*</span></label>
+                                            <input 
+                                                type="url" 
+                                                className="form-control" 
+                                                id="button_one_link" 
+                                                name="button_one_link"
+                                                placeholder="https://www.sciencelearn.org.nz/resources/2566-using-concept-cartoons" 
+                                                value={formData.button_one_link}
+                                                onChange={handleInputChange}
+                                                required
+                                            />
+                                        </div>
+                                    </div>
+                                    
+                                    <div className="row mb-3">
+                                        <div className="col-md-6">
+                                            <label htmlFor="button_two_text" className="form-label">Button Two Text<span className="text-danger">*</span></label>
+                                            <input 
+                                                type="text" 
+                                                className="form-control" 
+                                                id="button_two_text" 
+                                                name="button_two_text"
+                                                placeholder="Video" 
+                                                value={formData.button_two_text}
+                                                onChange={handleInputChange}
+                                                required
+                                            />
+                                        </div>
+                                        <div className="col-md-6">
+                                            <label htmlFor="button_two_link" className="form-label">Button Two Link<span className="text-danger">*</span></label>
+                                            <input 
+                                                type="url" 
+                                                className="form-control" 
+                                                id="button_two_link" 
+                                                name="button_two_link"
+                                                placeholder="https://www.youtube.com/watch?v=9GdZfpT6BVw" 
+                                                value={formData.button_two_link}
+                                                onChange={handleInputChange}
+                                                required
+                                            />
+                                        </div>
+                                    </div>
+                                    
+                                    <div className="mb-4">
+                                        <label htmlFor="media" className="form-label">Select Image</label>
+                                        <input 
+                                            type="file" 
+                                            className="form-control" 
+                                            id="media" 
+                                            name="media"
+                                            accept="image/*"
+                                            // onChange={handleFileChange}
+                                        />
+                                        {previewUrl && (
+                                            <div className="mt-2">
+                                                <img 
+                                                    src={previewUrl} 
+                                                    alt="Selected image preview" 
+                                                    className="img-thumbnail" 
+                                                    style={{ maxHeight: '200px' }} 
+                                                />
+                                            </div>
+                                        )}
+                                    </div>
+                                    
+                                    <div className="d-flex justify-content-end">
+                                        <button 
+                                            type="submit" 
+                                            className="btn btn-primary"
+                                            disabled={isSubmitting}
+                                        >
+                                            {isSubmitting ? 'Submitting...' : 'Submit'}
+                                        </button>
+                                    </div>
+                                </form>
+                            </div>
                         </div>
                     </div>
                 </div>

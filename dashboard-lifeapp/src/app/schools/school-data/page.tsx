@@ -1,18 +1,19 @@
 "use client";
 import '@tabler/core/dist/css/tabler.min.css';
-import 'bootstrap/dist/css/bootstrap.min.css';
+// import 'bootstrap/dist/css/bootstrap.min.css';
 import { useState, useEffect, useRef, useMemo } from 'react';
 import React from 'react';
-import { Poppins } from 'next/font/google';
-import Sidebar from '../../sidebar';
+import { Inter } from 'next/font/google';
+const inter = Inter({ subsets: ['latin'] });
+import { Sidebar } from '@/components/ui/sidebar';
 import { IconSearch, IconBell, IconSettings, IconEdit, IconTrash } from '@tabler/icons-react';
 import { ChevronDown, Plus, Search, XCircle } from "lucide-react";
 
-const poppins = Poppins({
-  subsets: ['latin'],
-  weight: ['400', '600', '700'],
-  variable: '--font-poppins',
-});
+// const poppins = Poppins({
+//   subsets: ['latin'],
+//   weight: ['400', '600', '700'],
+//   variable: '--font-poppins',
+// });
 
 // ------------------- SEARCHABLE DROPDOWN COMPONENT -------------------
 interface SearchableDropdownProps {
@@ -391,11 +392,11 @@ export default function SchoolData() {
 
   // ------------------- Render -------------------
   return (
-    <div className={`page bg-light ${poppins.variable} font-sans`}>
+    <div className={`page bg-light ${inter.className} font-sans`}>
       <Sidebar />
       <div className="page-wrapper" style={{ marginLeft: "250px" }}>
         {/* Top Navigation */}
-        <header className="navbar navbar-expand-md navbar-light bg-white shadow-sm border-bottom mb-3">
+        {/* <header className="navbar navbar-expand-md navbar-light bg-white shadow-sm border-bottom mb-3">
           <div className="container-fluid">
             <div className="d-flex align-items-center w-full">
               <span className="font-bold text-xl text-black">LifeAppDashBoard</span>
@@ -414,159 +415,160 @@ export default function SchoolData() {
               </div>
             </div>
           </div>
-        </header>
-
-        <div className="container-xl pt-0 pb-4">
-          {/* Search & Filter Section */}
-          <div className="card shadow-sm border-0 mb-4">
-            <div className="card-body">
-              <h5 className="card-title mb-4">School Data</h5>
-              <div className="row g-3">
-                <div className="col-12 col-md-6 col-lg-3">
-                  <input
-                    type="text"
-                    className="form-control"
-                    placeholder="Enter School Name"
-                    value={filterName}
-                    onChange={(e) => setFilterName(e.target.value)}
-                  />
-                </div>
-                <div className="col-12 col-md-6 col-lg-3">
-                  <input
-                    type="text"
-                    className="form-control"
-                    placeholder="Enter Code"
-                    value={filterCode}
-                    onChange={(e) => setFilterCode(e.target.value)}
-                  />
-                </div>
-                <div className="col-12 col-md-6 col-lg-3">
-                  <input
-                    type="text"
-                    className="form-control"
-                    placeholder="Enter District"
-                    value={filterDistrict}
-                    onChange={(e) => setFilterDistrict(e.target.value)}
-                  />
-                </div>
-                <div className="col-12 col-md-6 col-lg-3">
-                  <select
-                    className="form-select"
-                    value={filterStatus}
-                    onChange={(e) => setFilterStatus(e.target.value)}
-                  >
-                    <option value="">Select Status</option>
-                    <option value="Active">Active</option>
-                    <option value="Inactive">Inactive</option>
-                  </select>
-                </div>
-              </div>
-              <div className="row g-3 mt-2">
-                <div className="col-12 col-md-6 col-lg-3">
-                  <SearchableDropdown
-                    options={states}
-                    placeholder="Select State"
-                    value={selectedState}
-                    onChange={(val) => setSelectedState(val)}
-                    isLoading={false}
-                  />
-                </div>
-                <div className="col-12 col-md-6 col-lg-3">
-                  <SearchableDropdown
-                    options={cities}
-                    placeholder="Select City"
-                    value={selectedCity}
-                    onChange={(val) => setSelectedCity(val)}
-                    isLoading={false}
-                  />
-                </div>
-              </div>
-              <div className="row g-3 mt-2">
-                <div className="col-12 d-flex gap-2">
-                  <button className="btn btn-success d-inline-flex align-items-center" onClick={fetchSchools}>
-                    <Search className="me-2" size={16} /> Search
-                  </button>
-                  <button className="btn btn-warning d-inline-flex align-items-center text-dark" onClick={handleClear}>
-                    <XCircle className="me-2" size={16} /> Clear
-                  </button>
-                  <button className="btn btn-success d-inline-flex align-items-center" onClick={() => setShowAddModal(true)}>
-                    <Plus className="me-2" size={16} /> Add School
-                  </button>
-                </div>
-              </div>
-            </div>
-          
-
-          {/* TABLE OF SCHOOLS WITH PAGINATION */}
-            <div className="card shadow-sm border-0 mt-2 mb-4">
-              <div className="card-body overflow-x-scroll">
-                <h5 className="card-title">All Schools</h5>
-                {loading ? (
-                  <div className="text-center p-5">
-                      <div className="spinner-border text-purple" role="status" style={{ width: "3rem", height: "3rem" }}>
-                          <span className="visually-hidden">Loading...</span>
-                      </div>
-                      <p className="mt-3 text-muted">Loading data, please wait...</p>
+        </header> */}
+        <div className='page-body'>
+          <div className="container-xl pt-0 pb-4">
+            {/* Search & Filter Section */}
+            <div className="card shadow-sm border-0 mb-4">
+              <div className="card-body">
+                <h5 className="card-title mb-4">School Data</h5>
+                <div className="row g-3">
+                  <div className="col-12 col-md-6 col-lg-3">
+                    <input
+                      type="text"
+                      className="form-control"
+                      placeholder="Enter School Name"
+                      value={filterName}
+                      onChange={(e) => setFilterName(e.target.value)}
+                    />
                   </div>
-                ) : (
-                  <div className="table-responsive">
-                    <table className="table table-bordered table-hover">
-                      <thead>
-                        <tr>
-                          <th>ID</th>
-                          <th>Name</th>
-                          <th>State</th>
-                          <th>City</th>
-                          <th>District</th>
-                          <th>Pin Code</th>
-                          <th>App Visible</th>
-                          <th>Is Life Lab</th>
-                          <th>Status</th>
-                          <th>Actions</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {paginatedData.map((school) => (
-                          <tr key={school.id}>
-                            <td>{school.id}</td>
-                            <td>{school.name}</td>
-                            <td>{school.state}</td>
-                            <td>{school.city}</td>
-                            <td>{school.district}</td>
-                            <td>{school.pin_code}</td>
-                            <td>{school.app_visible}</td>
-                            <td>{school.is_life_lab}</td>
-                            <td>{school.status}</td>
-                            <td>
-                              <button className="btn btn-sm btn-primary me-2" onClick={() => handleEditClick(school)}>
-                                <IconEdit size={16} />
-                              </button>
-                              <button className="btn btn-sm btn-danger" onClick={() => handleDeleteClick(school.id)}>
-                                <IconTrash size={16} />
-                              </button>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                    {/* Pagination Controls */}
-                    <div className="d-flex justify-content-between align-items-center">
-                      <button className="btn btn-outline-secondary" onClick={handlePrevPage} disabled={currentPage === 0}>
-                        Previous
-                      </button>
-                      <span>
-                        Page {currentPage + 1} of {Math.ceil(tableData.length / rowsPerPage)}
-                      </span>
-                      <button
-                        className="btn btn-outline-secondary"
-                        onClick={handleNextPage}
-                        disabled={(currentPage + 1) * rowsPerPage >= tableData.length}
-                      >
-                        Next
-                      </button>
+                  <div className="col-12 col-md-6 col-lg-3">
+                    <input
+                      type="text"
+                      className="form-control"
+                      placeholder="Enter Code"
+                      value={filterCode}
+                      onChange={(e) => setFilterCode(e.target.value)}
+                    />
+                  </div>
+                  <div className="col-12 col-md-6 col-lg-3">
+                    <input
+                      type="text"
+                      className="form-control"
+                      placeholder="Enter District"
+                      value={filterDistrict}
+                      onChange={(e) => setFilterDistrict(e.target.value)}
+                    />
+                  </div>
+                  <div className="col-12 col-md-6 col-lg-3">
+                    <select
+                      className="form-select"
+                      value={filterStatus}
+                      onChange={(e) => setFilterStatus(e.target.value)}
+                    >
+                      <option value="">Select Status</option>
+                      <option value="Active">Active</option>
+                      <option value="Inactive">Inactive</option>
+                    </select>
+                  </div>
+                </div>
+                <div className="row g-3 mt-2">
+                  <div className="col-12 col-md-6 col-lg-3">
+                    <SearchableDropdown
+                      options={states}
+                      placeholder="Select State"
+                      value={selectedState}
+                      onChange={(val) => setSelectedState(val)}
+                      isLoading={false}
+                    />
+                  </div>
+                  <div className="col-12 col-md-6 col-lg-3">
+                    <SearchableDropdown
+                      options={cities}
+                      placeholder="Select City"
+                      value={selectedCity}
+                      onChange={(val) => setSelectedCity(val)}
+                      isLoading={false}
+                    />
+                  </div>
+                </div>
+                <div className="row g-3 mt-2">
+                  <div className="col-12 d-flex gap-2">
+                    <button className="btn btn-success d-inline-flex align-items-center" onClick={fetchSchools}>
+                      <Search className="me-2" size={16} /> Search
+                    </button>
+                    <button className="btn btn-warning d-inline-flex align-items-center text-dark" onClick={handleClear}>
+                      <XCircle className="me-2" size={16} /> Clear
+                    </button>
+                    <button className="btn btn-success d-inline-flex align-items-center" onClick={() => setShowAddModal(true)}>
+                      <Plus className="me-2" size={16} /> Add School
+                    </button>
+                  </div>
+                </div>
+              </div>
+            
+
+            {/* TABLE OF SCHOOLS WITH PAGINATION */}
+              <div className="card shadow-sm border-0 mt-2 mb-4">
+                <div className="card-body overflow-x-scroll">
+                  <h5 className="card-title">All Schools</h5>
+                  {loading ? (
+                    <div className="text-center p-5">
+                        <div className="spinner-border text-purple" role="status" style={{ width: "3rem", height: "3rem" }}>
+                            <span className="visually-hidden">Loading...</span>
+                        </div>
+                        <p className="mt-3 text-muted">Loading data, please wait...</p>
                     </div>
-                  </div>
-                )}
+                  ) : (
+                    <div className="table-responsive">
+                      <table className="table table-bordered table-hover">
+                        <thead>
+                          <tr>
+                            <th>ID</th>
+                            <th>Name</th>
+                            <th>State</th>
+                            <th>City</th>
+                            <th>District</th>
+                            <th>Pin Code</th>
+                            <th>App Visible</th>
+                            <th>Is Life Lab</th>
+                            <th>Status</th>
+                            <th>Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {paginatedData.map((school) => (
+                            <tr key={school.id}>
+                              <td>{school.id}</td>
+                              <td>{school.name}</td>
+                              <td>{school.state}</td>
+                              <td>{school.city}</td>
+                              <td>{school.district}</td>
+                              <td>{school.pin_code}</td>
+                              <td>{school.app_visible}</td>
+                              <td>{school.is_life_lab}</td>
+                              <td>{school.status}</td>
+                              <td>
+                                <button className="btn btn-sm btn-primary me-2" onClick={() => handleEditClick(school)}>
+                                  <IconEdit size={16} />
+                                </button>
+                                <button className="btn btn-sm btn-danger" onClick={() => handleDeleteClick(school.id)}>
+                                  <IconTrash size={16} />
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                      {/* Pagination Controls */}
+                      <div className="d-flex justify-content-between align-items-center">
+                        <button className="btn btn-outline-secondary" onClick={handlePrevPage} disabled={currentPage === 0}>
+                          Previous
+                        </button>
+                        <span>
+                          Page {currentPage + 1} of {Math.ceil(tableData.length / rowsPerPage)}
+                        </span>
+                        <button
+                          className="btn btn-outline-secondary"
+                          onClick={handleNextPage}
+                          disabled={(currentPage + 1) * rowsPerPage >= tableData.length}
+                        >
+                          Next
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           </div>

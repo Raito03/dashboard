@@ -1,18 +1,19 @@
 'use client'
 import '@tabler/core/dist/css/tabler.min.css';
-import 'bootstrap/dist/css/bootstrap.min.css';
+// import 'bootstrap/dist/css/bootstrap.min.css';
 import { useEffect, useState } from 'react';
 import React from 'react';
-import { Poppins } from 'next/font/google';
-import Sidebar from '../../sidebar';
+import { Inter } from 'next/font/google';
+const inter = Inter({ subsets: ['latin'] });
+import { Sidebar } from '@/components/ui/sidebar';
 import { IconSearch, IconBell, IconSettings, IconEdit } from '@tabler/icons-react';
 import { Plus, Search, XCircle } from "lucide-react";
 
-const poppins = Poppins({
-  subsets: ['latin'],
-  weight: ['400', '600', '700'],
-  variable: '--font-poppins',
-});
+// const poppins = Poppins({
+//   subsets: ['latin'],
+//   weight: ['400', '600', '700'],
+//   variable: '--font-poppins',
+// });
 
 interface LessonPlan {
   id?: number;
@@ -209,10 +210,10 @@ export default function LessonPlans() {
     }, []);
 
     return (
-        <div className={`page bg-light ${poppins.variable} font-sans`}>
+        <div className={`page bg-light ${inter.className} font-sans`}>
             <Sidebar />
             <div className="page-wrapper" style={{ marginLeft: '250px' }}>
-                <header className="navbar navbar-expand-md navbar-light bg-white shadow-sm border-bottom mb-3">
+                {/* <header className="navbar navbar-expand-md navbar-light bg-white shadow-sm border-bottom mb-3">
                     <div className="container-fluid">
                         <div className="d-flex align-items-center w-full">
                             <span className='font-bold text-xl text-black'>LifeAppDashBoard</span>
@@ -224,146 +225,148 @@ export default function LessonPlans() {
                             </div>
                         </div>
                     </div>
-                </header>
-                <div className="container-xl pt-0 pb-4">
-                    <div className="card shadow-sm border-0 mb-4">
-                        <div className="card-body">
-                            <h5 className="card-title mb-4">Lesson Plans</h5>
-                            <div className="row g-3">
-                                {/* Language Dropdown */}
-                                <div className="col-12 col-md-6 col-lg-3">
-                                    <select 
-                                        className="form-select" 
-                                        value={selectedLanguage} 
-                                        onChange={(e) => setSelectedLanguage(e.target.value)}
-                                    >
-                                        <option value="">Select Language</option>
-                                        {languages.map((lang) => (
-                                            <option key={lang.id} value={lang.name}>{lang.name}</option>
-                                        ))}
-                                    </select>
-                                </div>
-                                {/* Status Dropdown */}
-                                <div className="col-12 col-md-6 col-lg-3">
-                                    <select 
-                                        className="form-select" 
-                                        value={selectedStatus} 
-                                        onChange={(e) => setSelectedStatus(e.target.value)}
-                                    >
-                                        <option value="">Select Status</option>
-                                        <option value="Published">Published</option>
-                                        <option value="Drafted">Drafted</option>
-                                    </select>
-                                </div>
-                                {/* Title Search */}
-                                <div className="col-12 col-md-6 col-lg-3">
-                                    <input 
-                                        type="text" 
-                                        className="form-control" 
-                                        placeholder="Search with Title" 
-                                        value={selectedTitle}
-                                        onChange={(e) => setSelectedTitle(e.target.value)}
-                                    />
-                                </div>
-                                {/* Action Buttons */}
-                                <div className="col-12 col-md-6 col-lg-3 d-flex gap-2">
-                                    <button className="btn btn-success d-inline-flex align-items-center" onClick={handleSearch}>
-                                        <Search className="me-2" size={16} /> Search
-                                    </button>
-                                    <button className="btn btn-warning d-inline-flex align-items-center text-dark" onClick={handleClear}>
-                                        <XCircle className="me-2" size={16} /> Clear
-                                    </button>
-                                    
-                                </div>
-                                <div className=''>
-                                    <button className="btn btn-success" onClick={() => setShowAddModal(true)}>
-                                        <Plus size={16} className="me-2" /> Add Lesson Plan
-                                    </button>
+                </header> */}
+                <div className="page-body">
+                    <div className="container-xl pt-0 pb-4">
+                        <div className="card shadow-sm border-0 mb-4">
+                            <div className="card-body">
+                                <h5 className="card-title mb-4">Lesson Plans</h5>
+                                <div className="row g-3">
+                                    {/* Language Dropdown */}
+                                    <div className="col-12 col-md-6 col-lg-3">
+                                        <select 
+                                            className="form-select" 
+                                            value={selectedLanguage} 
+                                            onChange={(e) => setSelectedLanguage(e.target.value)}
+                                        >
+                                            <option value="">Select Language</option>
+                                            {languages.map((lang) => (
+                                                <option key={lang.id} value={lang.name}>{lang.name}</option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                    {/* Status Dropdown */}
+                                    <div className="col-12 col-md-6 col-lg-3">
+                                        <select 
+                                            className="form-select" 
+                                            value={selectedStatus} 
+                                            onChange={(e) => setSelectedStatus(e.target.value)}
+                                        >
+                                            <option value="">Select Status</option>
+                                            <option value="Published">Published</option>
+                                            <option value="Drafted">Drafted</option>
+                                        </select>
+                                    </div>
+                                    {/* Title Search */}
+                                    <div className="col-12 col-md-6 col-lg-3">
+                                        <input 
+                                            type="text" 
+                                            className="form-control" 
+                                            placeholder="Search with Title" 
+                                            value={selectedTitle}
+                                            onChange={(e) => setSelectedTitle(e.target.value)}
+                                        />
+                                    </div>
+                                    {/* Action Buttons */}
+                                    <div className="col-12 col-md-6 col-lg-3 d-flex gap-2">
+                                        <button className="btn btn-success d-inline-flex align-items-center" onClick={handleSearch}>
+                                            <Search className="me-2" size={16} /> Search
+                                        </button>
+                                        <button className="btn btn-warning d-inline-flex align-items-center text-dark" onClick={handleClear}>
+                                            <XCircle className="me-2" size={16} /> Clear
+                                        </button>
+                                        
+                                    </div>
+                                    <div className=''>
+                                        <button className="btn btn-success" onClick={() => setShowAddModal(true)}>
+                                            <Plus size={16} className="me-2" /> Add Lesson Plan
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
                         </div>
-                    </div>
 
-                    {/* Lesson Plans Table */}
-                    <div className="card shadow-sm border-0 mt-2 mb-4">
-                        <div className="card-body overflow-x-scroll">
-                            {isTableLoading ? (
-                                <div className="text-center p-5"><span>Loading...</span></div>
-                            ) : (
-                                <table className="table table-striped">
-                                    <thead>
-                                        <tr>
-                                            <th>Language</th>
-                                            <th>Type</th>
-                                            <th>Title</th>
-                                            <th>Status</th>
-                                            <th>Actions</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                    {paginatedData.length > 0 ? (
-                                        paginatedData.map((row, index) => (
-                                            <tr key={row.id ? `lesson-plan-${row.id}` : `lesson-plan-${index}-${row.title}`}>
-                                            <td>{row.language}</td>
-                                            <td>{row.type}</td>
-                                            <td>{row.title}</td>
-                                            <td>{row.status}</td>
-                                            <td>
-                                                <button className="btn btn-sm btn-info" onClick={() => handleEditClick(row)}>
-                                                <IconEdit size={16} />
-                                                </button>
-                                            </td>
+                        {/* Lesson Plans Table */}
+                        <div className="card shadow-sm border-0 mt-2 mb-4">
+                            <div className="card-body overflow-x-scroll">
+                                {isTableLoading ? (
+                                    <div className="text-center p-5"><span>Loading...</span></div>
+                                ) : (
+                                    <table className="table table-striped">
+                                        <thead>
+                                            <tr>
+                                                <th>Language</th>
+                                                <th>Type</th>
+                                                <th>Title</th>
+                                                <th>Status</th>
+                                                <th>Actions</th>
                                             </tr>
-                                        ))
-                                    ) : (
-                                        <tr>
-                                            <td colSpan={5} className="text-center">No data found. Please use the Search Filter properly</td>
-                                        </tr>
-                                        )}
-                                    </tbody>
-                                    </table>
-                                )}
-                            {/* Add this pagination component just after your table, before closing the card-body div */}
-                            {paginatedData.length > 0 && (
-                            <div className="d-flex justify-content-between align-items-center mt-3">
-                                <div>
-                                    <span className="text-muted">
-                                    Showing {currentPage * rowsPerPage + 1} to {Math.min((currentPage + 1) * rowsPerPage, tableData.length)} of {tableData.length} entries
-                                    </span>
-                                </div>
-                                <div className="btn-group">
-                                    <button
-                                    className="btn btn-outline-secondary"
-                                    onClick={() => setCurrentPage(prev => Math.max(0, prev - 1))}
-                                    disabled={currentPage === 0}
-                                    >
-                                    Previous
-                                    </button>
-                                    {[...Array(Math.ceil(tableData.length / rowsPerPage)).keys()]
-                                    .map(page => (
+                                        </thead>
+                                        <tbody>
+                                        {paginatedData.length > 0 ? (
+                                            paginatedData.map((row, index) => (
+                                                <tr key={row.id ? `lesson-plan-${row.id}` : `lesson-plan-${index}-${row.title}`}>
+                                                <td>{row.language}</td>
+                                                <td>{row.type}</td>
+                                                <td>{row.title}</td>
+                                                <td>{row.status}</td>
+                                                <td>
+                                                    <button className="btn btn-sm btn-info" onClick={() => handleEditClick(row)}>
+                                                    <IconEdit size={16} />
+                                                    </button>
+                                                </td>
+                                                </tr>
+                                            ))
+                                        ) : (
+                                            <tr>
+                                                <td colSpan={5} className="text-center">No data found. Please use the Search Filter properly</td>
+                                            </tr>
+                                            )}
+                                        </tbody>
+                                        </table>
+                                    )}
+                                {/* Add this pagination component just after your table, before closing the card-body div */}
+                                {paginatedData.length > 0 && (
+                                <div className="d-flex justify-content-between align-items-center mt-3">
+                                    <div>
+                                        <span className="text-muted">
+                                        Showing {currentPage * rowsPerPage + 1} to {Math.min((currentPage + 1) * rowsPerPage, tableData.length)} of {tableData.length} entries
+                                        </span>
+                                    </div>
+                                    <div className="btn-group">
                                         <button
-                                        key={page}
-                                        className={`btn ${currentPage === page ? 'btn-primary' : 'btn-outline-secondary'}`}
-                                        onClick={() => setCurrentPage(page)}
+                                        className="btn btn-outline-secondary"
+                                        onClick={() => setCurrentPage(prev => Math.max(0, prev - 1))}
+                                        disabled={currentPage === 0}
                                         >
-                                        {page + 1}
+                                        Previous
                                         </button>
-                                    ))
-                                    .slice(
-                                        Math.max(0, currentPage - 2),
-                                        Math.min(Math.ceil(tableData.length / rowsPerPage), currentPage + 3)
-                                    )
-                                    }
-                                    <button
-                                    className="btn btn-outline-secondary"
-                                    onClick={() => setCurrentPage(prev => Math.min(Math.ceil(tableData.length / rowsPerPage) - 1, prev + 1))}
-                                    disabled={currentPage >= Math.ceil(tableData.length / rowsPerPage) - 1}
-                                    >
-                                    Next
-                                    </button>
+                                        {[...Array(Math.ceil(tableData.length / rowsPerPage)).keys()]
+                                        .map(page => (
+                                            <button
+                                            key={page}
+                                            className={`btn ${currentPage === page ? 'btn-primary' : 'btn-outline-secondary'}`}
+                                            onClick={() => setCurrentPage(page)}
+                                            >
+                                            {page + 1}
+                                            </button>
+                                        ))
+                                        .slice(
+                                            Math.max(0, currentPage - 2),
+                                            Math.min(Math.ceil(tableData.length / rowsPerPage), currentPage + 3)
+                                        )
+                                        }
+                                        <button
+                                        className="btn btn-outline-secondary"
+                                        onClick={() => setCurrentPage(prev => Math.min(Math.ceil(tableData.length / rowsPerPage) - 1, prev + 1))}
+                                        disabled={currentPage >= Math.ceil(tableData.length / rowsPerPage) - 1}
+                                        >
+                                        Next
+                                        </button>
+                                    </div>
                                 </div>
+                                )}
                             </div>
-                            )}
                         </div>
                     </div>
                 </div>

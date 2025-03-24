@@ -18,12 +18,12 @@
   --foreground: #171717;
 }
 :root {
-  --font-poppins: 'Poppins', sans-serif;
+  /* --font-poppins: 'Poppins', sans-serif; */
 }
 
 
 body {
-  font-family: var(--font-poppins);
+  /* font-family: var(--font-poppins); */
 }
 
 /* Smooth icon transition
@@ -129,36 +129,40 @@ body {
 }
 
 .card:hover {
-  @apply -translate-y-0.5;
+  /* @apply -translate-y-0.5; */
 }
 
 .btn-icon {
   @apply w-10 h-10 flex items-center justify-center rounded-lg;
 }
-.custom-sidebar {
-  background-color: #ffffff !important; /* Force white background */
-}
+/* .custom-sidebar {
+  background-color: #ffffff !important; /* Force white background 
+} 
 
-.custom-sidebar .nav-link {
-  color: #000000 !important; /* Black text */
+/* .custom-sidebar .nav-link {
+  color: #000000 !important; /* Black text 
 }
 
 .custom-sidebar .nav-link:hover,
 .custom-sidebar .nav-link:focus {
-  color: #000000 !important; /* Maintain black on hover/focus */
+  color: #000000 !important; /* Maintain black on hover/focus 
 }
 
 .custom-sidebar .nav-link svg {
-  color: #000000 !important; /* Black icons */
-}
+  color: #000000 !important; /* Black icons 
+} */
 
-* {
+/* * {
   font-family: var(--font-poppins) !important;
-}
+} */
 
 /* Base styles */
 @layer base {
   body {
     @apply bg-[var(--background)] text-[var(--foreground)] font-sans;
   }
+}
+/* Add to your global CSS */
+a:hover {
+  text-decoration: none !important;
 }

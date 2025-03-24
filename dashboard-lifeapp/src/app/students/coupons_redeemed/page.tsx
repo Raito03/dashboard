@@ -1,17 +1,13 @@
 'use client'
 import '@tabler/core/dist/css/tabler.min.css';
-import 'bootstrap/dist/css/bootstrap.min.css';
+// import 'bootstrap/dist/css/bootstrap.min.css';
 import { useState, useEffect } from 'react'
 import React from 'react';
-import { Poppins } from 'next/font/google';
-import Sidebar from '../../sidebar';
+import { Inter } from 'next/font/google';
+const inter = Inter({ subsets: ['latin'] });
+import { Sidebar } from '@/components/ui/sidebar';
 import { IconSearch, IconBell, IconSettings, IconDownload } from '@tabler/icons-react';
 
-const poppins = Poppins({
-    subsets: ['latin'],
-    weight: ['400', '600', '700'],
-    variable: '--font-poppins',
-});
 
 // Define TypeScript interface for coupon data
 interface CouponRedemption {
@@ -114,7 +110,7 @@ export default function CouponsRedeemed() {
 
     if (!isClient) {
         return (
-            <div className={`page bg-light ${poppins.variable} font-sans`}>
+            <div className={`page bg-light ${inter.className} font-sans`}>
                 <Sidebar />
                 <div className="page-wrapper" style={{ marginLeft: '250px' }}>
                     <header className="navbar navbar-expand-md navbar-light bg-white shadow-sm border-bottom mb-3">
@@ -144,10 +140,10 @@ export default function CouponsRedeemed() {
     }
 
     return (
-        <div className={`page bg-light ${poppins.variable} font-sans`}>
+        <div className={`page bg-light ${inter.className} font-sans`}>
             <Sidebar />
             <div className="page-wrapper" style={{ marginLeft: '250px' }}>
-                <header className="navbar navbar-expand-md navbar-light bg-white shadow-sm border-bottom mb-3">
+                {/* <header className="navbar navbar-expand-md navbar-light bg-white shadow-sm border-bottom mb-3">
                     <div className="container-fluid">
                         <div className="d-flex align-items-center w-full">
                             <span className='font-bold text-xl text-black'>LifeAppDashboard</span>
@@ -166,89 +162,90 @@ export default function CouponsRedeemed() {
                             </div>
                         </div>
                     </div>
-                </header>
-
-                <div className='container-xl pt-0 pb-4'>
-                    <div className="card">
-                        <div className="card-header">
-                            <h3 className="card-title">Coupon Redemptions</h3>
-                        </div>
-                        <div className="card-body">
-                            <div className="d-flex mb-3 gap-3 flex-wrap">
-                                <div className="me-auto">
-                                    <div className="input-group">
-                                        <span className="input-group-text">
-                                            <IconSearch size={18} />
-                                        </span>
-                                        <input 
-                                            type="text" 
-                                            className="form-control" 
-                                            placeholder="Search..." 
-                                            value={searchTerm}
-                                            onChange={handleSearchChange}
-                                        />
-                                    </div>
-                                </div>
-                                <button className="btn btn-primary" onClick={handleSearch}>
-                                    <IconSearch size={18} className="me-1" /> Search
-                                </button>
-                                <button className="btn btn-primary" onClick={exportToCSV}>
-                                    <IconDownload size={18} className="me-1" /> Export
-                                </button>
+                </header> */}
+                <div className='page-body'>
+                    <div className='container-xl pt-0 pb-4'>
+                        <div className="card">
+                            <div className="card-header">
+                                <h3 className="card-title">Coupon Redemptions</h3>
                             </div>
-
-                            {loading ? (
-                                <div className="text-center py-4">
-                                    <div className="spinner-border text-primary" role="status">
-                                        <span className="visually-hidden">Loading...</span>
+                            <div className="card-body">
+                                <div className="d-flex mb-3 gap-3 flex-wrap">
+                                    <div className="me-auto">
+                                        <div className="input-group">
+                                            <span className="input-group-text">
+                                                <IconSearch size={18} />
+                                            </span>
+                                            <input 
+                                                type="text" 
+                                                className="form-control" 
+                                                placeholder="Search..." 
+                                                value={searchTerm}
+                                                onChange={handleSearchChange}
+                                            />
+                                        </div>
                                     </div>
+                                    <button className="btn btn-primary" onClick={handleSearch}>
+                                        <IconSearch size={18} className="me-1" /> Search
+                                    </button>
+                                    <button className="btn btn-primary" onClick={exportToCSV}>
+                                        <IconDownload size={18} className="me-1" /> Export
+                                    </button>
                                 </div>
-                            ) : error ? (
-                                <div className="alert alert-danger" role="alert">
-                                    Error loading data: {error}
-                                </div>
-                            ) : (
-                                <div className="table-responsive">
-                                    <table className="table table-vcenter table-hover">
-                                        <thead>
-                                            <tr>
-                                                <th>Student Name</th>
-                                                <th>School Name</th>
-                                                <th>Mobile Number</th>
-                                                <th>State</th>
-                                                <th>City</th>
-                                                <th>Grade</th>
-                                                <th>Coupon Title</th>
-                                                <th>Coins Redeemed</th>
-                                                <th>User ID</th>
-                                                <th>Redeemed Date</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            {coupons.length === 0 ? (
+
+                                {loading ? (
+                                    <div className="text-center py-4">
+                                        <div className="spinner-border text-primary" role="status">
+                                            <span className="visually-hidden">Loading...</span>
+                                        </div>
+                                    </div>
+                                ) : error ? (
+                                    <div className="alert alert-danger" role="alert">
+                                        Error loading data: {error}
+                                    </div>
+                                ) : (
+                                    <div className="table-responsive">
+                                        <table className="table table-vcenter table-hover">
+                                            <thead>
                                                 <tr>
-                                                    <td colSpan={9} className="text-center">No redemptions found</td>
+                                                    <th>Student Name</th>
+                                                    <th>School Name</th>
+                                                    <th>Mobile Number</th>
+                                                    <th>State</th>
+                                                    <th>City</th>
+                                                    <th>Grade</th>
+                                                    <th>Coupon Title</th>
+                                                    <th>Coins Redeemed</th>
+                                                    <th>User ID</th>
+                                                    <th>Redeemed Date</th>
                                                 </tr>
-                                            ) : (
-                                                coupons.map((coupon, index) => (
-                                                    <tr key={index}>
-                                                        <td>{coupon['Student Name']}</td>
-                                                        <td>{coupon['School Name']}</td>
-                                                        <td>{coupon['Mobile Number']}</td>
-                                                        <td>{coupon.state}</td>
-                                                        <td>{coupon.city}</td>
-                                                        <td>{coupon.grade}</td>
-                                                        <td>{coupon['Coupon Title']}</td>
-                                                        <td>{coupon['Coins Redeemed']}</td>
-                                                        <td>{coupon.user_id}</td>
-                                                        <td>{formatDate(coupon['Coupon Redeemed Date'])}</td>
+                                            </thead>
+                                            <tbody>
+                                                {coupons.length === 0 ? (
+                                                    <tr>
+                                                        <td colSpan={9} className="text-center">No redemptions found</td>
                                                     </tr>
-                                                ))
-                                            )}
-                                        </tbody>
-                                    </table>
-                                </div>
-                            )}
+                                                ) : (
+                                                    coupons.map((coupon, index) => (
+                                                        <tr key={index}>
+                                                            <td>{coupon['Student Name']}</td>
+                                                            <td>{coupon['School Name']}</td>
+                                                            <td>{coupon['Mobile Number']}</td>
+                                                            <td>{coupon.state}</td>
+                                                            <td>{coupon.city}</td>
+                                                            <td>{coupon.grade}</td>
+                                                            <td>{coupon['Coupon Title']}</td>
+                                                            <td>{coupon['Coins Redeemed']}</td>
+                                                            <td>{coupon.user_id}</td>
+                                                            <td>{formatDate(coupon['Coupon Redeemed Date'])}</td>
+                                                        </tr>
+                                                    ))
+                                                )}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                )}
+                            </div>
                         </div>
                     </div>
                 </div>

@@ -1,6 +1,6 @@
 'use client'
 import '@tabler/core/dist/css/tabler.min.css';
-import 'bootstrap/dist/css/bootstrap.min.css';  // Import Bootstrap CSS
+// import 'bootstrap/dist/css/bootstrap.min.css';  // Import Bootstrap CSS
 //import 'bootstrap/dist/js/bootstrap.bundle.min.js'; // Import Bootstrap JS (includes Popper.js)
 
 import { useState, useEffect } from 'react'
@@ -45,13 +45,11 @@ interface SignupData {
   count: number
 }
 import { Poppins } from 'next/font/google';
-import Sidebar from './sidebar';
-
-const poppins = Poppins({
-  subsets: ['latin'],
-  weight: ['400', '600', '700'], // Choose needed weights
-  variable: '--font-poppins', // Matches the CSS variable
-});
+// import Sidebar from './sidebar';
+import { title } from 'process';
+import { Sidebar } from '@/components/ui/sidebar';
+import { Inter } from 'next/font/google';
+const inter = Inter({ subsets: ['latin'] });
 
 const api_startpoint = 'https://lifeapp-api-vv1.vercel.app'
 export default function UserAnalyticsDashboard() {
@@ -322,8 +320,18 @@ export default function UserAnalyticsDashboard() {
       legend: { labels: { color: '#333' } },
     },
     scales: {
-      x: { ticks: { color: '#333' }, grid: { color: '#eee' } },
-      y: { ticks: { color: '#333' }, grid: { color: '#eee' } },
+      x: { ticks: { color: '#333' }, grid: { color: '#eee' },
+        title:{
+          display: true,
+          text: 'Assignment Count Range',
+          color: '#333',
+        } },
+      y: { ticks: { color: '#333' }, grid: { color: '#eee' },
+      title:{
+        display: true,
+        text: 'Number of Teachers',
+        color: '#333',
+      } },
     },
   }
 
@@ -408,7 +416,7 @@ export default function UserAnalyticsDashboard() {
   };
   
   return (
-    <div className={`page bg-light ${poppins.variable} font-sans`}>
+    <div className={`page bg-light ${inter.className} font-sans`}>
       {/* Fixed Sidebar */}
       {/* Updated Sidebar Component with strict inline styles */}
       <Sidebar />
@@ -418,7 +426,7 @@ export default function UserAnalyticsDashboard() {
       {/* Main Content */}
       <div className="page-wrapper" style={{ marginLeft: '250px' }}>
         {/* Top Navigation */}
-        <header className="navbar navbar-expand-md navbar-light bg-white shadow-sm border-bottom">
+        {/* <header className="navbar navbar-expand-md navbar-light bg-white shadow-sm border-bottom">
           <div className="container-fluid">
             <div className="d-flex align-items-center w-full">
               <span className='font-bold text-xl text-black '>LifeAppDashBoard</span>
@@ -437,7 +445,7 @@ export default function UserAnalyticsDashboard() {
               </div>
             </div>
           </div>
-        </header>
+        </header> */}
 
         {/* Main Content Area */}
         <div className="page-body">
@@ -462,20 +470,20 @@ export default function UserAnalyticsDashboard() {
                 { title: 'Highest Users Online', value: newSignups + 1056, icon: <IconUserPlus />, color: 'bg-orange', suffix: '' },
                 // { title: 'Approval Rate', value: approvalRate, icon: <IconPercentage />, color: 'bg-blue', suffix: '%' },
               ].map((metric, index) => (
-                <div className="col-12 col-sm-6 col-xl-3" key={index}>
-                  <div className="card shadow-sm border-0 h-100">
+                <div className="col-sm-6 col-lg-3" key={index}>
+                  <div className="card">
                     <div className="card-body">
-                      <div className="d-flex align-items-center gap-3">
-                        <div className={`${metric.color} rounded-circle p-3 text-white`}>
+                      <div className="d-flex align-items-center">
+                        {/* <div className={`${metric.color} rounded-circle p-3 text-white`}>
                           {React.cloneElement(metric.icon, { size: 24 })}
-                        </div>
+                        </div> */}
                         <div>
-                          <div className="text-muted mb-1">{metric.title}</div>
-                          <div className="h2 mb-0">
+                          <div className="subheader">{metric.title}</div>
+                          <div className="h1 mb-3">
                             <NumberFlow
                               value={metric.value}
                               suffix={metric.suffix || ''}
-                              className="fw-bold text-dark"
+                              className="fw-semi-bold text-dark"
                               transformTiming={{endDelay:6, duration:750, easing:'cubic-bezier(0.42, 0, 0.58, 1)'}}
                             />
                           </div>
@@ -516,8 +524,15 @@ export default function UserAnalyticsDashboard() {
                                   <stop offset="95%" stopColor="#4A90E2" stopOpacity={0} />
                                 </linearGradient>
                               </defs>
-                              <XAxis dataKey="month" stroke="#333" />
-                              <YAxis stroke="#333" />
+                              <XAxis 
+                                dataKey="month" 
+                                stroke="#333" 
+                                label={{ value: "Month", position: "insideBottom", offset: -5 }} 
+                              />
+                              <YAxis 
+                                stroke="#333" 
+                                label={{ value: "Number of Signups", position: "center", angle: -90, dy: 10, dx: -20 }} 
+                                />
                               <CartesianGrid strokeDasharray="3 3" stroke="#eee" />
                               <Tooltip content={<CustomTooltip />} />
                               <Area type="monotone" dataKey="count" stroke="#4A90E2" fill="url(#colorUv)" strokeWidth={2} />
