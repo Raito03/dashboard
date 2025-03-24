@@ -73,6 +73,34 @@ def debug_env():
 def backup():
     return "Heya, thanks for checking"
 
+@app.route('/api/user-type-chart',methods = ['GET'])
+def get_user_type_fetch():
+    try:
+        connection = get_db_connection()
+        with connection.cursor() as cursor:
+            # Execute the SQL query
+            sql = """
+                select count(*) as count,
+                case 
+                when type = 1
+                    then 'Admin'
+                when type = 3
+                    then 'Student'
+                when type = 5
+                    then 'Teacher'
+                when type = 4
+                    then 'Mentor'
+                else 'Default'
+                end as
+                userType from lifeapp.users group by type;
+            """
+            cursor.execute(sql)
+            result = cursor.fetchall()
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        connection.close()
 @app.route('/api/user-signups', methods=['GET'])
 def get_user_signups():
     try:
@@ -119,7 +147,7 @@ def execute_query(query: str, params: tuple = None) -> List[Dict[str, Any]]:
     finally:
         if connection:
             connection.close()
-@app.route('/api/signing-user', methods=['GET'])
+@app.route('/api/signing-user', methods=['POST'])
 def get_user_signups2():
     """
     Get user signup statistics grouped by different time periods.
@@ -129,9 +157,10 @@ def get_user_signups2():
         end_date: str - End date for filtering (YYYY-MM-DD)
     """
     try:
-        grouping = request.args.get('grouping', 'monthly')
-        start_date = request.args.get('start_date')
-        end_date = request.args.get('end_date')
+        filters = request.get_json() or {}
+        grouping = filters.get('grouping', 'monthly')
+        start_date = filters.get('start_date')
+        end_date = filters.get('end_date')
 
         # Base query with date filtering
         base_query = """

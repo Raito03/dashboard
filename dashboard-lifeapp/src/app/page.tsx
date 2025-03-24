@@ -58,6 +58,11 @@ const inter = Inter({ subsets: ['latin'] });
 const api_startpoint = 'https://lifeapp-api-vv1.vercel.app'
 //const api_startpoint = 'http://127.0.0.1:5000'
 
+interface userTypeChart {
+  count:number,
+  userType: string | null
+}
+
 interface EchartSignup {
   period: string | null,
   count: number
@@ -77,7 +82,11 @@ export default function UserAnalyticsDashboard() {
       // end_date: '2023-12-31'
     });
 
-    fetch(`${api_startpoint}/api/signing-user?${params.toString()}`)
+    fetch(`${api_startpoint}/api/signing-user`, {
+              method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({grouping: selectedGrouping})
+    })
       .then(response => {
         if (!response.ok) {
           throw new Error('Network response was not ok');
@@ -516,6 +525,86 @@ export default function UserAnalyticsDashboard() {
     },
   };
   
+  const [userTypeData, setUserTypeData] = useState<userTypeChart[]>([])
+  useEffect(() => {
+    async function fetchUserType() {
+      try {
+        const res = await fetch(`${api_startpoint}/api/user-type-chart`)
+        const data = await res.json()
+        if (data && data.length > 0) {
+          setUserTypeData(data)
+        }
+      } catch (error) {
+        console.error('Error fetching user type:', error)
+      }
+    }
+    fetchUserType()
+  }, [])
+
+  // Prepare chart options
+  const deepBlueColors = ['#1E3A8A', '#3B82F6', '#60A5FA', '#93C5FD', '#0F172A'];
+
+  const userTypeChartOptions = {
+    backgroundColor: 'white',
+    title: {
+      text: 'User Type',
+      left: 'center',
+      top: 20,
+      textStyle: {
+        color: 'black'
+      }
+    },
+    tooltip: {
+      trigger: 'item'
+    },
+    series: [
+      {
+        name: 'Number of',
+        type: 'pie',
+        radius: '55%', // Creates a donut effect for better label spacing
+        center: ['50%', '50%'],
+        data: userTypeData.map((item, index) => ({
+          value: item.count,
+          name: item.userType || 'Unknown',
+          itemStyle: { color: deepBlueColors[index % deepBlueColors.length] }
+        })),
+        label: {
+          show: true,
+          color: '#000',
+          fontSize: 14,
+          // formatter: '{b}: {c} ({d}%)' // Show name, count, and percentage
+        },
+        labelLine: {
+          show: true,
+          length: 15, // Line before text
+          length2: 20, // Line connecting to the label
+          lineStyle: {
+            color: '#000',
+            width: 0.5
+          }
+        },
+        itemStyle: {
+          shadowBlur: 10,
+          shadowOffsetX: 0,
+          shadowColor: 'rgba(0, 0, 0, 0.3)'
+        },
+        emphasis: {
+          itemStyle: {
+            shadowBlur: 15,
+            shadowOffsetX: 0,
+            shadowColor: 'rgba(0, 0, 0, 0.5)'
+          }
+        },
+        animationType: 'scale',
+        animationEasing: 'elasticOut',
+        animationDelay: function () {
+          return Math.random() * 200;
+        }
+      }
+    ]
+  };
+
+
   return (
     <div className={`page bg-light ${inter.className} font-sans`}>
       {/* Fixed Sidebar */}
@@ -613,7 +702,10 @@ export default function UserAnalyticsDashboard() {
                       </select>
                     </div>
                     {loading ? (
-                      <div>Loading chart...</div>
+                      <div className="text-center">
+                      
+                      <div className="spinner-border text-purple" role="status" style={{ width: "8rem", height: "8rem" }}></div>
+                      </div>
                     ) : error ? (
                       <div>Error: {error}</div>
                     ) : (
@@ -621,7 +713,7 @@ export default function UserAnalyticsDashboard() {
                     )}
                   </div>
                 {/* Signups Chart */}
-                <div className="col-12 col-xl-6">
+                {/* <div className="col-12 col-xl-6">
                   <div className="card shadow-sm border-0 h-100">
                     <div className="card-header bg-transparent d-flex justify-content-between align-items-center py-3">
                       <h3 className="card-title mb-0 fw-semibold">User Signups Trend</h3>
@@ -638,7 +730,7 @@ export default function UserAnalyticsDashboard() {
                     <div className="card-body pt-0">
                       <div style={{ height: '300px' }}>
                         <ResponsiveContainer width="100%" height="100%" >
-                          {/* Keep existing AreaChart configuration */}
+                          
                             <AreaChart data={filteredData}>
                               <defs>
                                 <linearGradient id="colorUv" x1="0" y1="0" x2="0" y2="1">
@@ -663,7 +755,7 @@ export default function UserAnalyticsDashboard() {
                       </div>
                     </div>
                   </div>
-                </div>
+                </div> */}
 
                 {/* Teacher Assignments */}
                 <div className="col-12 col-xl-6">
@@ -697,6 +789,15 @@ export default function UserAnalyticsDashboard() {
                       </div>
                     </div>
                   </div>
+                </div>
+                {/* User Types */}
+                <div className="col-12 col-xl-4">
+                  <div className="card">
+                    <div className="card-body">
+                      <ReactECharts option={userTypeChartOptions} style={{ height: '400px', width: '100%' }} />
+                    </div>
+                  </div>
+                  
                 </div>
 
                 {/* School Distribution */}
