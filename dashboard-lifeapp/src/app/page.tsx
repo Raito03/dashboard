@@ -51,8 +51,166 @@ import { Sidebar } from '@/components/ui/sidebar';
 import { Inter } from 'next/font/google';
 const inter = Inter({ subsets: ['latin'] });
 
-const api_startpoint = 'https://lifeapp-api-vv1.vercel.app'
+// const api_startpoint = 'https://lifeapp-api-vv1.vercel.app'
+const api_startpoint = 'http://127.0.0.1:5000'
+
+
+import { format } from 'date-fns';
+
+import ApexCharts from 'apexcharts'
+
+
+import dynamic from "next/dynamic";
+
+const ApexChart = dynamic(() => import("react-apexcharts"), { ssr: false });
+
+
+interface SignupData2 {
+  x: string;
+  y: number;
+}
+
 export default function UserAnalyticsDashboard() {
+  // const [data, setData] = useState<SignupData2[]>([]);
+  // const [isLoading, setIsLoading] = useState(true);
+  // const [error, setError] = useState<string | null>(null);
+
+  // const fetchSignupData  = async () => {
+  //   try {
+  //     setIsLoading(true);
+  //     const response = await fetch(`${api_startpoint}/api/user-signups2`);
+  //     const json = await response.json();
+  //     setData(json.data);
+  //     setError(null);
+  //   } catch (err) {
+  //     setError('Failed to load signup data');
+  //   } finally {
+  //     setIsLoading(false);
+  //   }
+  // };
+
+  // useEffect(() => {
+  //   fetchSignupData ();
+  // }, []);
+
+  // const chartOptions: ApexCharts.ApexOptions = {
+  //   chart: {
+  //     type: 'area' as const,
+  //     height: 350,
+  //     zoom: {
+  //       enabled: true,
+  //       type: 'x' as const,
+  //     },
+  //     toolbar: {
+  //       show: true,
+  //       tools: {
+  //         download: true,
+  //         selection: true,
+  //         zoom: true,
+  //         zoomin: true,
+  //         zoomout: true,
+  //         pan: true,
+  //         reset: true,
+  //       },
+  //     },
+  //     animations: {
+  //       enabled: true,
+  //       easing: 'easeinout', // ✅ Fixed: Use one of the allowed values
+  //       speed: 800,
+  //       animateGradually: {
+  //         enabled: true,
+  //         delay: 150,
+  //       },
+  //       dynamicAnimation: {
+  //         enabled: true,
+  //         speed: 350,
+  //       },
+  //     },
+  //   },
+  //   dataLabels: {
+  //     enabled: false,
+  //   },
+  //   stroke: {
+  //     curve: 'smooth' as const,
+  //     width: 2,
+  //   },
+  //   fill: {
+  //     type: 'gradient',
+  //     gradient: {
+  //       shadeIntensity: 1,
+  //       opacityFrom: 0.7,
+  //       opacityTo: 0.3,
+  //       stops: [0, 90, 100],
+  //     },
+  //   },
+  //   xaxis: {
+  //     type: 'datetime' as const,
+  //     labels: {
+  //       formatter: function (val: string) {
+  //         return format(new Date(val), 'MMM dd');
+  //       },
+  //     },
+  //     title: {
+  //       text: 'Date',
+  //     },
+  //   },
+  //   yaxis: {
+  //     title: {
+  //       text: 'Number of Signups',
+  //     },
+  //     min: 0,
+  //   },
+  //   tooltip: {
+  //     x: {
+  //       format: 'dd MMM yyyy',
+  //     },
+  //     y: {
+  //       formatter: function (val: number) {
+  //         return val.toString();
+  //       },
+  //     },
+  //   },
+  //   theme: {
+  //     mode: 'light' as const,
+  //     palette: 'palette1',
+  //   },
+  // };
+  
+
+  // const series = [
+  //   {
+  //     name: 'User Signups',
+  //     data: data,
+  //   },
+  // ];
+  // if (isLoading) {
+  //   return (
+  //     <div className='card'>
+  //       <div className=" card-body pt-6">
+  //         <div className="flex items-center justify-center h-[400px]">
+  //           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+  //         </div>
+  //       </div>
+  //     </div>
+  //   );
+  // }
+
+  // if (error) {
+  //   return (
+  //     <div className='card'>
+  //       <div className=" card-body pt-6">
+  //         <div className="flex flex-col items-center justify-center h-[400px] gap-4">
+  //           <p className="text-destructive">{error}</p>
+  //           <button onClick={fetchSignupData }>Retry</button>
+  //         </div>
+  //       </div>
+  //     </div>
+  //   );
+  // }
+
+
+
+
   const [mounted, setMounted] = useState(false)
   const [chartData, setChartData] = useState<SignupData[]>([])
   const [selectedYear, setSelectedYear] = useState<string>('')
@@ -497,7 +655,17 @@ export default function UserAnalyticsDashboard() {
 
             {/* Charts Section */}
             {mounted && (
-              <div className="row g-4">
+              
+                <div className="row g-4">
+                  {/* <div className="h-[400px] w-full">
+                <ApexChart
+                  options={chartOptions}
+                  series={series}
+                  type="area"
+                  height="100%"
+                  width="100%"
+                />
+              </div> */}
                 {/* Signups Chart */}
                 <div className="col-12 col-xl-6">
                   <div className="card shadow-sm border-0 h-100">

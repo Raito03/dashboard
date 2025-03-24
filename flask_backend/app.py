@@ -3,16 +3,23 @@ from binascii import Error
 from flask import Flask, jsonify, request
 from flask_cors import CORS
 import pymysql.cursors
+from datetime import datetime
+from typing import Optional, Dict, Any, List, Union
+import logging
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
 from pathlib import Path
 app = Flask(__name__)
 # Configure CORS to allow requests from http://localhost:3000 with credentials
-CORS(app, resources={r"/*": {"origins": "http://localhost:3000"}}, supports_credentials=True)
+CORS(app, resources={r"/*": {"origins": "*"}}, supports_credentials=True)
 
 import os
 from dotenv import load_dotenv
 
 # Load environment variables from .env file
-env_path = Path('.') / '.env.local'
+env_path = Path('.') / '.local.env'
 load_dotenv()
 # def get_db_connection():
 #     return pymysql.connect(
@@ -88,6 +95,100 @@ def get_user_signups():
         return jsonify({'error': str(e)}), 500
     finally:
         connection.close()
+
+def execute_query(query: str, params: tuple = None) -> List[Dict[str, Any]]:
+    """
+    Execute a database query and return results.
+    
+    Args:
+        query (str): SQL query to execute
+        params (tuple, optional): Query parameters
+        
+    Returns:
+        List[Dict[str, Any]]: Query results
+    """
+    connection = None
+    try:
+        connection = get_db_connection()
+        with connection.cursor() as cursor:
+            cursor.execute(query, params or ())
+            return cursor.fetchall()
+    except Exception as e:
+        logger.error(f"Query execution error: {str(e)}")
+        raise
+    finally:
+        if connection:
+            connection.close()
+@app.route('/api/user-signups2', methods=['GET'])
+def get_user_signups2():
+    """
+    Get user signup statistics grouped by different time periods.
+    Query parameters:
+        grouping: str - Time grouping (daily, weekly, monthly, quarterly, yearly, lifetime)
+        start_date: str - Start date for filtering (YYYY-MM-DD)
+        end_date: str - End date for filtering (YYYY-MM-DD)
+    """
+    try:
+        grouping = request.args.get('grouping', 'monthly')
+        start_date = request.args.get('start_date')
+        end_date = request.args.get('end_date')
+
+        # Base query with date filtering
+        base_query = """
+            SELECT 
+                {date_format} AS period,
+                COUNT(*) AS count 
+            FROM lifeapp.users 
+            WHERE 1=1
+        """
+        params = []
+
+        # Add date range filters if provided
+        if start_date:
+            base_query += " AND created_at >= %s"
+            params.append(start_date)
+        if end_date:
+            base_query += " AND created_at <= %s"
+            params.append(end_date)
+
+        # Define date format based on grouping
+        date_formats = {
+            'daily': "DATE_FORMAT(created_at, '%Y-%m-%d')",
+            'weekly': "DATE_FORMAT(created_at, '%Y-%u')", # ISO week number
+            'monthly': "DATE_FORMAT(created_at, '%Y-%m')",
+            'quarterly': "CONCAT(YEAR(created_at), '-Q', QUARTER(created_at))",
+            'yearly': "YEAR(created_at)",
+            'lifetime': "'Lifetime'"
+        }
+
+        if grouping not in date_formats:
+            return jsonify({"error": "Invalid grouping parameter"}), 400
+
+        # Format query with appropriate date format
+        query = base_query.format(date_format=date_formats[grouping])
+        
+        # Add grouping and ordering
+        if grouping != 'lifetime':
+            query += f" GROUP BY period HAVING period IS NOT NULL ORDER BY period"
+        else:
+            query += " GROUP BY period"
+
+        result = execute_query(query, tuple(params))
+
+        # Add additional metadata for better client-side handling
+        response = {
+            "data": result,
+            "grouping": grouping,
+            "start_date": start_date,
+            "end_date": end_date,
+            "total_count": sum(row['count'] for row in result)
+        }
+
+        return jsonify(response)
+    except Exception as e:
+        logger.error(f"Error in get_user_signups: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+    
 
 @app.route('/api/new-signups', methods=['GET'])
 def get_new_signups():
