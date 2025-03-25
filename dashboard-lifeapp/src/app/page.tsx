@@ -65,7 +65,13 @@ interface userTypeChart {
 
 interface EchartSignup {
   period: string | null,
-  count: number
+  count: number,
+  user_type: string,
+  Admin: string,
+  Mentor: string,
+  Student: string,
+  Teacher:string,
+  Unspecified: string
 }
 export default function UserAnalyticsDashboard() {
   const [EchartData, setEChartData] = useState<EchartSignup[]>([]);
@@ -95,7 +101,15 @@ export default function UserAnalyticsDashboard() {
       })
       .then(data => {
         // Assume API returns data in a { data: [{ period, count }, ...] } format
-        setEChartData(data.data);
+        // setEChartData(data.data);
+        // setLoading(false);
+        const groupedData = data.data.reduce((acc: any, entry: any) => {
+          if (!acc[entry.period]) acc[entry.period] = { period: entry.period };
+          acc[entry.period][entry.user_type] = entry.count;
+          return acc;
+        }, {});
+  
+        setEChartData(Object.values(groupedData));
         setLoading(false);
       })
       .catch(err => {
@@ -111,11 +125,15 @@ export default function UserAnalyticsDashboard() {
   // Configure the ECharts option
   const EchartOption = {
     title: {
-      text: 'User Signups Over Time',
+      text: 'User Signups by Type Over Time',
       left: 'center'
     },
     tooltip: {
-      trigger: 'axis'
+      trigger: 'axis',
+      //
+      axisPointer: {
+        type: 'shadow'
+      }
     },
     xAxis: {
       type: 'category',
@@ -142,15 +160,52 @@ export default function UserAnalyticsDashboard() {
         end: 100
       }
     ],
-    series: [
+    // series: [
+    //   {
+    //     name: 'Signups',
+    //     type: 'bar',
+    //     data: EchartData.map(item => item.count),
+    //     barMaxWidth: '50%',
+    //     itemStyle: {
+    //       color: '#5470C6'
+    //     }
+    //   }
+    // ]
+    series:  [
       {
-        name: 'Signups',
+        name: 'Admin',
         type: 'bar',
-        data: EchartData.map(item => item.count),
-        barMaxWidth: '50%',
-        itemStyle: {
-          color: '#5470C6'
-        }
+        stack: 'total',
+        data: EchartData.map(item => item.Admin || 0),
+        itemStyle: { color: '#1E3A8A' }
+      },
+      {
+        name: 'Student',
+        type: 'bar',
+        stack: 'total',
+        data: EchartData.map(item => item.Student || 0),
+        itemStyle: { color: '#3B82F6' }
+      },
+      {
+        name: 'Mentor',
+        type: 'bar',
+        stack: 'total',
+        data: EchartData.map(item => item.Mentor || 0),
+        itemStyle: { color: '#60A5FA' }
+      },
+      {
+        name: 'Teacher',
+        type: 'bar',
+        stack: 'total',
+        data: EchartData.map(item => item.Teacher || 0),
+        itemStyle: { color: '#93C5FD' }
+      },
+      {
+        name: 'Unspecified',
+        type: 'bar',
+        stack: 'total',
+        data: EchartData.map(item => item.Unspecified || 0),
+        itemStyle: { color: '#0F172A' }
       }
     ]
   };

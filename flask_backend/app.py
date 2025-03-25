@@ -166,7 +166,14 @@ def get_user_signups2():
         base_query = """
             SELECT 
                 {date_format} AS period,
-                COUNT(*) AS count 
+                COUNT(*) AS count,
+                CASE 
+                    WHEN `type` = 1 THEN 'Admin'
+                    WHEN `type` = 3 THEN 'Student'
+                    WHEN `type` = 4 THEN 'Mentor'
+                    WHEN `type` = 5 THEN 'Teacher'
+                    ELSE 'Unspecified'
+                END AS user_type 
             FROM lifeapp.users 
             WHERE 1=1
         """
@@ -198,9 +205,9 @@ def get_user_signups2():
         
         # Add grouping and ordering
         if grouping != 'lifetime':
-            query += f" GROUP BY period HAVING period IS NOT NULL ORDER BY period"
+            query += f" GROUP BY period, user_type HAVING period IS NOT NULL ORDER BY period"
         else:
-            query += " GROUP BY period"
+            query += " GROUP BY period, user_type"
 
         result = execute_query(query, tuple(params))
 
