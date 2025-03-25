@@ -19,6 +19,7 @@ import {
   Search,
   XCircle,
 } from "lucide-react";
+import error from 'next/error';
 
 interface SearchableDropdownProps {
     options: string[];
@@ -27,6 +28,23 @@ interface SearchableDropdownProps {
     onChange: (value: string) => void;
     isLoading?: boolean;
     maxDisplayItems?: number;
+}
+
+import dynamic from 'next/dynamic'
+
+
+const HighchartsReact = dynamic(() => import('highcharts-react-official'), { ssr: false });
+// import Highcharts from 'highcharts/highmaps';
+// const Highcharts = dynamic(() => import('highcharts/highmaps'), { ssr: false });
+
+interface DemographData {
+    state: string;
+    count: string;
+}
+
+interface DemographChartdata {
+    code: string;
+    value: number;
 }
 
 function SearchableDropdown({
@@ -520,6 +538,140 @@ export default function SchoolDashboard() {
         }
     };
     
+    const [chartOptions, setChartOptions] = useState<any>(null);
+    const [geoData, setGeoData] = useState<DemographData[]>([]);
+    const [errorMessage, setErrorMessage] = useState<string | null>(null);
+    const [HighchartsLib, setHighchartsLib] = useState<any>(null);
+    useEffect(() => {
+        // Load Highcharts on client-side only
+        const HighchartsLoaded = require('highcharts/highmaps');
+        setHighchartsLib(HighchartsLoaded);
+        const fetchData = async () => {
+            try {
+                // Fetch India TopoJSON map
+                const topoResponse = await fetch(
+                    // "https://code.highcharts.com/mapdata/countries/in/custom/in-all-andaman-and-nicobar.topo.json"
+                    "https://code.highcharts.com/mapdata/countries/in/custom/in-all-disputed.topo.json"
+                );
+                
+                const topology = await topoResponse.json();
+
+                // Fetch state-wise student count from API
+                const apiResponse = await fetch(`${api_startpoint}/api/demograph-students`,{
+                    method: 'POST'
+                });
+                const apiData: { count: string; state: string }[] = await apiResponse.json();
+
+                setGeoData(apiData); // Store API data for debugging or future use
+
+                // Map API state names to Highcharts' region keys
+                const stateMappings: Record<string, string> = {
+                    "Tamil Nadu": "tamil nadu",     // Tamil Nadu gets "in-tn"
+                    "Telangana": "telangana",       // Telangana gets "in-tg" (instead of "in-tn")
+                    "Maharashtra": "maharashtra",
+                    "Karnataka": "karnataka",
+                    "Andhra Pradesh": "andhra pradesh",
+                    "Gujarat": "gujarat",
+                    "Madhya Pradesh": "madhya pradesh",
+                    "Odisha": "odisha",
+                    "West Bengal": "west bengal",
+                    "Delhi": "nct of delhi",
+                    "Uttar Pradesh": "uttar pradesh",
+                    "Jharkhand": "jharkhand",
+                    "Assam": "assam",
+                    "Chhattisgarh": "chhattisgarh",
+                    "Punjab": "punjab",
+                    "Bihar": "bihar",
+                    "Haryana": "haryana",
+                    "Daman and Diu": "daman and diu",
+                    "Chandigarh": "chandigarh",
+                    // "Pondicherry": "in-py",
+                    "Puducherry": "puducherry",
+                    "Rajasthan": "rajasthan",
+                    "Goa": "goa",
+                    "Kerala": "kerala",
+                    "Uttarakhand": "uttarakhand",
+                    "Himachal Pradesh": "himachal pradesh",
+                    // "Ladakh": "in-la",
+                    "Lakshadweep": "lakshadweep",
+                    "Sikkim": "nikkim",
+                    "Nagaland": "nagaland",
+                    "Dadara and Nagar Haveli": "dadara and nagar havelli",
+                    "Jammu and Kashmir": "jammu and kashmir",
+                    "Manipur": "manipur",
+                    "Arunanchal Pradesh": "arunanchal pradesh",
+                    "Meghalaya": "meghalaya",
+                    "Mizoram": "mizoram",
+                    "Tripura": "tripura",
+                    "Andaman and Nicobar Islands": "andaman and nicobar",
+                };
+
+                // Transform API data into Highcharts format
+                const chartData: DemographChartdata[] = apiData
+                .map((item) => ({
+                    code: stateMappings[item.state] || '', // Use empty string if no mapping found
+                    value: Math.max(parseInt(item.count, 10), 1) // Ensure a minimum value of 1
+                }))
+                .filter((item) => item.code);
+
+
+                // Set up the chart options
+                const options = {
+                    chart: {
+                        map: topology,
+                    },
+                    title: {
+                        text: "Student Distribution Across India",
+                    },
+                    subtitle: {
+                        text: "Data sourced from lifeapp.users",
+                    },
+                    mapNavigation: {
+                        enabled: true,
+                        buttonOptions: {
+                            verticalAlign: "bottom",
+                        },
+                    },
+                    colorAxis: {
+                        min: 1,
+                        minColor: '#E6F2FF',
+                        maxColor: '#0077BE',
+                        type: 'logarithmic' // This helps differentiate states with vastly different counts
+                    },
+                    series: [
+                        {
+                            data: chartData.map((item) => [item.code, item.value]),
+                            name: "Student Count",
+                            states: {
+                                hover: {
+                                    color: "#BADA55",
+                                },
+                            },
+                            dataLabels: {
+                                enabled: true,
+                                format: '{point.name}',
+                                style: {
+                                    fontSize: '8px'
+                                }
+                            },
+                        },
+                    ],
+                };
+
+                setChartOptions(options);
+            } catch (error) {
+                console.error("Error fetching data:", error);
+                setErrorMessage("An error occurred while loading the chart.");
+            }
+        };
+
+        fetchData();
+    }, []);
+  
+
+
+
+
     return(
         <div className={`page bg-light ${inter.className} font-sans`}>
             <Sidebar />
@@ -581,7 +733,22 @@ export default function SchoolDashboard() {
                                 </div>
                             ))}
                         </div>
-
+                        <div>
+                        {!HighchartsLib || !chartOptions ? (
+                                <div className="text-center">
+                                    <div className="spinner-border text-purple" role="status" style={{ width: "8rem", height: "8rem" }}></div>
+                                </div>
+                            ) : errorMessage ? (
+                                <div>Error: {errorMessage}</div>
+                            ) : (
+                                <HighchartsReact
+                                    highcharts={HighchartsLib}
+                                    constructorType="mapChart"
+                                    options={chartOptions}
+                                />
+                        )}
+                        </div>
+                        
 
                         <div className="card shadow-sm border-0 mb-4">
                             <div className="card-body">

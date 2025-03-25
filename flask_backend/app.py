@@ -1593,5 +1593,69 @@ def get_cities_for_state():
         return jsonify({"error": str(e)}), 500
     finally:
         connection.close()
+
+@app.route('/api/demograph-students', methods=['POST'])
+def get_demograph_students():
+    """
+    Returns Count of students in each state with normalized state names.
+    Ensures unique state entries and consistent naming.
+    """
+    try:
+        connection = get_db_connection()
+        with connection.cursor() as cursor:
+            # Normalize state names and aggregate counts
+            sql = """
+            SELECT 
+                CASE 
+                    WHEN state IN ('Gujrat', 'Gujarat') THEN 'Gujarat'
+                    WHEN state IN ('Tamilnadu', 'Tamil Nadu') THEN 'Tamil Nadu'
+                    ELSE state 
+                END AS normalized_state,
+                SUM(count) as total_count
+            FROM (
+                SELECT state, COUNT(*) as count 
+                FROM lifeapp.users 
+                WHERE `type` = 3 AND state != 2 
+                GROUP BY state
+            ) AS subquery
+            GROUP BY normalized_state
+            ORDER BY total_count DESC
+            """
+            cursor.execute(sql)
+            result = cursor.fetchall()
+            
+            # Convert to list of dictionaries with consistent keys
+            normalized_result = [
+                {"count": row['total_count'], "state": row['normalized_state']} 
+                for row in result
+            ]
+            
+            return jsonify(normalized_result), 200
+    
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    finally:
+        connection.close()
+
+
+#### permission denied in digital ocean,
+@app.route('/api/correct-tamil-nadu-users', methods=['POST'])
+def correction_tamil_nadu_users():
+    sql = """
+        UPDATE lifeapp.users 
+        SET state = 'Tamil Nadu' 
+        WHERE state = 'Tamilnadu';
+    """
+    try:
+        connection = get_db_connection()
+        with connection.cursor() as cursor:
+            cursor.execute(sql)
+            connection.commit()  # Commit the transaction
+        return jsonify({"message": "Success in correcting the name"}), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    finally:
+        connection.close()
+
 if __name__ == '__main__':
     app.run(debug=True)
