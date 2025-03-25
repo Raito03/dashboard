@@ -8,7 +8,7 @@ import { Inter } from 'next/font/google';
 const inter = Inter({ subsets: ['latin'] });
 // import Sidebar from '../../sidebar';
 import { Sidebar } from '@/components/ui/sidebar';
-import { IconSearch, IconBell, IconSettings, IconUserFilled, IconUserExclamation, IconUser, IconUserScan } from '@tabler/icons-react';
+import { IconSearch, IconBell, IconSettings, IconUserFilled, IconUserExclamation, IconUser, IconUserScan, IconMapPin, IconSchool, IconTrophy } from '@tabler/icons-react';
 
 
 import {
@@ -45,6 +45,17 @@ interface DemographData {
 interface DemographChartdata {
     code: string;
     value: number;
+}
+
+interface StudentsByGrade {
+    grade: number | null;
+    count: number;
+}
+
+interface challengesCompletedData {
+    count: number;
+    la_mission_id: number | null;
+    title: string;
 }
 
 function SearchableDropdown({
@@ -674,6 +685,122 @@ export default function SchoolDashboard() {
 
 
 
+    const [studentsByGrade, setStudentsByGrade] = useState<StudentsByGrade[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
+    useEffect(() => {
+        const fetchStudentsByGrade = async () => {
+            try {
+                const response = await fetch(`${api_startpoint}/api/students-by-grade`, {
+                    method: "POST"
+                });
+                if (!response.ok) {
+                    throw new Error('Failed to fetch students by grade');
+                }
+                const data: StudentsByGrade[] = await response.json();
+                
+                // Sort the data by grade, handling null last
+                const sortedData = data.sort((a, b) => {
+                    if (a.grade === null) return 1;
+                    if (b.grade === null) return -1;
+                    return (a.grade as number) - (b.grade as number);
+                });
+    
+                setStudentsByGrade(sortedData);
+                setIsLoading(false);
+            } catch (err) {
+                setError(err instanceof Error ? err.message : 'An unknown error occurred');
+                setIsLoading(false);
+            }
+        };
+    
+        fetchStudentsByGrade();
+    }, []);
+
+    // State for modals
+    const [showDemographicsModal, setShowDemographicsModal] = useState(false);
+    const [showGradeModal, setShowGradeModal] = useState(false);
+
+    const [showChallengesModal, setShowChallengesModal] = useState(false);
+    const [challengesData, setChallengesData] = useState<challengesCompletedData[]>([]);
+    const [isChallengesLoading, setIsChallengesLoading] = useState(false);
+    useEffect(() => {
+        const fetchChallengesData = async () => {
+            try{
+                const response = await fetch(`${api_startpoint}/api/challenges-completed-per-mission`, {
+                    method: "POST"
+                });
+                if (!response.ok) {
+                    throw new Error('Failed to fetch students by grade');
+                }
+                const data: challengesCompletedData[] = await response.json();
+                setChallengesData(data);
+                setIsChallengesLoading(false);
+            } catch (err) {
+                setError(err instanceof Error ? err.message : 'An unknown error occurred');
+                setIsLoading(false);
+            }
+        };
+        fetchChallengesData()
+    }, [])
+    
+
+    const [totalPointsEarned, setTotalPointsEarned] = useState<number>(0)
+    useEffect(() => {
+        async function fetchTotalPointsEarned() {
+        try {
+            const res = await fetch(`${api_startpoint}/api/total-points-earned`, {
+                method: 'POST'
+            })
+            const data = await res.json()
+            if (data && data.length > 0) {
+                setTotalPointsEarned(data[0].total_points)
+            }
+        } catch (error) {
+            console.error('Error fetching user count:', error)
+        }
+        }
+        fetchTotalPointsEarned()
+    }, [])
+
+    const [totalPointsRedeemed, setTotalPointsRedeemed] = useState<number>(0)
+    useEffect(() => {
+        async function fetchTotalPointsRedeemed() {
+            try {
+                const res = await fetch(`${api_startpoint}/api/total-points-redeemed`, {
+                    method: 'POST'
+                })
+                const data = await res.json()
+                if (data && data.length > 0) {
+                    setTotalPointsRedeemed(data[0].total_coins_redeemed)
+                }
+            } catch (error) {
+                console.error('Error fetching user count:', error)
+            }
+            }
+            fetchTotalPointsRedeemed()
+    }, [])
+
+    const [tmcAssignedByTeacher, setTmcAssignedByTeacher] = useState<number>(0)
+    useEffect(() => {
+        async function fetchTmcAssignedByTeacher() {
+            try {
+                const res = await fetch(`${api_startpoint}/api/total-missions-completed-assigned-by-teacher`, {
+                    method: 'POST'
+                })
+                const data = await res.json()
+                if (data && data.length > 0) {
+                    setTmcAssignedByTeacher(data[0].total_missions_completed)
+                }
+            } catch (error) {
+                console.error('Error fetching user count:', error)
+            }
+            }
+            fetchTmcAssignedByTeacher()
+    }, [])
+
+    const [currentChallengesPage, setCurrentChallengesPage] = useState(0);
+    const rowsPerPageChallenges = 10; // Number of rows per page
 
     return(
         <div className={`page bg-light ${inter.className} font-sans`}>
@@ -709,7 +836,7 @@ export default function SchoolDashboard() {
                             {[
                                 { title: 'Total Students', value: totalStudents, icon: <IconUser />, color: 'bg-purple' },
                                 { title: 'Active Students', value: 256, icon: <IconUserFilled />, color: 'bg-teal' },
-                                { title: 'Inactive Students', value: 2559, icon: <IconUserExclamation />, color: 'bg-orange' },
+                                { title: 'Inactive Students', value: 2559, icon: <IconUserExclamation />, color: 'bg-orange', suffix:'' },
                                 { title: 'Highest Online User Count', value: 36987, icon: <IconUserScan />, color: 'bg-blue', suffix: '' },
                             ].map((metric, index) => (
                                 <div className="col-sm-6 col-lg-3" key={index}>
@@ -736,22 +863,401 @@ export default function SchoolDashboard() {
                                 </div>
                             ))}
                         </div>
-                        <div>
-                        {!HighchartsLib || !chartOptions ? (
-                                <div className="text-center">
-                                    <div className="spinner-border text-purple" role="status" style={{ width: "8rem", height: "8rem" }}></div>
+
+                        {/* Metrics Grid */}
+                        <div className="row g-4 mb-4">
+                            {[
+                                { title: 'Total Points Earned', value: totalPointsEarned, icon: <IconUser />, color: 'bg-purple' },
+                                { title: 'Total Points Redeemed', value: totalPointsRedeemed, icon: <IconUserFilled />, color: 'bg-teal' },
+                                { title: 'Teacher Assign Mission Completes', value: tmcAssignedByTeacher, icon: <IconUserExclamation />, color: 'bg-orange', suffix:'' },
+                                // { title: 'Highest Online User Count', value: 36987, icon: <IconUserScan />, color: 'bg-blue', suffix: '' },
+                            ].map((metric, index) => (
+                                <div className="col-sm-6 col-lg-3" key={index}>
+                                    <div className="card">
+                                        <div className="card-body">
+                                            <div className="d-flex align-items-center">
+                                                {/* <div className={`${metric.color} rounded-circle p-3 text-white`}>
+                                                {React.cloneElement(metric.icon, { size: 24 })}
+                                                </div> */}
+                                                <div>
+                                                <div className="subheader">{metric.title}</div>
+                                                    <div className="h1 mb-3">
+                                                        <NumberFlow
+                                                        value={metric.value}
+                                                        suffix={metric.suffix || ''}
+                                                        className="fw-semi-bold text-dark"
+                                                        transformTiming={{endDelay:6, duration:750, easing:'cubic-bezier(0.42, 0, 0.58, 1)'}}
+                                                        />
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
                                 </div>
-                            ) : errorMessage ? (
-                                <div>Error: {errorMessage}</div>
-                            ) : (
-                                <HighchartsReact
-                                    highcharts={HighchartsLib}
-                                    constructorType="mapChart"
-                                    options={chartOptions}
-                                />
-                        )}
+                            ))}
                         </div>
-                        
+                        {/* New Cards for Modal Triggers */}
+                        <div className="row g-4 mb-4">
+                            <div className="col-sm-4 col-lg-4" onClick={() => setShowGradeModal(true)}>
+                                <div className="card cursor-pointer hover:shadow-lg transition-shadow">
+                                    <div className="card-body">
+                                        <div className="d-flex align-items-center">
+                                            <div className="bg-purple rounded-circle p-3 text-white me-3">
+                                                <IconSchool size={24} />
+                                            </div>
+                                            <div>
+                                                <div className="subheader">View Students by Grade</div>
+                                                <div className="text-muted">Click to expand detailed grade distribution</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="col-sm-4 col-lg-4" onClick={() => setShowDemographicsModal(true)}>
+                                <div className="card cursor-pointer hover:shadow-lg transition-shadow">
+                                    <div className="card-body">
+                                        <div className="d-flex align-items-center">
+                                            <div className="bg-teal rounded-circle p-3 text-white me-3">
+                                                <IconMapPin size={24} />
+                                            </div>
+                                            <div>
+                                                <div className="subheader">View Student Demographics Map</div>
+                                                <div className="text-muted">Click to explore student distribution across India</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="col-sm-4 col-lg-4" onClick={() => setShowChallengesModal(true)}>
+                                <div className="card cursor-pointer hover:shadow-lg transition-shadow">
+                                    <div className="card-body">
+                                        <div className="d-flex align-items-center">
+                                            <div className="bg-info rounded-circle p-3 text-white me-3">
+                                                <IconTrophy size={24} />
+                                            </div>
+                                            <div>
+                                                <div className="subheader">View Challenges Completed per Mission</div>
+                                                <div className="text-muted">Click to see mission completion details</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                        </div>
+                        {/* <div className="row g-4 mb-4">
+                            {
+                                isLoading ? (
+                                    <div className="card ">
+                                        <div className="card-body text-center">
+                                            <div className="spinner-border text-purple" role="status">
+                                                <span className="visually-hidden">Loading...</span>
+                                            </div>
+                                            <p className="mt-2">Loading students by grade...</p>
+                                        </div>
+                                    </div>
+                                ): error? (
+                                    <div className="card ">
+                                        <div className="card-body text-center text-danger">
+                                            <p>Error: {error}</p>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <div className="card shadow-sm border-0 mt-4">
+                                        <div className="card-body">
+                                            <h5 className="card-title mb-4">Students by Grade</h5>
+                                            <div className="table-responsive">
+                                                <table className="table table-striped table-hover">
+                                                    <thead>
+                                                        <tr>
+                                                            <th>Grade</th>
+                                                            <th>Number of Students</th>
+                                                            <th>Percentage</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        {studentsByGrade.map((gradeData, index) => (
+                                                            <tr key={index}>
+                                                                <td>
+                                                                    {gradeData.grade === null 
+                                                                        ? 'Unspecified' 
+                                                                        : `Grade ${gradeData.grade}`}
+                                                                </td>
+                                                                <td>{gradeData.count.toLocaleString()}</td>
+                                                                <td>
+                                                                    {((gradeData.count / totalStudents) * 100).toFixed(2)}%
+                                                                </td>
+                                                            </tr>
+                                                        ))}
+                                                    </tbody>
+                                                    <tfoot>
+                                                        <tr className="table-active">
+                                                            <td><strong>Total</strong></td>
+                                                            <td><strong>{totalStudents.toLocaleString()}</strong></td>
+                                                            <td><strong>100%</strong></td>
+                                                        </tr>
+                                                    </tfoot>
+                                                </table>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )
+                            }
+                        </div> */}
+                        {/* <div>
+                            {!HighchartsLib || !chartOptions ? (
+                                    <div className="text-center">
+                                        <div className="spinner-border text-purple" role="status" style={{ width: "8rem", height: "8rem" }}></div>
+                                    </div>
+                                ) : errorMessage ? (
+                                    <div>Error: {errorMessage}</div>
+                                ) : (
+                                    <HighchartsReact
+                                        highcharts={HighchartsLib}
+                                        constructorType="mapChart"
+                                        options={chartOptions}
+                                    />
+                            )}
+                        </div> */}
+                        {/* Modals */}
+                        {/* Grade Distribution Modal */}
+                        {showGradeModal && (
+                            <div className="modal fade show" style={{ display: 'block', backgroundColor: 'rgba(0,0,0,0.5)' }}>
+                                <div className="modal-dialog modal-lg">
+                                    <div className="modal-content">
+                                        <div className="modal-header">
+                                            <h5 className="modal-title">Students by Grade Distribution</h5>
+                                            <button 
+                                                type="button" 
+                                                className="btn-close" 
+                                                onClick={() => setShowGradeModal(false)}
+                                            ></button>
+                                        </div>
+                                        <div className="modal-body">
+                                            {isLoading ? (
+                                                <div className="text-center">
+                                                    <div className="spinner-border text-purple" role="status">
+                                                        <span className="visually-hidden">Loading...</span>
+                                                    </div>
+                                                    <p className="mt-2">Loading students by grade...</p>
+                                                </div>
+                                            ) : error ? (
+                                                <div className="text-center text-danger">
+                                                    <p>Error: {error}</p>
+                                                </div>
+                                            ) : (
+                                                <div className="table-responsive">
+                                                    <table className="table table-striped table-hover">
+                                                        <thead>
+                                                            <tr>
+                                                                <th>Grade</th>
+                                                                <th>Number of Students</th>
+                                                                <th>Percentage</th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody>
+                                                            {studentsByGrade.map((gradeData, index) => (
+                                                                <tr key={index}>
+                                                                    <td>
+                                                                        {gradeData.grade === null 
+                                                                            ? 'Unspecified' 
+                                                                            : `Grade ${gradeData.grade}`}
+                                                                    </td>
+                                                                    <td>{gradeData.count.toLocaleString()}</td>
+                                                                    <td>
+                                                                        {((gradeData.count / totalStudents) * 100).toFixed(2)}%
+                                                                    </td>
+                                                                </tr>
+                                                            ))}
+                                                        </tbody>
+                                                        <tfoot>
+                                                            <tr className="table-active">
+                                                                <td><strong>Total</strong></td>
+                                                                <td><strong>{totalStudents.toLocaleString()}</strong></td>
+                                                                <td><strong>100%</strong></td>
+                                                            </tr>
+                                                        </tfoot>
+                                                    </table>
+                                                </div>
+                                            )}
+                                        </div>
+                                        <div className="modal-footer">
+                                            <button 
+                                                type="button" 
+                                                className="btn btn-secondary" 
+                                                onClick={() => setShowGradeModal(false)}
+                                            >
+                                                Close
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Demographics Map Modal */}
+                        {showDemographicsModal && (
+                            <div className="modal fade show" style={{ display: 'block', backgroundColor: 'rgba(0,0,0,0.5)' }}>
+                                <div className="modal-dialog modal-xl">
+                                    <div className="modal-content">
+                                        <div className="modal-header">
+                                            <h5 className="modal-title">Student Distribution Across India</h5>
+                                            <button 
+                                                type="button" 
+                                                className="btn-close" 
+                                                onClick={() => setShowDemographicsModal(false)}
+                                            ></button>
+                                        </div>
+                                        <div className="modal-body">
+                                            {!HighchartsLib || !chartOptions ? (
+                                                <div className="text-center">
+                                                    <div className="spinner-border text-purple" role="status" style={{ width: "8rem", height: "8rem" }}></div>
+                                                </div>
+                                            ) : errorMessage ? (
+                                                <div>Error: {errorMessage}</div>
+                                            ) : (
+                                                <HighchartsReact
+                                                    highcharts={HighchartsLib}
+                                                    constructorType="mapChart"
+                                                    options={chartOptions}
+                                                />
+                                            )}
+                                        </div>
+                                        <div className="modal-footer">
+                                            <button 
+                                                type="button" 
+                                                className="btn btn-secondary" 
+                                                onClick={() => setShowDemographicsModal(false)}
+                                            >
+                                                Close
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+                        {/*Total number of challenges submitted by students  in each level for each subject in the Life app*/}
+                        {showChallengesModal && (
+                            <div className="modal fade show" style={{ display: 'block', backgroundColor: 'rgba(0,0,0,0.5)' }}>
+                                <div className="modal-dialog modal-lg">
+                                    <div className="modal-content">
+                                        <div className="modal-header">
+                                            <h5 className="modal-title">Challenges Completed per Mission</h5>
+                                            <button 
+                                                type="button" 
+                                                className="btn-close" 
+                                                onClick={() => setShowChallengesModal(false)}
+                                            ></button>
+                                        </div>
+                                        <div className="modal-body">
+                                            {isChallengesLoading ? (
+                                                <div className="text-center">
+                                                    <div className="spinner-border text-info" role="status">
+                                                        <span className="visually-hidden">Loading...</span>
+                                                    </div>
+                                                    <p className="mt-2">Loading challenges data...</p>
+                                                </div>
+                                            ) : challengesData.length === 0 ? (
+                                                <div className="text-center text-muted">
+                                                    <p>No challenges data available.</p>
+                                                </div>
+                                            ) : (
+                                                (() => {
+                                                    const totalChallenges = challengesData.reduce((sum, row) => sum + row.count, 0);
+                                                    
+                                                    // Paginate the data
+                                                    const paginatedChallengesData = challengesData.slice(
+                                                        currentChallengesPage * rowsPerPageChallenges,
+                                                        (currentChallengesPage + 1) * rowsPerPageChallenges
+                                                    );
+
+                                                    return (
+                                                        <div className="table-responsive">
+                                                            <table className="table table-striped table-hover">
+                                                                <thead>
+                                                                    <tr>
+                                                                        <th>Mission ID</th>
+                                                                        <th>Title</th>
+                                                                        <th>Count</th>
+                                                                        <th>Percentage</th>
+                                                                    </tr>
+                                                                </thead>
+                                                                <tbody>
+                                                                    {paginatedChallengesData.map((row, index) => {
+                                                                        let title = '';
+                                                                        try {
+                                                                            const parsedTitle = JSON.parse(row.title);
+                                                                            title = parsedTitle.en || '';
+                                                                        } catch (error) {
+                                                                            title = row.title;
+                                                                        }
+
+                                                                        const percentage = totalChallenges > 0 ? ((row.count / totalChallenges) * 100).toFixed(3) : '0.00';
+                                                                        
+                                                                        return (
+                                                                            <tr key={index}>
+                                                                                <td>{row.la_mission_id}</td>
+                                                                                <td>{title}</td>
+                                                                                <td>{row.count.toLocaleString()}</td>
+                                                                                <td>{percentage}%</td>
+                                                                            </tr>
+                                                                        );
+                                                                    })}
+                                                                </tbody>
+                                                                <tfoot>
+                                                                    <tr className="table-active">
+                                                                        <td colSpan={2}><strong>Total</strong></td>
+                                                                        <td><strong>{totalChallenges.toLocaleString()}</strong></td>
+                                                                        <td><strong>100%</strong></td>
+                                                                    </tr>
+                                                                </tfoot>
+                                                            </table>
+
+                                                            {/* Pagination Controls */}
+                                                            <div className="d-flex justify-content-between mt-3">
+                                                                <button 
+                                                                    className="btn btn-secondary"
+                                                                    onClick={() => setCurrentChallengesPage(prev => Math.max(prev - 1, 0))}
+                                                                    disabled={currentChallengesPage === 0}
+                                                                >
+                                                                    Previous
+                                                                </button>
+                                                                <div className="d-flex align-items-center">
+                                                                    <span className="mx-2">
+                                                                        Page {currentChallengesPage + 1} of {Math.ceil(challengesData.length / rowsPerPageChallenges) || 1}
+                                                                    </span>
+                                                                </div>
+                                                                <button 
+                                                                    className="btn btn-secondary"
+                                                                    onClick={() => setCurrentChallengesPage(prev => 
+                                                                        (prev + 1) * rowsPerPageChallenges < challengesData.length ? prev + 1 : prev)}
+                                                                    disabled={(currentChallengesPage + 1) * rowsPerPageChallenges >= challengesData.length}
+                                                                >
+                                                                    Next
+                                                                </button>
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })()
+                                            )}
+                                        </div>
+                                        <div className="modal-footer">
+                                            <button 
+                                                type="button" 
+                                                className="btn btn-secondary" 
+                                                onClick={() => setShowChallengesModal(false)}
+                                            >
+                                                Close
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+
 
                         <div className="card shadow-sm border-0 mb-4">
                             <div className="card-body">

@@ -37,7 +37,7 @@ def get_db_connection():
     user=os.getenv('DB_USERNAME', 'root')
     password=os.getenv('DB_PASSWORD', '')
     database=os.getenv('DB_DATABASE', 'lifeapp')
-    print(host,port,user,password,database)
+    # print(host,port,user,password,database)
     return pymysql.connect(
         host = host,  # Fallback to 'localhost'
         port = port,     # Fallback to 3306
@@ -1652,6 +1652,107 @@ def correction_tamil_nadu_users():
             cursor.execute(sql)
             connection.commit()  # Commit the transaction
         return jsonify({"message": "Success in correcting the name"}), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    finally:
+        connection.close()
+
+@app.route('/api/students-by-grade', methods = ['POST'])
+def get_students_by_grade():
+    sql = """
+        select count(*) as count, grade 
+	        from lifeapp.users 
+		    where `type` = 3 
+            group by grade 
+            order by grade;
+
+    """
+    try:
+        connection = get_db_connection()
+        with connection.cursor() as cursor:
+            cursor.execute(sql)
+            result = cursor.fetchall()  
+        return jsonify(result), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    finally:
+        connection.close()
+
+
+@app.route('/api/challenges-completed-per-mission', methods= ['POST'])
+def get_challenges_completed_per_mission():
+    sql = """
+        select count(*) as count , lac.la_mission_id, lam.title  
+            from lifeapp.la_mission_completes lac 
+                inner join lifeapp.la_missions lam 
+                on 
+                lam.id = lac.la_mission_id 
+        group by lac.la_mission_id 
+        order by lac.la_mission_id;
+
+    """
+    try:
+        connection = get_db_connection()
+        with connection.cursor() as cursor:
+            cursor.execute(sql)
+            result = cursor.fetchall()  
+        return jsonify(result), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    finally:
+        connection.close()
+
+@app.route('/api/total-points-earned', methods = ['POST'])
+def get_total_points_earned():
+    sql = """
+        select sum(points) as total_points from lifeapp.la_mission_completes;
+    """
+    try:
+        connection = get_db_connection()
+        with connection.cursor() as cursor:
+            cursor.execute(sql)
+            result = cursor.fetchall()  
+        return jsonify(result), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    finally:
+        connection.close()
+
+@app.route('/api/total-points-redeemed', methods = ['POST'])
+def get_total_points_redeemed():
+    sql  = """
+        select sum(coins) as total_coins_redeemed from lifeapp.coupon_redeems;
+    """
+    try:
+        connection = get_db_connection()
+        with connection.cursor() as cursor:
+            cursor.execute(sql)
+            result = cursor.fetchall()  
+        return jsonify(result), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    finally:
+        connection.close()
+
+@app.route('/api/total-missions-completed-assigned-by-teacher', methods = ['POST'])
+def get_total_missions_completed_assigned_by_teacher():
+    sql  = """
+        WITH mission_counts AS (
+            SELECT COUNT(*) AS mission_count
+            FROM lifeapp.la_mission_assigns lama
+            INNER JOIN lifeapp.la_mission_completes lamc 
+                ON lamc.la_mission_id = lama.la_mission_id
+            GROUP BY lama.teacher_id, lama.user_id
+        )
+        SELECT SUM(mission_count) AS total_missions_completed
+        FROM mission_counts;
+    """
+    try:
+        connection = get_db_connection()
+        with connection.cursor() as cursor:
+            cursor.execute(sql)
+            result = cursor.fetchall()  
+        return jsonify(result), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
     finally:
