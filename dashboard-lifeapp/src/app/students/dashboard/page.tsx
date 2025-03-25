@@ -544,9 +544,12 @@ export default function SchoolDashboard() {
     const [HighchartsLib, setHighchartsLib] = useState<any>(null);
     useEffect(() => {
         // Load Highcharts on client-side only
-        const HighchartsLoaded = require('highcharts/highmaps');
-        setHighchartsLib(HighchartsLoaded);
+        // const HighchartsLoaded = require('highcharts/highmaps');
+        
         const fetchData = async () => {
+            const HighchartsLoaded = await import("highcharts/highmaps");
+
+            setHighchartsLib(HighchartsLoaded);
             try {
                 // Fetch India TopoJSON map
                 const topoResponse = await fetch(
