@@ -482,24 +482,72 @@ def get_state_list():
     finally:
         connection.close()
 
-@app.route('/api/city_list', methods=['GET'])
-def get_city_list():
+@app.route('/api/state_list_teachers', methods=['GET'])
+def get_state_list_teachers():
+    connection = get_db_connection()
     try:
-        connection = get_db_connection()
+        
         with connection.cursor() as cursor:
             sql = """
-                select distinct(city) from lifeapp.schools;
+                select distinct(state) from lifeapp.users where state != 'null' and state != '2';
             """
             cursor.execute(sql)
             result = cursor.fetchall()
-        
-        # print("Query Result:", result)  # Debugging statement
+            
+            # print("Query Result:", result)  # Debugging statement
         return jsonify(result)
     except Exception as e:
         return jsonify({'error': str(e)}), 500
     finally:
         connection.close()
 
+@app.route('/api/city_list', methods=['GET'])
+def get_city_list():
+    state = request.args.get('state')
+    if not state:
+        return jsonify({"error": "Query param 'state' is required"}), 400
+    try:
+        connection = get_db_connection()
+        with connection.cursor() as cursor:
+            sql = """
+                SELECT DISTINCT city 
+                FROM lifeapp.schools
+                WHERE state = %s 
+                  AND deleted_at IS NULL
+                  AND city IS NOT NULL AND city != ''
+            """
+            cursor.execute(sql, (state,))
+            result = cursor.fetchall()
+            cities = [row['city'] for row in result]
+        return jsonify(cities), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    finally:
+        connection.close()
+
+@app.route('/api/city_list_teachers', methods=['POST'])
+def get_city_list_teachers():
+    filters = request.get_json() or {}
+    state = filters.get('state')
+    if not state:
+        return jsonify({"error": "Query param 'state' is required"}), 400
+    try:
+        connection = get_db_connection()
+        with connection.cursor() as cursor:
+            sql = """
+                SELECT DISTINCT city 
+                FROM lifeapp.users
+                WHERE state = %s 
+                  AND city IS NOT NULL AND city != ''
+            """
+            cursor.execute(sql, (state))
+            result = cursor.fetchall()
+            cities = [row['city'] for row in result]
+        return jsonify(cities), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    finally:
+        connection.close()
 
 
 # New endpoint for filtering/searching the mission completes data
@@ -1712,6 +1760,44 @@ def get_demograph_students():
     finally:
         connection.close()
 
+@app.route('/api/demograph-teachers' , methods = ['POST'])
+def get_teacher_demograph():
+    try:
+        connection = get_db_connection()
+        with connection.cursor() as cursor:
+            # Normalize state names and aggregate counts
+            sql = """
+            SELECT 
+                CASE 
+                    WHEN state IN ('Gujrat', 'Gujarat') THEN 'Gujarat'
+                    WHEN state IN ('Tamilnadu', 'Tamil Nadu') THEN 'Tamil Nadu'
+                    ELSE state 
+                END AS normalized_state,
+                SUM(count) as total_count
+            FROM (
+                SELECT state, COUNT(*) as count 
+                FROM lifeapp.users 
+                WHERE `type` = 5 AND state != 2 
+                GROUP BY state
+            ) AS subquery
+            GROUP BY normalized_state
+            ORDER BY total_count DESC
+            """
+            cursor.execute(sql)
+            result = cursor.fetchall()
+            
+            # Convert to list of dictionaries with consistent keys
+            normalized_result = [
+                {"count": row['total_count'], "state": row['normalized_state']} 
+                for row in result
+            ]
+            
+            return jsonify(normalized_result), 200
+    
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    finally:
+        connection.close()
 
 #### permission denied in digital ocean,
 @app.route('/api/correct-tamil-nadu-users', methods=['POST'])
@@ -1753,6 +1839,21 @@ def get_students_by_grade():
     finally:
         connection.close()
 
+@app.route('/api/school_count', methods = ['POST'])
+def get_school_count():
+    sql = """
+        select count(distinct name) as count from lifeapp.schools where is_life_lab = 1 and deleted_at is null;
+    """
+    try:
+        connection = get_db_connection()
+        with connection.cursor() as cursor:
+            cursor.execute(sql)
+            result = cursor.fetchall()  
+        return jsonify(result), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    finally:
+        connection.close()
 
 @app.route('/api/challenges-completed-per-mission', methods= ['POST'])
 def get_challenges_completed_per_mission():
@@ -1821,6 +1922,22 @@ def get_total_missions_completed_assigned_by_teacher():
         )
         SELECT SUM(mission_count) AS total_missions_completed
         FROM mission_counts;
+    """
+    try:
+        connection = get_db_connection()
+        with connection.cursor() as cursor:
+            cursor.execute(sql)
+            result = cursor.fetchall()  
+        return jsonify(result), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    finally:
+        connection.close()
+
+@app.route('/api/teacher-count', methods = ['POST'])
+def get_teacher_count():
+    sql = """
+        select count(*) as total_count from lifeapp.users where `type` = 5;
     """
     try:
         connection = get_db_connection()

@@ -7,7 +7,7 @@ import React from 'react';
 import { Inter } from 'next/font/google';
 const inter = Inter({ subsets: ['latin'] });
 import { Sidebar } from '@/components/ui/sidebar';
-import { IconSearch, IconBell, IconSettings, IconUserFilled, IconUserExclamation, IconUser, IconUserScan } from '@tabler/icons-react';
+import { IconSearch, IconBell, IconSettings, IconUserFilled, IconUserExclamation, IconUser, IconUserScan, IconMapPin } from '@tabler/icons-react';
 
 
 import {
@@ -20,6 +20,18 @@ import {
 } from "lucide-react";
 import NumberFlow from '@number-flow/react';
 
+import dynamic from 'next/dynamic'
+
+
+const HighchartsReact = dynamic(() => import('highcharts-react-official'), { ssr: false });
+interface DemographData {
+    state: string;
+    count: string;
+}
+interface DemographChartdata {
+    code: string;
+    value: number;
+}
 
 interface SearchableDropdownProps {
     options: string[];
@@ -138,7 +150,6 @@ function SearchableDropdown({
 
     // Calculate if there are more items to load
     const hasMoreItems = filteredOptions.length > displayedItems;
-  
     return (
         <div className="relative" ref={dropdownRef}>
             <div
@@ -212,35 +223,36 @@ function SearchableDropdown({
     );
 }
 
-const api_startpoint = 'https://lifeapp-api-vv1.vercel.app'
-
+//const api_startpoint = 'https://lifeapp-api-vv1.vercel.app'
+const api_startpoint = 'http://127.0.0.1:5000'
 
 export default function TeachersDashboard() {
     const [states, setStates] = useState<string[]>([]);
     const [isStatesLoading, setIsStatesLoading] = useState(false);
     const [selectedState, setSelectedState] = useState("");
+
     useEffect(() => {
         async function fetchStates() {
             // Check cache first
-            const cachedStates = sessionStorage.getItem('stateList');
+            const cachedStates = sessionStorage.getItem("stateList");
             if (cachedStates) {
                 setStates(JSON.parse(cachedStates));
                 return;
             }
-            
+
             setIsStatesLoading(true);
             try {
-                const res = await fetch(`${api_startpoint}/api/state_list`);
+                const res = await fetch(`${api_startpoint}/api/state_list_teachers`);
                 const data: { state: string }[] = await res.json();
-                
+
                 if (Array.isArray(data)) {
                     const stateList = data
                         .map((item) => (item.state ? item.state.trim() : ""))
-                        .filter(state => state !== ""); // Filter out empty states
-                    
+                        .filter((state) => state !== ""); // Filter out empty states
+
                     setStates(stateList);
                     // Cache the results
-                    sessionStorage.setItem('stateList', JSON.stringify(stateList));
+                    sessionStorage.setItem("stateList", JSON.stringify(stateList));
                 } else {
                     console.error("Unexpected API response format:", data);
                     setStates([]);
@@ -252,7 +264,7 @@ export default function TeachersDashboard() {
                 setIsStatesLoading(false);
             }
         }
-        
+
         fetchStates();
     }, []);
 
@@ -260,58 +272,60 @@ export default function TeachersDashboard() {
     const [cities, setCities] = useState<string[]>([]);
     const [isCitiesLoading, setIsCitiesLoading] = useState(false);
     const [selectedCity, setSelectedCity] = useState("");
-    useEffect(() => {
-        async function fetchCities() {
-            // Check cache first
-            const cachedSchools = sessionStorage.getItem('cityList');
-            if (cachedSchools) {
-                setCities(JSON.parse(cachedSchools));
-                return;
+
+    const fetchCities = async (state: string) => {
+        if (!state) return;
+    
+        console.log("Fetching cities for state:", state);
+    
+        setIsCitiesLoading(true);
+        try {
+            const res = await fetch(`${api_startpoint}/api/city_list_teachers`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ state: state })
+            });
+    
+            if (!res.ok) {
+                throw new Error(`HTTP error! Status: ${res.status}`);
             }
-            
-            setIsCitiesLoading(true);
-            try {
-                const res = await fetch(`${api_startpoint}/api/city_list`);
-                const data: { city: string }[] = await res.json();
-                
-                if (Array.isArray(data)) {
-                    // Process data in chunks to avoid UI freezing with large datasets
-                    const processCityBatch = (startIndex: number, batchSize: number) => {
-                        const endIndex = Math.min(startIndex + batchSize, data.length);
-                        const batch = data
-                            .slice(startIndex, endIndex)
-                            .map(item => item.city ? item.city.trim() : "")
-                            .filter(city => city !== "");
-                        
-                        setCities(prevCities => [...prevCities, ...batch]);
-                        
-                        if (endIndex < data.length) {
-                            // Process next batch in the next tick to avoid blocking the UI
-                            setTimeout(() => processCityBatch(endIndex, batchSize), 0);
-                        } else {
-                            // All done, cache the results
-                            sessionStorage.setItem('cityList', JSON.stringify([...cities, ...batch]));
-                            setIsCitiesLoading(false);
-                        }
-                    };
-                    
-                    // Start processing in batches (100 items at a time)
-                    setCities([]); // Reset before starting
-                    processCityBatch(0, 100);
-                } else {
-                    console.error("Unexpected API response format:", data);
-                    setCities([]);
-                    setIsCitiesLoading(false);
-                }
-            } catch (error) {
-                console.error("Error fetching city list:", error);
-                setCities([]);
-                setIsCitiesLoading(false);
+    
+            const data = await res.json();
+    
+            console.log("Raw API Response:", data); // ✅ Check if cities are being received
+    
+            if (Array.isArray(data) && data.length > 0) {
+                let cityList: string[] = data.map(city => 
+                    typeof city === 'string' ? city.trim() : city.city ? city.city.trim() : ''
+                ).filter(city => city !== "");
+    
+                setCities(cityList);
+                sessionStorage.setItem(`cityList_${state}`, JSON.stringify(cityList));
+    
+                console.log(`✅ Loaded ${cityList.length} cities for ${state}`);
+            } else {
+                console.warn("⚠ No cities found for state:", state);
+                setCities([]); // Clear cities if none found
             }
+        } catch (error) {
+            console.error("❌ Error fetching city list:", error);
+            setCities([]);
+        } finally {
+            setIsCitiesLoading(false);
         }
-        
-        fetchCities();
-    }, []);
+    };
+    
+
+    useEffect(() => {
+        if (selectedState) {
+            console.log("🟢 State changed to:", selectedState);
+            setCities([]); // Reset cities when state changes
+            setSelectedCity(""); // Reset selected city
+            fetchCities(selectedState);
+        }
+    }, [selectedState]);
+    
+
     const [selectedSchoolCode, setSelectedSchoolCode] = useState<string>("");
     const [selectedLifeLab, setSelectedLifeLab] = useState<string>("");
     const [tableData, setTableData] = useState<any[]>([]);
@@ -382,6 +396,181 @@ export default function TeachersDashboard() {
         setTableData([]);
     };
 
+    const [totalTeachers, setTotalTeachers] = useState<number>(0);
+    useEffect( () => {
+        async function fetchTeacherCount() {
+            try {
+                const res = await fetch(`${api_startpoint}/api/teacher-count`, {
+                    method: 'POST'
+                })
+                const data = await res.json()
+                if (data && data.length > 0) {
+                    setTotalTeachers(data[0].total_count)
+                }
+            } catch (error) {
+                console.error('Error fetching user count:', error)
+            }
+        }
+            fetchTeacherCount()
+    }, [])
+
+
+    
+
+    const [chartOptions, setChartOptions] = useState<any>(null);
+    const [geoData, setGeoData] = useState<DemographData[]>([]);
+    const [errorMessage, setErrorMessage] = useState<string | null>(null);
+    const [HighchartsLib, setHighchartsLib] = useState<any>(null);
+    useEffect(() => {
+        // Load Highcharts on client-side only
+        // const HighchartsLoaded = require('highcharts/highmaps');
+        
+        const fetchData = async () => {
+            const HighchartsLoaded = await import("highcharts/highmaps");
+
+            setHighchartsLib(HighchartsLoaded);
+            try {
+                // Fetch India TopoJSON map
+                const topoResponse = await fetch(
+                    // "https://code.highcharts.com/mapdata/countries/in/custom/in-all-andaman-and-nicobar.topo.json"
+                    "https://code.highcharts.com/mapdata/countries/in/custom/in-all-disputed.topo.json"
+                );
+                
+                const topology = await topoResponse.json();
+
+                // Fetch state-wise student count from API
+                const apiResponse = await fetch(`${api_startpoint}/api/demograph-teachers`,{
+                    method: 'POST'
+                });
+                const apiData: DemographData[] = await apiResponse.json();
+
+                setGeoData(apiData); // Store API data for debugging or future use
+
+                // Map API state names to Highcharts' region keys
+                const stateMappings: Record<string, string> = {
+                    "Tamil Nadu": "tamil nadu",     // Tamil Nadu gets "in-tn"
+                    "Telangana": "telangana",       // Telangana gets "in-tg" (instead of "in-tn")
+                    "Maharashtra": "maharashtra",
+                    "Karnataka": "karnataka",
+                    "Andhra Pradesh": "andhra pradesh",
+                    "Gujarat": "gujarat",
+                    "Madhya Pradesh": "madhya pradesh",
+                    "Odisha": "odisha",
+                    "West Bengal": "west bengal",
+                    "Delhi": "nct of delhi",
+                    "Uttar Pradesh": "uttar pradesh",
+                    "Jharkhand": "jharkhand",
+                    "Assam": "assam",
+                    "Chhattisgarh": "chhattisgarh",
+                    "Punjab": "punjab",
+                    "Bihar": "bihar",
+                    "Haryana": "haryana",
+                    "Daman and Diu": "daman and diu",
+                    "Chandigarh": "chandigarh",
+                    // "Pondicherry": "in-py",
+                    "Puducherry": "puducherry",
+                    "Rajasthan": "rajasthan",
+                    "Goa": "goa",
+                    "Kerala": "kerala",
+                    "Uttarakhand": "uttarakhand",
+                    "Himachal Pradesh": "himachal pradesh",
+                    // "Ladakh": "in-la",
+                    "Lakshadweep": "lakshadweep",
+                    "Sikkim": "nikkim",
+                    "Nagaland": "nagaland",
+                    "Dadara and Nagar Haveli": "dadara and nagar havelli",
+                    "Jammu and Kashmir": "jammu and kashmir",
+                    "Manipur": "manipur",
+                    "Arunanchal Pradesh": "arunanchal pradesh",
+                    "Meghalaya": "meghalaya",
+                    "Mizoram": "mizoram",
+                    "Tripura": "tripura",
+                    "Andaman and Nicobar Islands": "andaman and nicobar",
+                };
+
+                // Transform API data into Highcharts format
+                const chartData: DemographChartdata[] = apiData
+                .map((item) => ({
+                    code: stateMappings[item.state] || '', // Use empty string if no mapping found
+                    value: Math.max(parseInt(item.count, 10), 1) // Ensure a minimum value of 1
+                }))
+                .filter((item) => item.code);
+
+
+                // Set up the chart options
+                const options = {
+                    chart: {
+                        map: topology,
+                    },
+                    title: {
+                        text: "Teacher Distribution Across India",
+                    },
+                    subtitle: {
+                        text: "Data sourced from lifeapp.users",
+                    },
+                    mapNavigation: {
+                        enabled: true,
+                        buttonOptions: {
+                            verticalAlign: "bottom",
+                        },
+                    },
+                    colorAxis: {
+                        min: 1,
+                        minColor: '#E6F2FF',
+                        maxColor: '#0077BE',
+                        type: 'logarithmic' // This helps differentiate states with vastly different counts
+                    },
+                    series: [
+                        {
+                            data: chartData.map((item) => [item.code, item.value]),
+                            name: "Teacher Count",
+                            states: {
+                                hover: {
+                                    color: "#BADA55",
+                                },
+                            },
+                            dataLabels: {
+                                enabled: true,
+                                format: '{point.name}',
+                                style: {
+                                    fontSize: '8px'
+                                }
+                            },
+                        },
+                    ],
+                };
+
+                setChartOptions(options);
+            } catch (error) {
+                console.error("Error fetching data:", error);
+                setErrorMessage("An error occurred while loading the chart.");
+            }
+        };
+
+        fetchData();
+    }, []);
+
+    // State for modals
+    const [showDemographicsModal, setShowDemographicsModal] = useState(false);
+    
+    const [schoolCount, setSchoolCount] = useState<number>(0);
+    useEffect( () => {
+        async function fetchSchoolCount() {
+            try {
+                const res = await fetch(`${api_startpoint}/api/school_count`, {
+                    method: 'POST'
+                })
+                const data = await res.json()
+                if (data && data.length > 0) {
+                    setSchoolCount(data[0].count)
+                }
+            } catch (error) {
+                console.error('Error fetching user count:', error)
+            }
+        }
+        fetchSchoolCount()
+    }, [])
+
     return (
         <div className={`page bg-light ${inter.className} font-sans`}>
             <Sidebar />
@@ -414,10 +603,10 @@ export default function TeachersDashboard() {
                         {/* Metrics Grid */}
                         <div className="row g-4 mb-4">
                             {[
-                                { title: 'Total Teachers', value: 361, icon: <IconUser />, color: 'bg-purple' },
-                                { title: 'Active Teachers', value: 256, icon: <IconUserFilled />, color: 'bg-teal' },
-                                { title: 'Inactive Teachers', value: 46, icon: <IconUserExclamation />, color: 'bg-orange' },
-                                { title: 'Highest Online User Count', value: 36987, icon: <IconUserScan />, color: 'bg-blue', suffix: '' },
+                                { title: 'Total Teachers', value: totalTeachers, icon: <IconUser />, color: 'bg-purple' },
+                                { title: 'Active Teachers', value: 0, icon: <IconUserFilled />, color: 'bg-teal' },
+                                { title: 'Inactive Teachers', value: 0, icon: <IconUserExclamation />, color: 'bg-orange' },
+                                { title: 'Highest Online User Count', value: 0, icon: <IconUserScan />, color: 'bg-blue', suffix: '' },
                             ].map((metric, index) => (
                                 <div className="col-sm-6 col-lg-3" key={index}>
                                     <div className="card">
@@ -443,6 +632,90 @@ export default function TeachersDashboard() {
                                 </div>
                             ))}
                         </div>
+
+                        <div className="row g-4 mb-4">
+                            <div className="col-sm-4 col-lg-4" 
+                                onClick={() => setShowDemographicsModal(true)}
+                                >
+                                <div className="card cursor-pointer hover:shadow-lg transition-shadow">
+                                    <div className="card-body">
+                                        <div className="d-flex align-items-center">
+                                            <div className="bg-teal rounded-circle p-3 text-white me-3">
+                                                <IconMapPin size={24} />
+                                            </div>
+                                            <div>
+                                                <div className="subheader">View Teacher Demographics Map</div>
+                                                <div className="text-muted">Click to explore Teacher distribution across India</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div className="col-sm-6 col-lg-3">
+                                    <div className="card">
+                                        <div className="card-body">
+                                            <div className="d-flex align-items-center">
+                                                {/* <div className={`${metric.color} rounded-circle p-3 text-white`}>
+                                                {React.cloneElement(metric.icon, { size: 24 })}
+                                                </div> */}
+                                                <div>
+                                                <div className="subheader w-full">Total Number of Schools</div>
+                                                    <div className="h1 mb-3">
+                                                        <NumberFlow
+                                                        value = {schoolCount}
+                                                        // suffix={metric.suffix || ''}
+                                                        className="fw-semi-bold text-dark"
+                                                        transformTiming={{endDelay:6, duration:750, easing:'cubic-bezier(0.42, 0, 0.58, 1)'}}
+                                                        />
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                        </div>
+
+                        {/* Demographics Map Modal */}
+                        {showDemographicsModal && (
+                            <div className="modal fade show" style={{ display: 'block', backgroundColor: 'rgba(0,0,0,0.5)' }}>
+                                <div className="modal-dialog modal-xl">
+                                    <div className="modal-content">
+                                        <div className="modal-header">
+                                            <h5 className="modal-title">Student Distribution Across India</h5>
+                                            <button 
+                                                type="button" 
+                                                className="btn-close" 
+                                                onClick={() => setShowDemographicsModal(false)}
+                                            ></button>
+                                        </div>
+                                        <div className="modal-body">
+                                            {!HighchartsLib || !chartOptions ? (
+                                                <div className="text-center">
+                                                    <div className="spinner-border text-purple" role="status" style={{ width: "8rem", height: "8rem" }}></div>
+                                                </div>
+                                            ) : errorMessage ? (
+                                                <div>Error: {errorMessage}</div>
+                                            ) : (
+                                                <HighchartsReact
+                                                    highcharts={HighchartsLib}
+                                                    constructorType="mapChart"
+                                                    options={chartOptions}
+                                                />
+                                            )}
+                                        </div>
+                                        <div className="modal-footer">
+                                            <button 
+                                                type="button" 
+                                                className="btn btn-secondary" 
+                                                onClick={() => setShowDemographicsModal(false)}
+                                            >
+                                                Close
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
                         <div className="card shadow-sm border-0 mb-4">
                             <div className="card-body">
                                 <h5 className="card-title mb-4">Search & Filter</h5>
@@ -452,7 +725,7 @@ export default function TeachersDashboard() {
                                             options={states}
                                             placeholder="Select States"
                                             value={selectedState}
-                                            onChange={setSelectedState}
+                                            onChange={(val) => setSelectedState(val)}
                                             isLoading={isStatesLoading}
                                             maxDisplayItems={200}
                                         />
@@ -462,7 +735,7 @@ export default function TeachersDashboard() {
                                             options={cities}
                                             placeholder="Select City"
                                             value={selectedCity}
-                                            onChange={setSelectedCity}
+                                            onChange={(val) => setSelectedCity(val)}
                                             isLoading={isCitiesLoading}
                                             maxDisplayItems={200}
                                             
