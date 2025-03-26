@@ -501,7 +501,7 @@ export default function SchoolData() {
             {/* TABLE OF SCHOOLS WITH PAGINATION */}
               <div className="card shadow-sm border-0 mt-2 mb-4">
                 <div className="card-body overflow-x-scroll">
-                  <h5 className="card-title">All Schools</h5>
+                  <h5 className="card-title">All Schools- {tableData.length} rows found</h5>
                   {loading ? (
                     <div className="text-center p-5">
                         <div className="spinner-border text-purple" role="status" style={{ width: "3rem", height: "3rem" }}>

@@ -8,9 +8,9 @@ import { Inter } from 'next/font/google';
 const inter = Inter({ subsets: ['latin'] });
 // import Sidebar from '../../sidebar';
 import { Sidebar } from '@/components/ui/sidebar';
-import { IconSearch, IconBell, IconSettings, IconUserFilled, IconUserExclamation, IconUser, IconUserScan, IconMapPin, IconSchool, IconTrophy } from '@tabler/icons-react';
+import { IconSearch, IconBell, IconSettings, IconUserFilled, IconUserExclamation, IconUser, IconUserScan, IconMapPin, IconSchool, IconTrophy, IconDeviceAnalytics } from '@tabler/icons-react';
 
-
+import ReactECharts from 'echarts-for-react';
 import {
   BarChart3,
   ChevronDown,
@@ -58,6 +58,15 @@ interface challengesCompletedData {
     title: string;
 }
 
+interface MissionStatusData {
+    period: string;
+    "Mission Requested"?: number;
+    "Mission Rejected"?: number;
+    "Mission Approved"?: number;
+    [key: string]: string | number | undefined; // Allow dynamic keys
+}
+  
+  
 function SearchableDropdown({
     options,
     placeholder,
@@ -241,7 +250,7 @@ function SearchableDropdown({
 }
   
 const api_startpoint = 'https://lifeapp-api-vv1.vercel.app'
-// const api_startpoint = 'http://127.0.0.1:5000'
+//const api_startpoint = 'http://127.0.0.1:5000'
 export default function SchoolDashboard() {
     const [totalStudents, setTotalStudents] = useState<number>(0)
     const [selectedState, setSelectedState] = useState("");
@@ -443,6 +452,8 @@ export default function SchoolDashboard() {
     const [selectedToDate, setSelectedToDate] = useState("");     // New state for To Date
     const [tableData, setTableData] = useState<any[]>([]);
     const [currentPage, setCurrentPage] = useState<number>(0);
+    const [selectedMobileNo, setSelectedMobileNo] = useState("");
+    const [selectedSchoolCode, setSelectedSchoolCode] = useState("");
     const rowsPerPage = 50;
     const [isTableLoading, setIsTableLoading] = useState(false);
     // Handler for search button
@@ -458,7 +469,9 @@ export default function SchoolDashboard() {
             mission_accepted_no: selectedMissionAcceptedNo,    // Add these filters
             earn_coins: selectedEarnCoins, // Add this line
             from_date: selectedFromDate, // Include the From Date filter
-            to_date: selectedToDate      // Include the To Date filter
+            to_date: selectedToDate,      // Include the To Date filter
+            mobile_no: selectedMobileNo,
+            schoolCode : selectedSchoolCode,
         };
 
         setIsTableLoading(true); // Set loading to true when search starts
@@ -496,6 +509,8 @@ export default function SchoolDashboard() {
         setSelectedFromDate(""); // Clear the From Date
         setSelectedToDate("");   // Clear the To Date
         // Clear other filters...
+        setSelectedMobileNo("");
+        setSelectedSchoolCode("");
         setTableData([]);
     };
 
@@ -802,6 +817,154 @@ export default function SchoolDashboard() {
     const [currentChallengesPage, setCurrentChallengesPage] = useState(0);
     const rowsPerPageChallenges = 10; // Number of rows per page
 
+    const [missionStatusData, setMissionStatusData] = useState<MissionStatusData[]>([]);
+    const [loading, setLoading] = useState<boolean>(false);
+    const [missionStatusError, setMissionStatusError] = useState<string | null>(null);
+    const [modalOpen, setModalOpen] = useState<boolean>(false);
+    const [grouping, setGrouping] = useState<string>('monthly'); // Default grouping
+
+    // Key improvement: UseEffect to trigger data fetch when grouping changes
+    useEffect(() => {
+        if (modalOpen) {
+            fetchMissionStatusData(grouping);
+        }
+    }, [grouping, modalOpen]);
+
+    const fetchMissionStatusData = (selectedGrouping: string) => {
+        setLoading(true);
+        setMissionStatusError(null);
+      
+        fetch(`${api_startpoint}/api/mission-status-graph`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ grouping: selectedGrouping }),
+        })
+        .then(response => {
+            if (!response.ok) {
+                throw new Error('Network response was not ok');
+            }
+            return response.json();
+        })
+        .then(data => {
+            // Improved data transformation
+            const groupedData: Record<string, MissionStatusData> = {};
+
+            data.data.forEach((entry: any) => {
+                const period = entry.period;
+                if (!groupedData[period]) {
+                    groupedData[period] = { 
+                        period: period,
+                        'Mission Requested': 0,
+                        'Mission Rejected': 0,
+                        'Mission Approved': 0
+                    };
+                }
+
+                // Safely map mission status
+                switch(entry.mission_status) {
+                    case 'Mission Requested':
+                        groupedData[period]['Mission Requested'] = entry.count;
+                        break;
+                    case 'Mission Rejected':
+                        groupedData[period]['Mission Rejected'] = entry.count;
+                        break;
+                    case 'Mission Approved':
+                        groupedData[period]['Mission Approved'] = entry.count;
+                        break;
+                }
+            });
+
+            // Convert to array and sort
+            const sortedData = Object.values(groupedData)
+                .sort((a, b) => a.period.localeCompare(b.period));
+
+            setMissionStatusData(sortedData);
+            setLoading(false);
+        })
+        .catch(err => {
+            setMissionStatusError(err.message);
+            setLoading(false);
+        });
+    };
+      
+    const MissionStatusChartOptions = {
+        title: {
+            text: 'Mission Status Over Time',
+            left: 'center'
+        },
+        tooltip: {
+            trigger: 'axis',
+            axisPointer: {
+                type: 'shadow'
+            }
+        },
+        legend: {
+            top: 'bottom'
+        },
+        grid: {
+            left: '3%',
+            right: '4%',
+            bottom: '10%',
+            containLabel: true
+        },
+        xAxis: {
+            type: 'category',
+            data: missionStatusData.map(item => item.period),
+            boundaryGap: grouping === 'lifetime' ? true : false,
+            axisLabel: {
+                // Rotate labels for better readability
+                rotate: grouping === 'daily' ? 45 : 0,
+                interval: 0 // Show all labels
+            }
+        },
+        yAxis: {
+            type: 'value'
+        },
+        dataZoom: [
+            {
+                type: 'inside',
+                start: 0,
+                end: 100
+            },
+            {
+                type: 'slider',
+                start: 0,
+                end: 100
+            }
+        ],
+        series: [
+            {
+                name: 'Mission Requested',
+                type: 'bar',
+                stack: 'total',
+                data: missionStatusData.map(item => item['Mission Requested'] || 0),
+                itemStyle: { color: '#FFD700' } // Yellow
+            },
+            {
+                name: 'Mission Rejected',
+                type: 'bar',
+                stack: 'total',
+                data: missionStatusData.map(item => item['Mission Rejected'] || 0),
+                itemStyle: { color: '#FF4500' } // Red
+            },
+            {
+                name: 'Mission Approved',
+                type: 'bar',
+                stack: 'total',
+                data: missionStatusData.map(item => item['Mission Approved'] || 0),
+                itemStyle: { color: '#32CD32' } // Green
+            }
+        ]
+    };
+    
+    const handleModalOpen = () => {
+        fetchMissionStatusData(grouping);
+        setModalOpen(true);
+    };
+      
+    const handleModalClose = () => {
+        setModalOpen(false);
+    };
     return(
         <div className={`page bg-light ${inter.className} font-sans`}>
             <Sidebar />
@@ -835,9 +998,9 @@ export default function SchoolDashboard() {
                         <div className="row g-4 mb-4">
                             {[
                                 { title: 'Total Students', value: totalStudents, icon: <IconUser />, color: 'bg-purple' },
-                                { title: 'Active Students', value: 256, icon: <IconUserFilled />, color: 'bg-teal' },
-                                { title: 'Inactive Students', value: 2559, icon: <IconUserExclamation />, color: 'bg-orange', suffix:'' },
-                                { title: 'Highest Online User Count', value: 36987, icon: <IconUserScan />, color: 'bg-blue', suffix: '' },
+                                { title: 'Active Students', value: 0, icon: <IconUserFilled />, color: 'bg-teal' },
+                                { title: 'Inactive Students', value: 0, icon: <IconUserExclamation />, color: 'bg-orange', suffix:'' },
+                                { title: 'Highest Online User Count', value: 0, icon: <IconUserScan />, color: 'bg-blue', suffix: '' },
                             ].map((metric, index) => (
                                 <div className="col-sm-6 col-lg-3" key={index}>
                                     <div className="card">
@@ -946,6 +1109,21 @@ export default function SchoolDashboard() {
                                 </div>
                             </div>
 
+                            <div className="col-sm-4 col-lg-4" onClick={handleModalOpen}>
+                                <div className="card cursor-pointer hover:shadow-lg transition-shadow">
+                                    <div className="card-body">
+                                        <div className="d-flex align-items-center">
+                                            <div className="bg-orange rounded-circle p-3 text-white me-3">
+                                                <IconDeviceAnalytics size={24} />
+                                            </div>
+                                            <div>
+                                                <div className="subheader">View Mission Status Analytics</div>
+                                                <div className="text-muted">Click to see mission status details</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                         {/* <div className="row g-4 mb-4">
                             {
@@ -1022,6 +1200,55 @@ export default function SchoolDashboard() {
                             )}
                         </div> */}
                         {/* Modals */}
+                        {/* Mission Status Modal */}
+                        {modalOpen && (
+                            <div className="fixed inset-0 flex items-center justify-center z-50 bg-black bg-opacity-50">
+                                <div className="bg-white p-6 rounded-lg shadow-lg w-3/4 relative overflow-auto">
+                                    <h2 className="text-lg font-bold mb-4">Mission Status Analytics</h2>
+
+                                    {/* Grouping Dropdown */}
+                                    <select 
+                                        value={grouping} 
+                                        onChange={(e) => setGrouping(e.target.value)} 
+                                        className="mb-4 p-2 border rounded"
+                                    >
+                                        <option value="daily">Daily</option>
+                                        <option value="weekly">Weekly</option>
+                                        <option value="monthly">Monthly</option>
+                                        <option value="quarterly">Quarterly</option>
+                                        <option value="yearly">Yearly</option>
+                                        <option value="lifetime">Lifetime</option>
+                                    </select>
+
+                                    {/* Loading and Error States */}
+                                    {loading && (
+                                        <div className="text-center py-4">Loading data...</div>
+                                    )}
+                                    
+                                    {missionStatusError && (
+                                        <div className="text-red-500 text-center py-4">
+                                            {missionStatusError}
+                                        </div>
+                                    )}
+
+                                    {/* Chart */}
+                                    {!loading && !missionStatusError && (
+                                        <ReactECharts 
+                                            option={MissionStatusChartOptions} 
+                                            style={{ height: '400px', width: '100%' }}
+                                        />
+                                    )}
+
+                                    {/* Close button */}
+                                    <button 
+                                        onClick={handleModalClose} 
+                                        className="mt-4 p-2 bg-red-500 text-white rounded"
+                                    >
+                                        Close
+                                    </button>
+                                </div>
+                            </div>
+                        )}
                         {/* Grade Distribution Modal */}
                         {showGradeModal && (
                             <div className="modal fade show" style={{ display: 'block', backgroundColor: 'rgba(0,0,0,0.5)' }}>
@@ -1388,6 +1615,8 @@ export default function SchoolDashboard() {
                                             type="tel"
                                             placeholder="Search With Mobile Number"
                                             className="form-control"
+                                            value={selectedMobileNo}
+                                            onChange={(e) => setSelectedMobileNo(e.target.value)}
                                         />
                                     </div>
 
@@ -1418,6 +1647,8 @@ export default function SchoolDashboard() {
                                             type="text"
                                             placeholder="Search With School code"
                                             className="form-control"
+                                            value={selectedSchoolCode}
+                                            onChange={(e) => setSelectedSchoolCode(e.target.value)}
                                         />
                                     </div>
                                 </div>
@@ -1460,7 +1691,7 @@ export default function SchoolDashboard() {
                         {/* Paginated Results Table */}
                         <div className="card shadow-sm border-0 mt-2">
                             <div className="card-body overflow-x-scroll">
-                                <h5 className="card-title mb-4">Results</h5>
+                                <h5 className="card-title mb-4">Results- {tableData.length} rows found</h5>
                                 {isTableLoading ? (
                                         <div className="text-center p-5">
                                             <div className="spinner-border text-purple" role="status" style={{ width: "3rem", height: "3rem" }}>

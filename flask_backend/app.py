@@ -225,6 +225,64 @@ def get_user_signups2():
         logger.error(f"Error in get_user_signups: {str(e)}")
         return jsonify({"error": str(e)}), 500
     
+@app.route('/api/mission-status-graph', methods=['POST'])
+def get_mission_status_graph():
+    """
+    Get mission completion statistics grouped by period and status.
+    """
+    try:
+        filters = request.get_json() or {}
+        grouping = filters.get('grouping', 'monthly')
+        start_date = filters.get('start_date')
+        end_date = filters.get('end_date')
+
+        # Define date format based on grouping
+        date_formats = {
+            'daily': "DATE_FORMAT(created_at, '%%Y-%%m-%%d')",
+            'weekly': "CONCAT(YEAR(created_at), '-', WEEK(created_at))",
+            'monthly': "DATE_FORMAT(created_at, '%%Y-%%m')",
+            'quarterly': "CONCAT(YEAR(created_at), '-Q', QUARTER(created_at))",
+            'yearly': "CAST(YEAR(created_at) AS CHAR)",
+            'lifetime': "'Lifetime'"
+        }
+
+        if grouping not in date_formats:
+            return jsonify({"error": "Invalid grouping parameter"}), 400
+
+        date_format = date_formats[grouping]
+
+        # SQL Query for mission status breakdown
+        query = f"""
+            SELECT 
+                {date_format} AS period,
+                COUNT(*) AS count,
+                CASE 
+                    WHEN approved_at IS NULL AND rejected_at IS NULL THEN 'Mission Requested'
+                    WHEN approved_at IS NULL AND rejected_at IS NOT NULL THEN 'Mission Rejected'
+                    WHEN approved_at IS NOT NULL THEN 'Mission Approved'
+                END AS mission_status
+            FROM lifeapp.la_mission_completes
+            WHERE 1=1
+        """
+
+        # Apply date filtering if provided
+        if start_date:
+            query += f" AND created_at >= '{start_date}'"
+        if end_date:
+            query += f" AND created_at <= '{end_date}'"
+
+        query += """
+            GROUP BY period, mission_status
+            HAVING period IS NOT NULL
+            ORDER BY period
+        """
+
+        result = execute_query(query)
+
+        return jsonify({"data": result, "grouping": grouping})
+    except Exception as e:
+        logger.error(f"Error in get_mission_status: {str(e)}")
+        return jsonify({"error": str(e)}), 500
 
 @app.route('/api/new-signups', methods=['GET'])
 def get_new_signups():
@@ -459,6 +517,8 @@ def search():
     earn_coins = filters.get('earn_coins')  # Add this line
     from_date = filters.get('from_date')  # New filter: starting date
     to_date = filters.get('to_date')      # New filter: ending date
+    mobile_no = filters.get('mobile_no')
+    schoolCode = filters.get('schoolCode')
     
     # Build the base query with the CTE, including mission count aggregations
     sql = """
@@ -528,6 +588,14 @@ def search():
         elif earn_coins == "1000+":
             sql += " AND u.earn_coins > 1000"
 
+    if schoolCode:
+        sql += " AND u.school_id = %s OR u.school_code = %s"
+        params.append(schoolCode)
+        params.append(int(schoolCode))
+    
+    if mobile_no:
+        sql+= " AND u.mobile_no = %s"
+        params.append(mobile_no)
     # Add date range filters
     if from_date:
         sql += " AND u.created_at >= %s"

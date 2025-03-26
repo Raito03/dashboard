@@ -241,7 +241,7 @@ export default function TeacherAssessment() {
             {/* Assessments Table */}
             <div className="card shadow-sm border-0 mt-2">
               <div className="card-body overflow-x-scroll">
-                <h5 className="card-title mb-4">Results</h5>
+                <h5 className="card-title mb-4">Results- {tableData.length} rows found</h5>
                 {isTableLoading ? (
                   <div className="text-center p-5">
                     <div className="spinner-border text-purple" role="status" style={{ width: "3rem", height: "3rem" }}>

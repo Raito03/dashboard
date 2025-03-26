@@ -710,9 +710,9 @@ export default function UserAnalyticsDashboard() {
               {[
                 { title: 'Total Users', value: totalUsers, icon: <IconUsers />, color: 'bg-purple' },
                 { title: 'Active Users', value: activeUsers, icon: <IconUserCheck />, color: 'bg-teal' },
-                { title: 'Inactive Users', value: newSignups + 2289, icon: <IconUserPlus />, color: 'bg-orange' },
+                { title: 'Inactive Users', value: 0, icon: <IconUserPlus />, color: 'bg-orange' },
                 // { title: 'New Signups', value: newSignups, icon: <IconUserPlus />, color: 'bg-orange' },
-                { title: 'Highest Users Online', value: newSignups + 1056, icon: <IconUserPlus />, color: 'bg-orange', suffix: '' },
+                { title: 'Highest Users Online', value: 0, icon: <IconUserPlus />, color: 'bg-orange', suffix: '' },
                 // { title: 'Approval Rate', value: approvalRate, icon: <IconPercentage />, color: 'bg-blue', suffix: '%' },
               ].map((metric, index) => (
                 <div className="col-sm-6 col-lg-3" key={index}>
