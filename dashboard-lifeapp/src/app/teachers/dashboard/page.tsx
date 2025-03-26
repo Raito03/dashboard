@@ -295,7 +295,7 @@ export default function TeachersDashboard() {
             console.log("Raw API Response:", data); // ✅ Check if cities are being received
     
             if (Array.isArray(data) && data.length > 0) {
-                let cityList: string[] = data.map(city => 
+                const cityList: string[] = data.map(city => 
                     typeof city === 'string' ? city.trim() : city.city ? city.city.trim() : ''
                 ).filter(city => city !== "");
     
