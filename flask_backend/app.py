@@ -1839,6 +1839,26 @@ def get_students_by_grade():
     finally:
         connection.close()
 
+@app.route('/api/teachers-by-grade', methods = ['POST'])
+def get_teachers_by_grade() :
+    sql= """
+        select count(distinct user_id) as count, la_grade_id as grade 
+            from lifeapp.la_teacher_grades 
+            group by la_grade_id 
+            order by la_grade_id;
+
+    """
+    try:
+        connection = get_db_connection()
+        with connection.cursor() as cursor:
+            cursor.execute(sql)
+            result = cursor.fetchall()  
+        return jsonify(result), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    finally:
+        connection.close()
+
 @app.route('/api/school_count', methods = ['POST'])
 def get_school_count():
     sql = """
@@ -1936,8 +1956,14 @@ def get_total_missions_completed_assigned_by_teacher():
 
 @app.route('/api/teacher-count', methods = ['POST'])
 def get_teacher_count():
+    # select count(*) as total_count from lifeapp.users where `type` = 5;
     sql = """
-        select count(*) as total_count from lifeapp.users where `type` = 5;
+        
+        select sum(total_count) as total_count from (
+            select count(distinct user_id) as total_count, la_grade_id
+                from lifeapp.la_teacher_grades
+                group by la_grade_id
+        ) as teacher_count; 
     """
     try:
         connection = get_db_connection()

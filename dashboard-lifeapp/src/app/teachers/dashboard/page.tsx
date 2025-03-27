@@ -7,7 +7,7 @@ import React from 'react';
 import { Inter } from 'next/font/google';
 const inter = Inter({ subsets: ['latin'] });
 import { Sidebar } from '@/components/ui/sidebar';
-import { IconSearch, IconBell, IconSettings, IconUserFilled, IconUserExclamation, IconUser, IconUserScan, IconMapPin } from '@tabler/icons-react';
+import { IconSearch, IconBell, IconSettings, IconUserFilled, IconUserExclamation, IconUser, IconUserScan, IconMapPin, IconSchool } from '@tabler/icons-react';
 
 
 import {
@@ -31,6 +31,10 @@ interface DemographData {
 interface DemographChartdata {
     code: string;
     value: number;
+}
+interface TeachersByGrade {
+    grade: number | null;
+    count: number;
 }
 
 interface SearchableDropdownProps {
@@ -571,6 +575,42 @@ export default function TeachersDashboard() {
         fetchSchoolCount()
     }, [])
 
+
+
+    const [teachersByGrade, setTeachersByGrade] = useState<TeachersByGrade[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
+    useEffect(() => {
+        const fetchTeachersByGrade = async () => {
+            try {
+                const response = await fetch(`${api_startpoint}/api/teachers-by-grade`, {
+                    method: "POST"
+                });
+                if (!response.ok) {
+                    throw new Error('Failed to fetch Teachers by grade');
+                }
+                const data: TeachersByGrade[] = await response.json();
+                
+                // Sort the data by grade, handling null last
+                const sortedData = data.sort((a, b) => {
+                    if (a.grade === null) return 1;
+                    if (b.grade === null) return -1;
+                    return (a.grade as number) - (b.grade as number);
+                });
+    
+                setTeachersByGrade(sortedData);
+                setIsLoading(false);
+            } catch (err) {
+                setError(err instanceof Error ? err.message : 'An unknown error occurred');
+                setIsLoading(false);
+            }
+        };
+    
+        fetchTeachersByGrade();
+    }, []);
+
+    const [showGradeModal, setShowGradeModal] = useState(false);
+
     return (
         <div className={`page bg-light ${inter.className} font-sans`}>
             <Sidebar />
@@ -652,27 +692,43 @@ export default function TeachersDashboard() {
                                 </div>
                             </div>
                             <div className="col-sm-6 col-lg-3">
-                                    <div className="card">
-                                        <div className="card-body">
-                                            <div className="d-flex align-items-center">
-                                                {/* <div className={`${metric.color} rounded-circle p-3 text-white`}>
-                                                {React.cloneElement(metric.icon, { size: 24 })}
-                                                </div> */}
-                                                <div>
-                                                <div className="subheader w-full">Total Number of Schools</div>
-                                                    <div className="h1 mb-3">
-                                                        <NumberFlow
-                                                        value = {schoolCount}
-                                                        // suffix={metric.suffix || ''}
-                                                        className="fw-semi-bold text-dark"
-                                                        transformTiming={{endDelay:6, duration:750, easing:'cubic-bezier(0.42, 0, 0.58, 1)'}}
-                                                        />
-                                                    </div>
+                                <div className="card">
+                                    <div className="card-body">
+                                        <div className="d-flex align-items-center">
+                                            {/* <div className={`${metric.color} rounded-circle p-3 text-white`}>
+                                            {React.cloneElement(metric.icon, { size: 24 })}
+                                            </div> */}
+                                            <div>
+                                            <div className="subheader w-full">Total Number of Schools</div>
+                                                <div className="h1 mb-3">
+                                                    <NumberFlow
+                                                    value = {schoolCount}
+                                                    // suffix={metric.suffix || ''}
+                                                    className="fw-semi-bold text-dark"
+                                                    transformTiming={{endDelay:6, duration:750, easing:'cubic-bezier(0.42, 0, 0.58, 1)'}}
+                                                    />
                                                 </div>
                                             </div>
                                         </div>
                                     </div>
                                 </div>
+                            </div>
+
+                            <div className="col-sm-4 col-lg-4" onClick={() => setShowGradeModal(true)}>
+                                <div className="card cursor-pointer hover:shadow-lg transition-shadow">
+                                    <div className="card-body">
+                                        <div className="d-flex align-items-center">
+                                            <div className="bg-purple rounded-circle p-3 text-white me-3">
+                                                <IconSchool size={24} />
+                                            </div>
+                                            <div>
+                                                <div className="subheader">View Teachers by Grade</div>
+                                                <div className="text-muted">Click to expand detailed grade distribution</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
 
                         {/* Demographics Map Modal */}
@@ -681,7 +737,7 @@ export default function TeachersDashboard() {
                                 <div className="modal-dialog modal-xl">
                                     <div className="modal-content">
                                         <div className="modal-header">
-                                            <h5 className="modal-title">Student Distribution Across India</h5>
+                                            <h5 className="modal-title">Teacher Distribution Across India</h5>
                                             <button 
                                                 type="button" 
                                                 className="btn-close" 
@@ -708,6 +764,80 @@ export default function TeachersDashboard() {
                                                 type="button" 
                                                 className="btn btn-secondary" 
                                                 onClick={() => setShowDemographicsModal(false)}
+                                            >
+                                                Close
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+                        {/* Grade Distribution Modal */}
+                        {showGradeModal && (
+                            <div className="modal fade show" style={{ display: 'block', backgroundColor: 'rgba(0,0,0,0.5)' }}>
+                                <div className="modal-dialog modal-lg">
+                                    <div className="modal-content">
+                                        <div className="modal-header">
+                                            <h5 className="modal-title">Teachers by Grade Distribution</h5>
+                                            <button 
+                                                type="button" 
+                                                className="btn-close" 
+                                                onClick={() => setShowGradeModal(false)}
+                                            ></button>
+                                        </div>
+                                        <div className="modal-body">
+                                            {isLoading ? (
+                                                <div className="text-center">
+                                                    <div className="spinner-border text-purple" role="status">
+                                                        <span className="visually-hidden">Loading...</span>
+                                                    </div>
+                                                    <p className="mt-2">Loading Teachers by grade...</p>
+                                                </div>
+                                            ) : error ? (
+                                                <div className="text-center text-danger">
+                                                    <p>Error: {error}</p>
+                                                </div>
+                                            ) : (
+                                                <div className="table-responsive">
+                                                    <table className="table table-striped table-hover">
+                                                        <thead>
+                                                            <tr>
+                                                                <th>Grade</th>
+                                                                <th>Number of Teachers</th>
+                                                                <th>Percentage</th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody>
+                                                            {teachersByGrade.map((gradeData, index) => (
+                                                                <tr key={index}>
+                                                                    <td>
+                                                                        {gradeData.grade === null 
+                                                                            ? 'Unspecified' 
+                                                                            : `Grade ${gradeData.grade}`}
+                                                                    </td>
+                                                                    <td>{gradeData.count.toLocaleString()}</td>
+                                                                    <td>
+                                                                        {((gradeData.count / totalTeachers) * 100).toFixed(2)}%
+                                                                    </td>
+                                                                </tr>
+                                                            ))}
+                                                        </tbody>
+                                                        <tfoot>
+                                                            <tr className="table-active">
+                                                                <td><strong>Total</strong></td>
+                                                                <td><strong>{totalTeachers.toLocaleString()}</strong></td>
+                                                                <td><strong>100%</strong></td>
+                                                            </tr>
+                                                        </tfoot>
+                                                    </table>
+                                                </div>
+                                            )}
+                                        </div>
+                                        <div className="modal-footer">
+                                            <button 
+                                                type="button" 
+                                                className="btn btn-secondary" 
+                                                onClick={() => setShowGradeModal(false)}
                                             >
                                                 Close
                                             </button>
