@@ -264,13 +264,23 @@ export default function MissionPage() {
                                                         </tr>
                                                     </thead>
                                                     <tbody>
-                                                        {paginatedData.map((row, index) => (
+                                                        {paginatedData.map((row, index) => {
+                                                            let MissionTitle = '';
+                                                            try {
+                                                                const parsedTitle = JSON.parse(row.Mission_Title);
+                                                                MissionTitle = parsedTitle.en || '';
+                                                            } catch (error) {
+                                                                MissionTitle = row.Mission_Title;
+                                                            }
+                                                            return (
+                                                            
                                                             <tr key={index}>
+                                                                
                                                                 <td>{row.Mission_Id}</td>
                                                                 <td>{row.Student_Name}</td>
                                                                 <td>{row.school_id}</td>
                                                                 <td>{row.School_Name}</td>
-                                                                <td>{row.Mission_Title}</td>
+                                                                <td>{MissionTitle}</td>
                                                                 <td>{row.Approved_By}</td>
                                                                 <td>{row.Status}</td>
                                                                 <td>{row.Student_Id}</td>
@@ -287,7 +297,8 @@ export default function MissionPage() {
                                                                 <td>{row.heart_coins}</td>
                                                                 <td>{row.brain_coins}</td>
                                                             </tr>
-                                                        ))}
+                                                            );
+                                                        })}
                                                     </tbody>
                                                 </table>
                                                 

@@ -7,20 +7,23 @@ import React from 'react';
 import { Inter } from 'next/font/google';
 const inter = Inter({ subsets: ['latin'] });
 import { Sidebar } from '@/components/ui/sidebar';
-import { IconSearch, IconBell, IconSettings, IconUserFilled, IconUserExclamation, IconUser, IconUserScan, IconMapPin, IconSchool } from '@tabler/icons-react';
+import { IconSearch, IconBell, IconSettings, IconUserFilled, IconUserExclamation, IconUser, IconUserScan, IconMapPin, IconSchool, IconEdit, IconTrash } from '@tabler/icons-react';
 
 
 import {
   BarChart3,
   ChevronDown,
   Download,
+  Pencil,
   Plus,
   Search,
+  Trash,
   XCircle,
 } from "lucide-react";
 import NumberFlow from '@number-flow/react';
 
 import dynamic from 'next/dynamic'
+import { endpointWriteToDisk } from 'next/dist/build/swc/generated-native';
 
 
 const HighchartsReact = dynamic(() => import('highcharts-react-official'), { ssr: false });
@@ -330,19 +333,65 @@ export default function TeachersDashboard() {
     }, [selectedState]);
     
 
+    const [schools, setSchools] = useState<string[]>([]);
+    const [isSchoolsLoading, setIsSchoolsLoading] = useState(false);
+    const [selectedSchools, setSelectedSchools] = useState("");
+    useEffect(() => {
+        async function fetchSchools() {
+            // Check cache first
+            const cachedSchools = sessionStorage.getItem("schoolsList");
+            if (cachedSchools) {
+                setSchools(JSON.parse(cachedSchools));
+                return;
+            }
+
+            setIsSchoolsLoading(true);
+            try {
+                const res = await fetch(`${api_startpoint}/api/teacher_schools`, {
+                    method: 'POST'
+                });
+                const data: { school: string }[] = await res.json();
+
+                if (Array.isArray(data)) {
+                    const schoolList = data
+                        .map((item) => (item.school ? item.school.trim() : ""))
+                        .filter((school) => school !== ""); // Filter out empty states
+
+                        setSchools(schoolList);
+                    // Cache the results
+                    sessionStorage.setItem("schoolsList", JSON.stringify(schoolList));
+                } else {
+                    console.error("Unexpected API response format:", data);
+                    setSchools([]);
+                }
+            } catch (error) {
+                console.error("Error fetching school list:", error);
+                setSchools([]);
+            } finally {
+                setIsSchoolsLoading(false);
+            }
+        }
+
+        fetchSchools();
+    }, []);
+
     const [selectedSchoolCode, setSelectedSchoolCode] = useState<string>("");
     const [selectedLifeLab, setSelectedLifeLab] = useState<string>("");
     const [tableData, setTableData] = useState<any[]>([]);
     const [currentPage, setCurrentPage] = useState<number>(0);
     const rowsPerPage = 50;
     const [isTableLoading, setIsTableLoading] = useState(false);
-
+    const [selectedFromDate, setSelectedFromDate] = useState(""); // New state for From Date
+    const [selectedToDate, setSelectedToDate] = useState("");     // New state for To Date
     const handleSearch = async () => {
         const filters = {
             state: selectedState,
             city: selectedCity,
             school_code: selectedSchoolCode,
             is_life_lab: selectedLifeLab,
+            school: selectedSchools,
+            from_date: selectedFromDate, // Include the From Date filter
+            to_date: selectedToDate,      // Include the To Date filter
         };
     
         setIsTableLoading(true);
@@ -397,6 +446,9 @@ export default function TeachersDashboard() {
         setSelectedLifeLab("");
         setSelectedSchoolCode("");
         // Clear other filters...
+        setSelectedSchools("");
+        setSelectedFromDate(""); // Clear the From Date
+        setSelectedToDate("");   // Clear the To Date
         setTableData([]);
     };
 
@@ -611,6 +663,67 @@ export default function TeachersDashboard() {
 
     const [showGradeModal, setShowGradeModal] = useState(false);
 
+    const [showEditModal, setShowEditModal] = useState(false);
+    const [showDeleteModal, setShowDeleteModal] = useState(false);
+    const [selectedRow, setSelectedRow] = useState<any>(null); // or a more specific type if you have one
+    
+    // ...
+    // ########################### INCOMPLETE EDIT AND DELETE ACTIONS ##################################
+    // Handler for clicking "Edit"
+    const handleEdit = (rowData: any) => {
+        setSelectedRow(rowData);
+        setShowEditModal(true);
+    };
+
+    // Handler for clicking "Delete"
+    const handleDelete = (rowData: any) => {
+        setSelectedRow(rowData);
+        setShowDeleteModal(true);
+    };
+
+    // Handler for confirming delete
+    const confirmDelete = async () => {
+        if (!selectedRow) return;
+        
+        try {
+        // Example: call your DELETE API endpoint
+        // await fetch(`${api_startpoint}/api/teacher_delete`, {
+        //   method: "POST",
+        //   headers: { "Content-Type": "application/json" },
+        //   body: JSON.stringify({ user_id: selectedRow.id }),
+        // });
+
+        // Then refresh table data or remove row from state
+        // ...
+        } catch (error) {
+        console.error("Delete error:", error);
+        } finally {
+        setShowDeleteModal(false);
+        setSelectedRow(null);
+        }
+    };
+
+    // Handler for saving edited data
+    const saveEdits = async () => {
+        if (!selectedRow) return;
+
+        try {
+        // Example: call your UPDATE API endpoint
+        // await fetch(`${api_startpoint}/api/teacher_update`, {
+        //   method: "POST",
+        //   headers: { "Content-Type": "application/json" },
+        //   body: JSON.stringify(selectedRow),
+        // });
+
+        // Then refresh table data or update row in state
+        // ...
+        } catch (error) {
+        console.error("Update error:", error);
+        } finally {
+        setShowEditModal(false);
+        setSelectedRow(null);
+        }
+    };
     return (
         <div className={`page bg-light ${inter.className} font-sans`}>
             <Sidebar />
@@ -691,7 +804,7 @@ export default function TeachersDashboard() {
                                     </div>
                                 </div>
                             </div>
-                            <div className="col-sm-6 col-lg-3">
+                            <div className="col-sm-4 col-lg-3">
                                 <div className="card">
                                     <div className="card-body">
                                         <div className="d-flex align-items-center">
@@ -700,7 +813,7 @@ export default function TeachersDashboard() {
                                             </div> */}
                                             <div>
                                             <div className="subheader w-full">Total Number of Schools</div>
-                                                <div className="h1 mb-3">
+                                                <div className="h1 mb-1">
                                                     <NumberFlow
                                                     value = {schoolCount}
                                                     // suffix={metric.suffix || ''}
@@ -848,12 +961,12 @@ export default function TeachersDashboard() {
                         )}
                         <div className="card shadow-sm border-0 mb-4">
                             <div className="card-body">
-                                <h5 className="card-title mb-4">Search & Filter</h5>
+                                <h5 className="card-title mb-4">Teacher Search & Filter</h5>
                                 <div className="row g-3">
                                     <div className="col-12 col-md-6 col-lg-3">
                                         <SearchableDropdown
                                             options={states}
-                                            placeholder="Select States"
+                                            placeholder="Select State"
                                             value={selectedState}
                                             onChange={(val) => setSelectedState(val)}
                                             isLoading={isStatesLoading}
@@ -867,6 +980,17 @@ export default function TeachersDashboard() {
                                             value={selectedCity}
                                             onChange={(val) => setSelectedCity(val)}
                                             isLoading={isCitiesLoading}
+                                            maxDisplayItems={200}
+                                            
+                                        />
+                                    </div>
+                                    <div className="col-12 col-md-6 col-lg-3">
+                                        <SearchableDropdown
+                                            options={schools}
+                                            placeholder="Select School"
+                                            value={selectedSchools}
+                                            onChange={(val) => setSelectedSchools(val)}
+                                            isLoading={isSchoolsLoading}
                                             maxDisplayItems={200}
                                             
                                         />
@@ -888,6 +1012,24 @@ export default function TeachersDashboard() {
                                             <option value="No">No</option> 
 
                                         </select>
+                                    </div>
+                                    <div className="col-12 col-md-6 col-lg-3">
+                                        <input
+                                            type="date"
+                                            placeholder="From Date"
+                                            className="form-control"
+                                            value={selectedFromDate}
+                                            onChange={(e) => setSelectedFromDate(e.target.value)}
+                                        />
+                                    </div>
+                                    <div className="col-12 col-md-6 col-lg-3">
+                                        <input
+                                            type="date"
+                                            placeholder="To Date"
+                                            className="form-control"
+                                            value={selectedToDate}
+                                            onChange={(e) => setSelectedToDate(e.target.value)}
+                                        />
                                     </div>
                                 </div>
                                 {/* Action Buttons */}
@@ -926,25 +1068,50 @@ export default function TeachersDashboard() {
                                                     <table className="table table-striped">
                                                         <thead>
                                                             <tr>
+                                                                <th>ID</th>
                                                                 <th>Name</th>
                                                                 <th>Email</th>
                                                                 <th>Mobile</th>
                                                                 <th>City</th>
                                                                 <th>State</th>
+                                                                <th>School Name</th>
                                                                 <th>School ID</th>
+                                                                <th>Mission Assign Count</th>
                                                                 <th>Is Life Lab</th>
+                                                                <th>Created At</th>
+                                                                <th>Updated At</th>
+                                                                <th>Actions</th>
                                                             </tr>
                                                         </thead>
                                                         <tbody>
                                                             {paginatedData.map((row, index) => (
                                                                 <tr key={index}>
+                                                                    <td>{row.id}</td>
                                                                     <td>{row.name}</td>
                                                                     <td>{row.email}</td>
                                                                     <td>{row.mobile_no}</td>
                                                                     <td>{row.city}</td>
                                                                     <td>{row.state}</td>
+                                                                    <td>{row.school_name}</td>
                                                                     <td>{row.school_id}</td>
+                                                                    <td>{row.mission_assign_count}</td>
                                                                     <td>{row.is_life_lab}</td>
+                                                                    <td>{row.created_at}</td>
+                                                                    <td>{row.updated_at}</td>
+                                                                    <td >
+                                                                        <button
+                                                                        className="btn btn-sm btn-primary me-2 "
+                                                                        onClick={() => handleEdit(row)}
+                                                                        >
+                                                                        <IconEdit size={16} />
+                                                                        </button>
+                                                                        <button
+                                                                        className="btn btn-sm btn-danger "
+                                                                        onClick={() => handleDelete(row)}
+                                                                        >
+                                                                        <IconTrash size={16} />
+                                                                        </button>
+                                                                    </td>
                                                                 </tr>
                                                             ))}
                                                         </tbody>
@@ -977,7 +1144,105 @@ export default function TeachersDashboard() {
                                     </div>
                                 </div> 
                         </div>
-
+                        {showEditModal && (
+                            <div
+                                className="modal fade show"
+                                style={{ display: "block", backgroundColor: "rgba(0,0,0,0.5)" }}
+                            >
+                                <div className="modal-dialog modal-md">
+                                <div className="modal-content">
+                                    <div className="modal-header">
+                                    <h5 className="modal-title">Edit Row</h5>
+                                    <button
+                                        type="button"
+                                        className="btn-close"
+                                        onClick={() => setShowEditModal(false)}
+                                    ></button>
+                                    </div>
+                                    <div className="modal-body">
+                                    {/* Example form fields; adapt as needed */}
+                                    <div className="mb-3">
+                                        <label className="form-label">Name</label>
+                                        <input
+                                        type="text"
+                                        className="form-control"
+                                        value={selectedRow?.name || ""}
+                                        onChange={(e) =>
+                                            setSelectedRow({ ...selectedRow, name: e.target.value })
+                                        }
+                                        />
+                                    </div>
+                                    <div className="mb-3">
+                                        <label className="form-label">Email</label>
+                                        <input
+                                        type="text"
+                                        className="form-control"
+                                        value={selectedRow?.email || ""}
+                                        onChange={(e) =>
+                                            setSelectedRow({ ...selectedRow, email: e.target.value })
+                                        }
+                                        />
+                                    </div>
+                                    {/* Add more fields as needed */}
+                                    </div>
+                                    <div className="modal-footer">
+                                    <button
+                                        type="button"
+                                        className="btn btn-secondary"
+                                        onClick={() => setShowEditModal(false)}
+                                    >
+                                        Cancel
+                                    </button>
+                                    <button type="button" className="btn btn-primary" onClick={saveEdits}>
+                                        Save
+                                    </button>
+                                    </div>
+                                </div>
+                                </div>
+                            </div>
+                        )}
+                        
+                        {showDeleteModal && (
+                            <div
+                                className="modal fade show"
+                                style={{ display: "block", backgroundColor: "rgba(0,0,0,0.5)" }}
+                            >
+                                <div className="modal-dialog modal-md">
+                                <div className="modal-content">
+                                    <div className="modal-header">
+                                    <h5 className="modal-title">Delete Row</h5>
+                                    <button
+                                        type="button"
+                                        className="btn-close"
+                                        onClick={() => setShowDeleteModal(false)}
+                                    ></button>
+                                    </div>
+                                    <div className="modal-body">
+                                    <p>Are you sure you want to delete this record?</p>
+                                    <p>
+                                        <strong>{selectedRow?.name}</strong>
+                                    </p>
+                                    </div>
+                                    <div className="modal-footer">
+                                    <button
+                                        type="button"
+                                        className="btn btn-secondary"
+                                        onClick={() => setShowDeleteModal(false)}
+                                    >
+                                        Cancel
+                                    </button>
+                                    <button
+                                        type="button"
+                                        className="btn btn-danger"
+                                        onClick={confirmDelete}
+                                    >
+                                        Delete
+                                    </button>
+                                    </div>
+                                </div>
+                                </div>
+                            </div>
+                        )}
 
                     </div>
                 </div>

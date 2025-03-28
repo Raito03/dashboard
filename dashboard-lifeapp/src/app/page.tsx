@@ -135,6 +135,15 @@ export default function UserAnalyticsDashboard() {
         type: 'shadow'
       }
     },
+    legend: {
+        top: 'bottom'
+    },
+    grid: {
+        left: '3%',
+        right: '4%',
+        bottom: '10%',
+        containLabel: true
+    },
     xAxis: {
       type: 'category',
       data: EchartData.map(item => item.period),
@@ -859,7 +868,7 @@ export default function UserAnalyticsDashboard() {
                 <div className="col-12 col-xl-8">
                   <div className="card shadow-sm border-0 h-100">
                     <div className="card-header bg-transparent py-3">
-                      <h3 className="card-title mb-0 fw-semibold">School Distribution</h3>
+                      <h3 className="card-title mb-0 fw-semibold">School Distribution (Top 5 Schools)</h3>
                     </div>
                     <div className="card-body pt-0">
                       <div style={{ height: '300px' }}>
@@ -880,7 +889,7 @@ export default function UserAnalyticsDashboard() {
         <footer className="footer bg-white border-top py-3 mt-auto">
           <div className="container-xl">
             <div className="d-flex justify-content-between align-items-center text-muted">
-              <span>© 2024 LifeAppDashboard. All rights reserved.</span>
+              <span>© 2025 LifeAppDashboard. All rights reserved.</span>
               <div className="d-flex gap-3">
                 <a href="#" className="text-muted text-decoration-none">Privacy</a>
                 <a href="#" className="text-muted text-decoration-none">Terms</a>

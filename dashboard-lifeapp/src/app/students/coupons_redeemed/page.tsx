@@ -172,10 +172,10 @@ export default function CouponsRedeemed() {
                             <div className="card-body">
                                 <div className="d-flex mb-3 gap-3 flex-wrap">
                                     <div className="me-auto">
-                                        <div className="input-group">
-                                            <span className="input-group-text">
+                                        <div className="input-group gap-3">
+                                            {/* <span className="input-group-text">
                                                 <IconSearch size={18} />
-                                            </span>
+                                            </span> */}
                                             <input 
                                                 type="text" 
                                                 className="form-control" 
@@ -183,11 +183,14 @@ export default function CouponsRedeemed() {
                                                 value={searchTerm}
                                                 onChange={handleSearchChange}
                                             />
+                                            
+                                            <button className="btn btn-primary rounded-sm" onClick={handleSearch}>
+                                                <IconSearch size={18} className="me-1" /> Search
+                                            </button>
                                         </div>
+
                                     </div>
-                                    <button className="btn btn-primary" onClick={handleSearch}>
-                                        <IconSearch size={18} className="me-1" /> Search
-                                    </button>
+                                    
                                     <button className="btn btn-primary" onClick={exportToCSV}>
                                         <IconDownload size={18} className="me-1" /> Export
                                     </button>

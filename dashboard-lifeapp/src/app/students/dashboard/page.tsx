@@ -8,7 +8,7 @@ import { Inter } from 'next/font/google';
 const inter = Inter({ subsets: ['latin'] });
 // import Sidebar from '../../sidebar';
 import { Sidebar } from '@/components/ui/sidebar';
-import { IconSearch, IconBell, IconSettings, IconUserFilled, IconUserExclamation, IconUser, IconUserScan, IconMapPin, IconSchool, IconTrophy, IconDeviceAnalytics } from '@tabler/icons-react';
+import { IconSearch, IconBell, IconSettings, IconUserFilled, IconUserExclamation, IconUser, IconUserScan, IconMapPin, IconSchool, IconTrophy, IconDeviceAnalytics, IconEdit, IconTrash } from '@tabler/icons-react';
 
 import ReactECharts from 'echarts-for-react';
 import {
@@ -56,6 +56,7 @@ interface challengesCompletedData {
     count: number;
     la_mission_id: number | null;
     title: string;
+    description: string;
 }
 
 interface MissionStatusData {
@@ -313,59 +314,56 @@ export default function SchoolDashboard() {
     const [cities, setCities] = useState<string[]>([]);
     const [isCitiesLoading, setIsCitiesLoading] = useState(false);
     const [selectedCity, setSelectedCity] = useState("");
-    useEffect(() => {
-        async function fetchCities() {
-            // Check cache first
-            const cachedSchools = sessionStorage.getItem('cityList');
-            if (cachedSchools) {
-                setCities(JSON.parse(cachedSchools));
-                return;
+    const fetchCities = async (state: string) => {
+        if (!state) return;
+    
+        console.log("Fetching cities for state:", state);
+    
+        setIsCitiesLoading(true);
+        try {
+            const res = await fetch(`${api_startpoint}/api/city_list_teachers`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ state: state })
+            });
+    
+            if (!res.ok) {
+                throw new Error(`HTTP error! Status: ${res.status}`);
             }
-            
-            setIsCitiesLoading(true);
-            try {
-                const res = await fetch(`${api_startpoint}/api/city_list`);
-                const data: { city: string }[] = await res.json();
-                
-                if (Array.isArray(data)) {
-                    // Process data in chunks to avoid UI freezing with large datasets
-                    const processCityBatch = (startIndex: number, batchSize: number) => {
-                        const endIndex = Math.min(startIndex + batchSize, data.length);
-                        const batch = data
-                            .slice(startIndex, endIndex)
-                            .map(item => item.city ? item.city.trim() : "")
-                            .filter(city => city !== "");
-                        
-                        setCities(prevCities => [...prevCities, ...batch]);
-                        
-                        if (endIndex < data.length) {
-                            // Process next batch in the next tick to avoid blocking the UI
-                            setTimeout(() => processCityBatch(endIndex, batchSize), 0);
-                        } else {
-                            // All done, cache the results
-                            sessionStorage.setItem('cityList', JSON.stringify([...cities, ...batch]));
-                            setIsCitiesLoading(false);
-                        }
-                    };
-                    
-                    // Start processing in batches (100 items at a time)
-                    setCities([]); // Reset before starting
-                    processCityBatch(0, 100);
-                } else {
-                    console.error("Unexpected API response format:", data);
-                    setCities([]);
-                    setIsCitiesLoading(false);
-                }
-            } catch (error) {
-                console.error("Error fetching city list:", error);
-                setCities([]);
-                setIsCitiesLoading(false);
+    
+            const data = await res.json();
+    
+            console.log("Raw API Response:", data); // ✅ Check if cities are being received
+    
+            if (Array.isArray(data) && data.length > 0) {
+                const cityList: string[] = data.map(city => 
+                    typeof city === 'string' ? city.trim() : city.city ? city.city.trim() : ''
+                ).filter(city => city !== "");
+    
+                setCities(cityList);
+                sessionStorage.setItem(`cityList_${state}`, JSON.stringify(cityList));
+    
+                console.log(`✅ Loaded ${cityList.length} cities for ${state}`);
+            } else {
+                console.warn("⚠ No cities found for state:", state);
+                setCities([]); // Clear cities if none found
             }
+        } catch (error) {
+            console.error("❌ Error fetching city list:", error);
+            setCities([]);
+        } finally {
+            setIsCitiesLoading(false);
         }
-        
-        fetchCities();
-    }, []);
- 
+    };
+    
+    useEffect(() => {
+        if (selectedState) {
+            console.log("🟢 State changed to:", selectedState);
+            setCities([]); // Reset cities when state changes
+            setSelectedCity(""); // Reset selected city
+            fetchCities(selectedState);
+        }
+    }, [selectedState]);
     
 
 
@@ -746,7 +744,7 @@ export default function SchoolDashboard() {
                     method: "POST"
                 });
                 if (!response.ok) {
-                    throw new Error('Failed to fetch students by grade');
+                    throw new Error('Failed to fetch challenges-completed-per-mission ');
                 }
                 const data: challengesCompletedData[] = await response.json();
                 setChallengesData(data);
@@ -875,8 +873,11 @@ export default function SchoolDashboard() {
             });
 
             // Convert to array and sort
-            const sortedData = Object.values(groupedData)
-                .sort((a, b) => a.period.localeCompare(b.period));
+            const sortedData = Object.values(groupedData).sort((a, b) => {
+                const [yearA, weekA] = a.period.split('-').map(Number);
+                const [yearB, weekB] = b.period.split('-').map(Number);
+                return yearA !== yearB ? yearA - yearB : weekA - weekB;
+            })
 
             setMissionStatusData(sortedData);
             setLoading(false);
@@ -1407,7 +1408,8 @@ export default function SchoolDashboard() {
                                                                     <tr>
                                                                         <th>Mission ID</th>
                                                                         <th>Title</th>
-                                                                        <th>Count</th>
+                                                                        <th>Level</th>
+                                                                        <th>Student Count</th>
                                                                         <th>Percentage</th>
                                                                     </tr>
                                                                 </thead>
@@ -1420,6 +1422,13 @@ export default function SchoolDashboard() {
                                                                         } catch (error) {
                                                                             title = row.title;
                                                                         }
+                                                                        let level = '';
+                                                                        try {
+                                                                            const parsedTitle = JSON.parse(row.description);
+                                                                            level = parsedTitle.en || '';
+                                                                        } catch (error) {
+                                                                            level = row.description;
+                                                                        }
 
                                                                         const percentage = totalChallenges > 0 ? ((row.count / totalChallenges) * 100).toFixed(3) : '0.00';
                                                                         
@@ -1427,6 +1436,7 @@ export default function SchoolDashboard() {
                                                                             <tr key={index}>
                                                                                 <td>{row.la_mission_id}</td>
                                                                                 <td>{title}</td>
+                                                                                <td>{level}</td>
                                                                                 <td>{row.count.toLocaleString()}</td>
                                                                                 <td>{percentage}%</td>
                                                                             </tr>
@@ -1436,7 +1446,9 @@ export default function SchoolDashboard() {
                                                                 <tfoot>
                                                                     <tr className="table-active">
                                                                         <td colSpan={2}><strong>Total</strong></td>
+                                                                        <td><strong/></td>
                                                                         <td><strong>{totalChallenges.toLocaleString()}</strong></td>
+                                                                        
                                                                         <td><strong>100%</strong></td>
                                                                     </tr>
                                                                 </tfoot>
@@ -1732,6 +1744,7 @@ export default function SchoolDashboard() {
                                                         <th>Registered At</th>
                                                         <th>Total Requested</th>
                                                         <th>Total Accepted</th>
+                                                        <th>Actions</th>
                                                     </tr>
                                                 </thead>
                                                 <tbody>
@@ -1758,6 +1771,20 @@ export default function SchoolDashboard() {
                                                             <td>{row.registered_at}</td>
                                                             <td>{row.total_missions_requested || 0}</td>
                                                             <td>{row.total_missions_accepted || 0}</td>
+                                                            <td >
+                                                                <button
+                                                                className="btn btn-sm btn-primary me-2 "
+                                                                //onClick={() => handleEdit(row)}
+                                                                >
+                                                                <IconEdit size={16} />
+                                                                </button>
+                                                                <button
+                                                                className="btn btn-sm btn-danger "
+                                                                //onClick={() => handleDelete(row)}
+                                                                >
+                                                                <IconTrash size={16} />
+                                                                </button>
+                                                            </td>
                                                         </tr>
                                                     ))}
                                                 </tbody>

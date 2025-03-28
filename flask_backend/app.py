@@ -796,7 +796,23 @@ def mission_search():
     finally:
         connection.close()
 
+@app.route('/api/teacher_schools', methods = ['POST'])
+def get_teacher_states():
+    sql = """
+        select distinct ls.name as school from lifeapp.schools ls inner join lifeapp.users u on u.school_id = ls.id where u.type = 5;
+    """
+    try:
+        connection = get_db_connection()
+        with connection.cursor() as cursor:
+            cursor.execute(sql)
+            result = cursor.fetchall()
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        connection.close()
 
+        
 @app.route('/api/teacher_dashboard_search', methods=['POST'])
 def fetch_teacher_dashboard():
     filters = request.get_json() or {}
@@ -804,20 +820,27 @@ def fetch_teacher_dashboard():
     city = filters.get('city')
     school_code = filters.get('school_code')  # Make sure this matches frontend key
     is_life_lab = filters.get('is_life_lab')
-
+    school = filters.get('school')
+    from_date = filters.get('from_date')  # New filter: starting date
+    to_date = filters.get('to_date')      # New filter: ending date
     # Start with base SQL
     sql = """
+        with cte as(
+            select count(*) as mission_assign_count, teacher_id from lifeapp.la_mission_assigns group by teacher_id
+        )
         SELECT 
-            u.name, u.email,
+            u.id, u.name, u.email,
             u.mobile_no, u.state, 
-            u.city, u.school_id, 
+            u.city, ls.name as school_name, u.school_id, cte.mission_assign_count,
             CASE 
                 WHEN ls.is_life_lab = 1 
                     THEN 'Yes' 
                 ELSE 'No' 
-            END AS is_life_lab 
+            END AS is_life_lab,
+            u.created_at, u.updated_at 
         FROM lifeapp.users u
-        INNER JOIN lifeapp.schools ls ON ls.id = u.school_id 
+        INNER JOIN lifeapp.schools ls ON ls.id = u.school_id
+        left join cte on cte.teacher_id = u.id
         WHERE u.type = 5
     """
     params = []
@@ -837,7 +860,16 @@ def fetch_teacher_dashboard():
             sql += " AND ls.is_life_lab = 1"
         elif is_life_lab == "No":
             sql += " AND ls.is_life_lab = 0"
-
+    if school:
+        sql += " AND ls.name = %s"
+        params.append(school)
+    # Add date range filters
+    if from_date:
+        sql += " AND u.created_at >= %s"
+        params.append(from_date)
+    if to_date:
+        sql += " AND u.created_at <= %s"
+        params.append(to_date)
     # Print the SQL for debugging (remove in production)
     # print("SQL Query:", sql)
     # print("Parameters:", params)
@@ -1878,11 +1910,14 @@ def get_school_count():
 @app.route('/api/challenges-completed-per-mission', methods= ['POST'])
 def get_challenges_completed_per_mission():
     sql = """
-        select count(*) as count , lac.la_mission_id, lam.title  
+        select count(*) as count , lac.la_mission_id, lam.title, lev.description  
             from lifeapp.la_mission_completes lac 
                 inner join lifeapp.la_missions lam 
                 on 
                 lam.id = lac.la_mission_id 
+                inner join lifeapp.la_levels lev
+                on
+                lam.la_level_id = lev.id
         group by lac.la_mission_id 
         order by lac.la_mission_id;
 
@@ -1976,5 +2011,91 @@ def get_teacher_count():
     finally:
         connection.close()
 
+
+###################################################################################
+###################################################################################
+################# MENTOR DASHBOARD AND SESSION APIs ###############################
+###################################################################################
+###################################################################################
+@app.route('/api/mentor_dashboard_table', methods = ['POST'])
+def get_mentor_dashboard_table():
+    sql = """
+        select id, name, email, mobile_no, pin as mentor_code from lifeapp.users where `type` = 4;
+    """
+    try:
+        connection = get_db_connection()
+        with connection.cursor() as cursor:
+            cursor.execute(sql)
+            result = cursor.fetchall()  
+        return jsonify(result), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    finally:
+        connection.close()
+
+@app.route('/api/update_mentor', methods=['POST'])
+def update_mentor():
+    filters = request.get_json()
+    mentor_id = filters.get('id')
+
+    if not mentor_id:
+        return jsonify({'error': 'Mentor ID is required'}), 400
+
+    # Extracting fields to update
+    name = filters.get('name')
+    email = filters.get('email')
+    mobile_no = filters.get('mobile_no')
+    city = filters.get('city')
+    state = filters.get('state')
+    pin = filters.get('pin')
+    updated_at = datetime.now().strftime('%Y-%m-%d %H:%M:%S')  # Get current timestamp
+
+    try:
+        connection = get_db_connection()
+        cursor = connection.cursor()
+
+        query = """
+            UPDATE lifeapp.users
+            SET name = %s, email = %s, mobile_no = %s, city = %s, state = %s, pin = %s, updated_at = %s
+            WHERE id = %s
+        """
+        values = (name, email, mobile_no, city, state, pin, updated_at, mentor_id)
+        
+        cursor.execute(query, values)
+        connection.commit()
+        cursor.close()
+        connection.close()
+        
+        return jsonify({'success': True, 'message': 'Mentor updated successfully'}), 200
+    except Error as e:
+        print("Error updating mentor:", e)
+        return jsonify({'error': 'Internal server error', 'details': str(e)}), 500
+
+@app.route('/api/delete_mentor', methods=['DELETE'])
+def delete_mentor():
+    filters = request.get_json()
+    mentor_id = filters.get('id')
+
+    if not mentor_id:
+        return jsonify({'error': 'Mentor ID is required'}), 400
+
+    try:
+        connection = get_db_connection()
+        cursor = connection.cursor()
+
+        query = "DELETE FROM lifeapp.users WHERE id = %s"
+        cursor.execute(query, (mentor_id,))
+        connection.commit()
+        cursor.close()
+        connection.close()
+        
+        return jsonify({'success': True, 'message': 'Mentor deleted successfully'}), 200
+    except Error as e:
+        print("Error deleting mentor:", e)
+        return jsonify({'error': 'Internal server error', 'details': str(e)}), 500
+
+
+
+###################################################################################
 if __name__ == '__main__':
     app.run(debug=True)
