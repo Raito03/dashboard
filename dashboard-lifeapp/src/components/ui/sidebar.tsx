@@ -102,6 +102,7 @@ export function Sidebar() {
     schools: false,
     resources: false,
     resources_teachers: false,
+    settings: false,
   });
 
   const toggleSection = (section: string) => {
@@ -287,7 +288,18 @@ export function Sidebar() {
             </div>
         )}
 
-        <NavItem href="#" label="Settings" isNested icon = {<IconSettings className="h-3 w-3"/>}/>
+        <NavItem href="#" label="Settings" isNested hasChildren icon = {<IconSettings className="h-3 w-3"/>}
+        isOpen={openSections.settings}
+        onClick={() => toggleSection("settings")}
+        />
+        {openSections.settings && (
+            <div className="space-y-0.5 ml-5">
+                <NavItem href="/settings/subjects" label="Subjects" isNested />
+                
+            </div>
+        )}
+
+
         <NavItem href="#" label="Campaigns" isNested icon = {<IconCalculator className="h-3 w-3"/>} />
 
 

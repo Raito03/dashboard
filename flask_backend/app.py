@@ -17,6 +17,8 @@ CORS(app, resources={r"/*": {"origins": "*"}}, supports_credentials=True)
 
 import os
 from dotenv import load_dotenv
+import uuid
+import boto3
 
 # Load environment variables from .env file
 env_path = Path('.') / '.local.env'
@@ -30,6 +32,22 @@ load_dotenv()
 #         database='lifeapp',    # Database name
 #         cursorclass=pymysql.cursors.DictCursor
 #     )
+
+# DigitalOcean Spaces Config
+DO_SPACES_KEY = os.getenv("DO_SPACES_KEY")
+DO_SPACES_SECRET = os.getenv("DO_SPACES_SECRET")
+DO_SPACES_REGION = os.getenv("DO_SPACES_REGION")
+DO_SPACES_BUCKET = os.getenv("DO_SPACES_BUCKET")
+DO_SPACES_ENDPOINT = os.getenv("DO_SPACES_ENDPOINT")
+
+# Initialize Boto3 Client
+s3_client = boto3.client(
+    "s3",
+    endpoint_url=DO_SPACES_ENDPOINT,
+    aws_access_key_id=DO_SPACES_KEY,
+    aws_secret_access_key=DO_SPACES_SECRET,
+)
+
 
 def get_db_connection():
     host=os.getenv('DB_HOST', 'localhost')
@@ -2097,5 +2115,115 @@ def delete_mentor():
 
 
 ###################################################################################
+
+
+
+###################################################################################
+###################################################################################
+######################## SETTINGS/SUBJECTS APIs ###################################
+###################################################################################
+###################################################################################
+
+@app.route('/api/subjects_list', methods=['POST'])
+def get_subjects():
+    """Fetch all subjects."""
+    try:
+        connection = get_db_connection()
+        with connection.cursor() as cursor:
+            sql = "SELECT id, title, heading, image, status FROM lifeapp.la_subjects ORDER BY id;"
+            cursor.execute(sql)
+            subjects = cursor.fetchall()
+        return jsonify(subjects)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        connection.close()
+
+@app.route('/api/subjects_new', methods=['POST'])
+def create_subject():
+    """Create a new subject."""
+    try:
+        filters = request.get_json or {}
+        title = filters.get('title')
+        heading = filters.get('heading')
+        created_by  = filters.get('created_by')
+        imageId = filters.get('imageId')
+
+        if created_by == 'Admin':
+            created_no = 1
+        elif created_by == 'Mentor':
+            created_no  = 4
+        elif created_by == 'Teacher':
+            created_no  = 5
+        connection = get_db_connection()
+        with connection.cursor() as cursor:
+            sql = """
+                INSERT INTO lifeapp.la_subjects (title, heading, created_by, image)
+                VALUES (%s, %s, %s, %s, %s)
+            """
+            cursor.execute(sql, (title, heading, created_no, imageId))
+            connection.commit()
+        return jsonify({'message': 'Subject Created'}), 201
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        connection.close()
+
+
+@app.route('/api/subjects/<int:subject_id>', methods=['PUT'])
+def update_subject(subject_id):
+    """Update a subject."""
+    try:
+        filters = request.get_json or {}
+        title = filters.get('title')
+        heading = filters.get('heading')
+        created_by  = filters.get('created_by')
+        subject_id = filters.get('id')
+        imageId = filters.get('imageId')
+        if created_by == 'Admin':
+            created_no = 1
+        elif created_by == 'Mentor':
+            created_no  = 4
+        elif created_by == 'Teacher':
+            created_no  = 5
+
+        connection = get_db_connection()
+        with connection.cursor() as cursor:
+            sql = """
+                UPDATE lifeapp.la_subjects
+                SET title = %s, heading = %s, image = %s
+                WHERE id = %s
+            """
+            cursor.execute(sql, (title, heading, created_no, imageId, subject_id))
+            connection.commit()
+        return jsonify({'message': 'Subject Updated'}), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        connection.close()
+
+
+@app.route('/api/subjects/<int:subject_id>/status', methods=['PATCH'])
+def change_subject_status(subject_id):
+    """Change the status of a subject."""
+    try:
+        filters =  request.get_json() or {}
+        status  = filters.get('status')
+        if status == 'ACTIVE':
+            status_no = 1
+        else:
+            status_no = 0
+        connection = get_db_connection()
+
+        with connection.cursor() as cursor:
+            sql = "UPDATE lifeapp.la_subjects SET status = IF(%s=1, 0, 1) WHERE id = %s"
+            cursor.execute(sql, (status_no,subject_id,))
+            connection.commit()
+        return jsonify({'message': 'Subject Status Changed'}), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        connection.close()
+
 if __name__ == '__main__':
     app.run(debug=True)

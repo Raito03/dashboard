@@ -3,3 +3,4 @@ gunicorn
 flask_cors
 pymysql
 python-dotenv
+boto3

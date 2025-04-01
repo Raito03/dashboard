@@ -21,6 +21,8 @@
     "date-fns": "^4.1.0",
     "echarts": "^5.6.0",
     "echarts-for-react": "^3.0.2",
+    "embla-carousel-autoplay": "^8.5.2",
+    "embla-carousel-react": "^8.5.2",
     "highcharts": "^12.1.2",
     "highcharts-react-official": "^3.2.1",
     "lucide-react": "^0.474.0",
