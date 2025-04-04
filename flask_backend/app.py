@@ -1,6 +1,6 @@
 # app.py
 from binascii import Error
-from flask import Flask, jsonify, request
+from flask import Flask, json, jsonify, request
 from flask_cors import CORS
 import pymysql.cursors
 from datetime import datetime
@@ -2224,6 +2224,617 @@ def change_subject_status(subject_id):
         return jsonify({'error': str(e)}), 500
     finally:
         connection.close()
+
+
+###################################################################################
+###################################################################################
+######################## SETTINGS/LEVELS APIs ###################################
+###################################################################################
+###################################################################################
+@app.route('/api/levels', methods=['POST'])
+def get_levels():
+    """Fetch all levels with pagination."""
+    connection = None
+    try:
+        filters = request.get_json() or {}
+        page = filters.get('page', 1)
+        per_page = 25  # Default pagination limit
+        offset = (page - 1) * per_page
+
+        connection = get_db_connection()
+        if connection is None:
+            raise Exception("Database connection failed")
+
+        with connection.cursor() as cursor:
+            sql = "SELECT * FROM lifeapp.la_levels ORDER BY id ASC LIMIT %s OFFSET %s"
+            cursor.execute(sql, (per_page, offset))
+            levels = cursor.fetchall()
+        
+        return jsonify(levels)
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+    finally:
+        if connection:  # Check if connection is not None
+            connection.close()
+
+
+
+@app.route('/api/levels_new', methods=['POST'])
+def create_level():
+    """Create a new level."""
+    try:
+        data = request.get_json() or {}
+        title_data = data.get('title', {})
+        description_data = data.get('description', {})
+        jigyasa_points= data.get('jigyasa_points')
+        mission_points= data.get('mission_points')
+        pragya_points=data.get('pragya_points')
+        puzzle_points= data.get('puzzle_points')
+        puzzle_time =data.get('puzzle_time')
+        quiz_points=  data.get('quiz_points')
+        quiz_time= data.get('quiz_time')
+        riddle_points= data.get('riddle_points')
+        riddle_time= data.get('riddle_time')
+        status= data.get('status')
+        datetime_str = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        params = [json.dumps(title_data), json.dumps(description_data),jigyasa_points,mission_points,
+                    pragya_points,puzzle_points, puzzle_time,quiz_points,quiz_time, riddle_points,riddle_time,status, datetime_str]
+        connection = get_db_connection()
+        with connection.cursor() as cursor:
+            sql = """
+                INSERT INTO la_levels (title, description,jigyasa_points,mission_points,
+                    pragya_points,puzzle_points, puzzle_time,quiz_points,quiz_time, riddle_points,riddle_time,status, created_by)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            """
+            cursor.execute(sql, params)
+            connection.commit()
+        return jsonify({'message': 'Level Created'}), 201
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        connection.close()
+
+
+@app.route('/api/levels_update', methods=['POST'])
+def update_level(level_id):
+    """Update a level."""
+    try:
+        data = request.get_json() or {}
+        id = data.get('id')
+        title_data = data.get('title', {})
+        description_data = data.get('description', {})
+        jigyasa_points= data.get('jigyasa_points')
+        mission_points= data.get('mission_points')
+        pragya_points=data.get('pragya_points')
+        puzzle_points= data.get('puzzle_points')
+        puzzle_time =data.get('puzzle_time')
+        quiz_points=  data.get('quiz_points')
+        quiz_time= data.get('quiz_time')
+        riddle_points= data.get('riddle_points')
+        riddle_time= data.get('riddle_time')
+        status= data.get('status')
+        datetime_str = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+
+        params = [json.dumps(title_data), json.dumps(description_data),jigyasa_points,mission_points,
+                    pragya_points,puzzle_points, puzzle_time,quiz_points,quiz_time, riddle_points,riddle_time,status, datetime_str, id]
+        
+        connection = get_db_connection()
+        with connection.cursor() as cursor:
+            sql = """
+                UPDATE lifeapp.la_levels
+                SET 
+                    title = %s, description = %s,
+                    jigyasa_points = %s, mission_points = %s,  pragya_points =%s,
+                    puzzle_points = %s, puzzle_time = %s, quiz_points = %s,
+                    quiz_time = %s, riddle_points = %s, riddle_time = %s,
+                    status = %s, updated_at = %s
+                WHERE id = %s
+            """
+            cursor.execute(sql, params)
+            connection.commit()
+        return jsonify({'message': 'Level Updated'}), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        connection.close()
+
+
+@app.route('/api/levels_delete', methods=['POST'])
+def delete_level():
+    """Delete a level."""
+    try:
+        data = request.get_json() or {}
+        level_id = data.get('id')
+
+        if not level_id:
+            return jsonify({'error': 'Missing level ID'}), 400
+
+        connection = get_db_connection()
+        with connection.cursor() as cursor:
+            sql = "DELETE FROM lifeapp.la_levels WHERE id = %s"
+            cursor.execute(sql, (level_id,))
+            connection.commit()
+
+        return jsonify({'message': 'Level deleted successfully'}), 200
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        connection.close()
+
+
+
+###################################################################################
+###################################################################################
+######################## SETTINGS/LANGUAGES APIs ###################################
+###################################################################################
+###################################################################################
+
+@app.route('/api/languages', methods=['POST'])
+def get_languages():
+    """Fetch all languages with pagination."""
+    try:
+        filters = request.get_json() or {}
+        page = filters.get('page', 1)
+        per_page = 25  # Default pagination limit
+        offset = (page - 1) * per_page
+
+        connection = get_db_connection()
+        with connection.cursor() as cursor:
+            sql = "SELECT * FROM lifeapp.languages ORDER BY title LIMIT %s OFFSET %s"
+            cursor.execute(sql, (per_page, offset))
+            languages = cursor.fetchall()
+        return jsonify(languages)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        connection.close()
+
+
+@app.route('/api/languages_new', methods=['POST'])
+def create_language():
+    """Create a new language."""
+    try:
+        data = request.get_json() or {}
+        title = data.get('title', '')
+        slug = data.get('slug', '').strip().lower()
+        status = data.get('status')
+        if not slug:
+            return jsonify({'error': 'Slug is required'}), 400
+
+        connection = get_db_connection()
+        with connection.cursor() as cursor:
+            # Check if slug already exists
+            cursor.execute("SELECT COUNT(*) FROM lifeapp.languages WHERE slug = %s", (slug,))
+            exists = cursor.fetchone()
+            if exists and exists[0] > 0:
+                return jsonify({'error': 'Slug already exists'}), 400
+
+            sql = "INSERT INTO lifeapp.languages (slug, title, status) VALUES (%s, %s, %s)"
+            cursor.execute(sql, (slug, title, status))  # 1 for Active status
+            connection.commit()
+        return jsonify({'message': 'Language Created'}), 201
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        connection.close()
+
+
+@app.route('/api/languages_update', methods=['POST'])
+def update_language():
+    """Update a language."""
+    try:
+        data = request.get_json() or {}
+        language_id = data.get('id')
+        title = data.get('title', '').strip()
+        status = data.get('status').strip()
+        slug = data.get('slug', '').strip().lower()
+
+        if not language_id or not slug:
+            return jsonify({'error': 'ID and Slug are required'}), 400
+
+        connection = get_db_connection()
+        with connection.cursor() as cursor:
+            # Check if slug already exists for another language
+            cursor.execute("SELECT COUNT(*) FROM lifeapp.languages WHERE slug = %s AND id != %s", (slug, language_id))
+            exists = cursor.fetchone()
+            if exists and exists[0] > 0:
+                return jsonify({'error': 'Slug already exists'}), 400
+
+            sql = "UPDATE lifeapp.languages SET slug = %s, title = %s, status = %s WHERE id = %s"
+            cursor.execute(sql, (slug, title, status, language_id))
+            connection.commit()
+        return jsonify({'message': 'Language Updated'}), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        connection.close()
+
+
+@app.route('/api/languages_delete/<int:language_id>', methods=['DELETE'])
+def delete_language(language_id):
+    """Delete a language."""
+    try:
+        connection = get_db_connection()
+        with connection.cursor() as cursor:
+            sql = "DELETE FROM lifeapp.languages WHERE id = %s"
+            cursor.execute(sql, (language_id,))
+            connection.commit()
+        return jsonify({'message': 'Language Deleted'}), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        connection.close()
+
+
+@app.route('/api/languages/<int:language_id>/status', methods=['PATCH'])
+def change_language_status(language_id):
+    """Change the status of a language."""
+    try:
+        connection = get_db_connection()
+        with connection.cursor() as cursor:
+            sql = "UPDATE languages SET status = IF(status='ACTIVE', 'DEACTIVE', 'ACTIVE') WHERE id = %s"
+            cursor.execute(sql, (language_id,))
+            connection.commit()
+        return jsonify({'message': 'Language Status Changed'}), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        connection.close()
+
+
+
+
+###################################################################################
+###################################################################################
+######################## SETTINGS/SECTIONS APIs ###################################
+###################################################################################
+###################################################################################
+
+@app.route('/api/sections', methods=['POST'])
+def get_sections():
+    """Fetch list of sections."""
+    try:
+        filters = request.get_json() or {}
+        status = filters.get('status')
+        connection = get_db_connection()
+        with connection.cursor() as cursor:
+            sql = "SELECT * FROM lifeapp.la_sections"
+            if status is not None:  # Ensure status=0 is also considered
+                sql += " WHERE status = %s"
+                cursor.execute(sql, (status,))
+            else:
+                cursor.execute(sql)
+
+            result = cursor.fetchall()
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        connection.close()
+
+@app.route('/api/sections_new', methods=['POST'])
+def create_section():
+    """Create a new section."""
+    try:
+        data = request.get_json() or {}
+        status = data.get('status')
+        name = data.get('name')
+        datetime_str = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        if not name:
+            return jsonify({'error': 'Name is required'}), 400
+        connection = get_db_connection()
+        with connection.cursor() as cursor:
+            cursor.execute("INSERT INTO lifeapp.la_sections (name, status, created_at, updated_at) VALUES (%s, %s)", (name,status, datetime_str, datetime_str))
+            connection.commit()
+        return jsonify({'message': 'Section created successfully'})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        connection.close()
+
+@app.route('/api/sections_update', methods=['POST'])
+def update_section(section_id):
+    """Update section details."""
+    try:
+        data = request.get_json() or {}
+        name = data.get('name')
+        section_id = data.get('id')
+        status = data.get('status')
+        datetime_str = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        if not name:
+            return jsonify({'error': 'Name is required'}), 400
+        connection = get_db_connection()
+        with connection.cursor() as cursor:
+            cursor.execute("UPDATE lifeapp.la_sections SET name = %s, status = %s, updated_at = %s WHERE id = %s", (name,status, datetime_str, section_id))
+            connection.commit()
+        return jsonify({'message': 'Section updated successfully'})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        connection.close()
+
+@app.route('/api/sections_delete', methods=['POST'])
+def delete_section():
+    """Delete a section."""
+    try:
+        data = request.get_json() or {}
+        section_id = data.get('id')
+
+        if not section_id:
+            return jsonify({'error': 'Section ID is required'}), 400
+
+        connection = get_db_connection()
+        with connection.cursor() as cursor:
+            cursor.execute("DELETE FROM lifeapp.la_sections WHERE id = %s", (section_id,))
+            connection.commit()
+
+        return jsonify({'message': 'Section deleted successfully'})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        connection.close()
+
+
+@app.route('/api/sections/<int:section_id>/status', methods=['PATCH'])
+def toggle_section_status(section_id):
+    """Toggle the status of a section."""
+    try:
+        connection = get_db_connection()
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT status FROM la_sections WHERE id = %s", (section_id,))
+            section = cursor.fetchone()
+            if not section:
+                return jsonify({'error': 'Section not found'}), 404
+            new_status = 'inactive' if section['status'] == 'active' else 'active'
+            cursor.execute("UPDATE la_sections SET status = %s WHERE id = %s", (new_status, section_id))
+            connection.commit()
+        return jsonify({'message': 'Section status changed', 'status': new_status})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        connection.close()
+
+
+
+###################################################################################
+###################################################################################
+######################## SCHOOLS/DASHBOARD APIs ###################################
+###################################################################################
+###################################################################################
+@app.route('/api/count_school_state_dashboard', methods= ['POST'])
+def get_count_school_rate_dashboard():
+    connection = get_db_connection()
+    try:
+       
+        with connection.cursor() as cursor:
+            #execute sql query
+            sql = """
+            select state, count(*) as count from lifeapp.schools 
+            where state != 'null' and state != '2' group by state order by count desc;
+            """
+            cursor.execute(sql)
+            result = cursor.fetchall()
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        connection.close()
+
+
+###################################################################################
+###################################################################################
+######################## MENTORS/DASHBOARD APIs ###################################
+###################################################################################
+###################################################################################
+@app.route('/api/mentors', methods=['POST'])
+def get_mentors():
+    """Fetch list of mentors."""
+    try:
+        filters = request.get_json() or {}
+        connection = get_db_connection()
+        with connection.cursor() as cursor:
+            sql = "select id,name,email,mobile_no,pin, gender, dob, state, city from lifeapp.users where `type` = 4;"
+            cursor.execute(sql)
+            result = cursor.fetchall()
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        connection.close()
+
+@app.route('/api/add_mentor', methods=['POST'])
+def add_mentor():
+    """Add a new mentor to the database."""
+    try:
+        data = request.get_json()
+        datetime_str = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        connection = get_db_connection()
+        with connection.cursor() as cursor:
+            sql = """
+                INSERT INTO lifeapp.users 
+                (name, email, mobile_no, pin, board_name, school_code, user_rank, created_by, la_grade_id, la_board_id, 
+                 la_section_id, device_token, device, updated_at, created_at, remember_token, otp, image_path, 
+                 profile_image, brain_coins, heart_coins, earn_coins, password, address, state, city, grade, 
+                 gender, dob, `type`, username, guardian_name, school_id)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 
+                        %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            """
+            cursor.execute(sql, (
+                data['name'], data['email'], data['mobile_no'], data['pin'], None, None,
+                None, None, None, None, None,
+                None, None, datetime_str, datetime_str, None,
+                None, None, None, None, None, 
+                None, None, None, data['state'], data['city'], None, 
+                data['gender'], data['dob'], 4, None, None, None
+            ))
+            connection.commit()
+        return jsonify({'message': 'Mentor added successfully'}), 201
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        connection.close()
+
+@app.route('/api/update_mentor', methods=['POST'])
+def do_update_mentor():
+    """Update an existing mentor in the database."""
+    try:
+        data = request.get_json()
+        datetime_str = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        connection = get_db_connection()
+        with connection.cursor() as cursor:
+            sql = """
+                UPDATE lifeapp.users
+                SET name = %s,
+                    email = %s,
+                    mobile_no = %s,
+                    pin = %s,
+                    state = %s,
+                    city = %s,
+                    gender = %s,
+                    dob = %s,
+                    updated_at = %s
+                WHERE id = %s AND `type` = 4
+            """
+            cursor.execute(sql, (
+                data['name'],
+                data['email'],
+                data['mobile_no'],
+                data['pin'],
+                data['state'],
+                data['city'],
+                data['gender'],
+                data['dob'],
+                datetime_str,
+                data['id']
+            ))
+            connection.commit()
+        return jsonify({'message': 'Mentor updated successfully'}), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        connection.close()
+
+@app.route('/api/delete_mentor', methods=['POST'])
+def do_delete_mentor():
+    """Delete a mentor from the database."""
+    try:
+        data = request.get_json()
+        mentor_id = data.get('id')
+
+        if not mentor_id:
+            return jsonify({'error': 'Mentor ID is required'}), 400
+
+        connection = get_db_connection()
+        with connection.cursor() as cursor:
+            sql = "DELETE FROM lifeapp.users WHERE id = %s AND `type` = 4"
+            cursor.execute(sql, (mentor_id,))
+            connection.commit()
+
+        return jsonify({'message': 'Mentor deleted successfully'}), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        connection.close()
+
+
+###################################################################################
+###################################################################################
+######################## MENTORS/SESSIONS APIs ###################################
+###################################################################################
+###################################################################################
+@app.route('/api/sessions', methods=['POST'])
+def get_sessions():
+    """Fetch all mentor sessions with user name and status."""
+    try:
+        connection = get_db_connection()
+        with connection.cursor() as cursor:
+            sql = """
+                SELECT 
+                    las.id,
+                    u.name,
+                    las.heading,
+                    las.zoom_link,
+                    las.zoom_password,
+                    las.date_time,
+                    las.status
+                FROM 
+                    lifeapp.la_sessions las
+                INNER JOIN 
+                    lifeapp.users u ON las.user_id = u.id
+                ORDER BY las.date_time DESC
+            """
+            cursor.execute(sql)
+            sessions = cursor.fetchall()
+
+        return jsonify(sessions), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        connection.close()
+
+@app.route('/api/update_session', methods=['POST'])
+def update_session():
+    """Update an existing session's heading, description, and status."""
+    try:
+        data = request.get_json()
+        session_id = data.get('id')
+        heading = data.get('heading')
+        description = data.get('description')
+        status = data.get('status')
+
+        connection = get_db_connection()
+        with connection.cursor() as cursor:
+            sql = """
+                UPDATE lifeapp.la_sessions
+                SET heading = %s, description = %s, status = %s
+                WHERE id = %s
+            """
+            cursor.execute(sql, (heading, description, status, session_id))
+            connection.commit()
+        return jsonify({'message': 'Session updated successfully'}), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        connection.close()
+
+@app.route('/api/session_participants', methods=['POST'])
+def get_session_participants():
+    """Get all participants of a given session ID."""
+    try:
+        data = request.get_json()
+        session_id = data.get('session_id')
+
+        connection = get_db_connection()
+        with connection.cursor() as cursor:
+            sql = """
+                SELECT 
+                    u.school_id, 
+                    u.name, 
+                    u.mobile_no, 
+                    u.grade, 
+                    u.city, 
+                    u.state,
+                    lasp.la_session_id 
+                FROM 
+                    lifeapp.users u 
+                INNER JOIN 
+                    lifeapp.la_session_participants lasp 
+                ON 
+                    u.id = lasp.user_id
+                WHERE
+                    lasp.la_session_id = %s;
+            """
+            cursor.execute(sql, (session_id,))
+            participants = cursor.fetchall()
+        return jsonify(participants), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        connection.close()
+
 
 if __name__ == '__main__':
     app.run(debug=True)

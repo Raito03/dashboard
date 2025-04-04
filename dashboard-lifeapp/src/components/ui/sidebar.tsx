@@ -295,7 +295,9 @@ export function Sidebar() {
         {openSections.settings && (
             <div className="space-y-0.5 ml-5">
                 <NavItem href="/settings/subjects" label="Subjects" isNested />
-                
+                <NavItem href="/settings/levels" label="Levels" isNested />
+                <NavItem href="/settings/languages" label="Languages" isNested />
+                <NavItem href="/settings/sections" label="Sections" isNested />
             </div>
         )}
 

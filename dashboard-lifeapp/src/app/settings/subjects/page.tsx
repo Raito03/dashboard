@@ -31,9 +31,10 @@ interface RawSubject {
 
 export default function SettingsSubject() {
     const [totalSubjects, setTotalSubjects] = useState<Slide[]>([])
-    
+    const [loading, setLoading] = useState(true);
     async function fetchSubjectList() {
         try {
+            setLoading(true);
             const res = await fetch(`${api_startpoint}/api/subjects_list`, {
                 method: 'POST'
             });
@@ -56,9 +57,11 @@ export default function SettingsSubject() {
                 });
     
                 setTotalSubjects(processedSubjects);
+                setLoading(false);
             }
         } catch (error) {
             console.error('Error fetching subject list:', error);
+            setLoading(false);
         }
     }
     
@@ -441,12 +444,14 @@ export default function SettingsSubject() {
                             <div className="card-body p-2">
                                 {/* Carousel Container */}
                                 <div className="overflow-hidden rounded " ref={emblaRef}>
-                                    <div className="flex">
-                                        {totalSubjects.map((slide) => (
-                                            <div
-                                                key={slide.id}
-                                                className="relative flex-[0_0_100%] min-w-0"
-                                            >
+                                <div className="flex">
+                                    {loading ? (
+                                        <div className="flex justify-center items-center h-40 w-60 text-center">
+                                            <div className="animate-spin rounded-full h-10 w-10 border-t-4 border-blue-800"></div>
+                                        </div>
+                                    ) : (
+                                        totalSubjects.map((slide) => (  // Removed extra `{}` around map
+                                            <div key={slide.id} className="relative flex-[0_0_100%] min-w-0">
                                                 <div className="card card-sm mx-2 shadow-none border">
                                                     {/* Edit & Delete Icons */}
                                                     <div className="absolute top-2 right-2 flex gap-2">
@@ -481,8 +486,10 @@ export default function SettingsSubject() {
                                                     </div>
                                                 </div>
                                             </div>
-                                        ))}
-                                    </div>
+                                        ))
+                                    )}
+                                </div>
+
                                     {/* Tabler-styled Pagination Dots */}
                                     <div className="d-flex justify-content-center gap-1 mt-3">
                                         {totalSubjects.map((_, index) => (
