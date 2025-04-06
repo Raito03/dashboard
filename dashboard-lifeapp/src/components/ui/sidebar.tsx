@@ -103,6 +103,7 @@ export function Sidebar() {
     resources: false,
     resources_teachers: false,
     settings: false,
+    student_related: false,
   });
 
   const toggleSection = (section: string) => {
@@ -268,12 +269,27 @@ export function Sidebar() {
         />
         {openSections.resources && (
             <div className="space-y-0.5 ml-5">
-                <NavItem href="#" label="Student/Related" isNested />
+                <NavItem href="#" label="Student_Related" isNested 
+                  hasChildren
+                  isOpen={openSections.student_related}
+                  onClick={() => toggleSection("student_related")}
+                  
+                />
+                {
+                  openSections.student_related && (
+                    <div className="pl-4 space-y-0.5">
+                    <NavItem href="/student_related/quiz_sessions" label="Quiz Sessions" isNested />
+                    <NavItem href="/student_related/mission" label="Mission" isNested />
+                    <NavItem href="/student_related/vision" label="Vision" isNested />
+                    </div>
+                  )
+                }
                 <NavItem href="#" label="Teachers" isNested
                     hasChildren
                     isOpen={openSections.resources_teachers}
                     onClick={() => toggleSection("resources_teachers")} 
                 />
+                
                 {openSections.resources_teachers && (
                     <div className="pl-4 space-y-0.5">
                     <NavItem href="/teachers/competencies" label="Competencies" isNested />

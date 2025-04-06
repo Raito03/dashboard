@@ -2836,5 +2836,394 @@ def get_session_participants():
         connection.close()
 
 
+
+
+###################################################################################
+###################################################################################
+######################## RESOURCES/STUDENT_RELATED/QUIZ APIs ######################
+###################################################################################
+###################################################################################
+@app.route('/api/quiz_sessions', methods=['POST'])
+def get_quiz_sessions():
+    try:
+        connection = get_db_connection()
+        with connection.cursor() as cursor:
+            cursor.execute("""
+                WITH sessionized_data AS (
+                    SELECT 
+                        *,
+                        @session_group := CASE 
+                            WHEN TIMESTAMPDIFF(SECOND, @prev_created_at, created_at) > 5 
+                                 OR @prev_user_id != user_id 
+                                 OR @prev_game_id != la_quiz_game_id 
+                            THEN @session_group + 1 
+                            ELSE @session_group 
+                        END AS session_group,
+                        @prev_created_at := created_at,
+                        @prev_user_id := user_id,
+                        @prev_game_id := la_quiz_game_id
+                    FROM 
+                        lifeapp.la_quiz_game_results,
+                        (SELECT @prev_created_at := NULL, @prev_user_id := NULL, @prev_game_id := NULL, @session_group := 0) vars
+                    ORDER BY 
+                        user_id, la_quiz_game_id, created_at
+                ),
+                ranked_entries AS (
+                    SELECT 
+                        *,
+                        ROW_NUMBER() OVER (
+                            PARTITION BY user_id, la_quiz_game_id, session_group 
+                            ORDER BY created_at
+                        ) AS session_rank
+                    FROM sessionized_data
+                )
+                SELECT 
+                    id,
+                    la_quiz_game_id,
+                    user_id,
+                    total_questions,
+                    total_correct_answers,
+                    coins,
+                    created_at,
+                    updated_at
+                FROM ranked_entries
+                WHERE session_rank = 1
+                ORDER BY user_id, la_quiz_game_id, created_at;
+            """)
+            result = cursor.fetchall()
+        return jsonify(result), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        connection.close()
+# @app.route('/api/quiz_sessions', methods=['POST'])
+# def get_quiz_sessions():
+#     try:
+#         data = request.get_json()
+#         page = int(data.get('page', 1))
+#         limit = int(data.get('limit', 10))
+#         offset = (page - 1) * limit
+
+#         connection = get_db_connection()
+#         with connection.cursor() as cursor:
+#             # Main paginated data
+#             cursor.execute(f"""
+#                 WITH sessionized_data AS (
+#                     SELECT 
+#                         *,
+#                         @session_group := CASE 
+#                             WHEN TIMESTAMPDIFF(SECOND, @prev_created_at, created_at) > 5 
+#                                  OR @prev_user_id != user_id 
+#                                  OR @prev_game_id != la_quiz_game_id 
+#                             THEN @session_group + 1 
+#                             ELSE @session_group 
+#                         END AS session_group,
+#                         @prev_created_at := created_at,
+#                         @prev_user_id := user_id,
+#                         @prev_game_id := la_quiz_game_id
+#                     FROM 
+#                         lifeapp.la_quiz_game_results,
+#                         (SELECT @prev_created_at := NULL, @prev_user_id := NULL, @prev_game_id := NULL, @session_group := 0) vars
+#                     ORDER BY 
+#                         user_id, la_quiz_game_id, created_at
+#                 ),
+#                 ranked_entries AS (
+#                     SELECT 
+#                         *,
+#                         ROW_NUMBER() OVER (
+#                             PARTITION BY user_id, la_quiz_game_id, session_group 
+#                             ORDER BY created_at
+#                         ) AS session_rank
+#                     FROM sessionized_data
+#                 )
+#                 SELECT 
+#                     id,
+#                     la_quiz_game_id,
+#                     user_id,
+#                     total_questions,
+#                     total_correct_answers,
+#                     coins,
+#                     created_at,
+#                     updated_at
+#                 FROM ranked_entries
+#                 WHERE session_rank = 1
+#                 ORDER BY user_id, la_quiz_game_id, created_at
+#                 LIMIT %s OFFSET %s;
+#             """, (limit, offset))
+#             results = cursor.fetchall()
+
+#             # Total count of grouped sessions
+#             cursor.execute("""
+#                 WITH sessionized_data AS (
+#                     SELECT 
+#                         *,
+#                         @session_group := CASE 
+#                             WHEN TIMESTAMPDIFF(SECOND, @prev_created_at, created_at) > 5 
+#                                  OR @prev_user_id != user_id 
+#                                  OR @prev_game_id != la_quiz_game_id 
+#                             THEN @session_group + 1 
+#                             ELSE @session_group 
+#                         END AS session_group,
+#                         @prev_created_at := created_at,
+#                         @prev_user_id := user_id,
+#                         @prev_game_id := la_quiz_game_id
+#                     FROM 
+#                         lifeapp.la_quiz_game_results,
+#                         (SELECT @prev_created_at := NULL, @prev_user_id := NULL, @prev_game_id := NULL, @session_group := 0) vars
+#                     ORDER BY 
+#                         user_id, la_quiz_game_id, created_at
+#                 ),
+#                 ranked_entries AS (
+#                     SELECT 
+#                         *,
+#                         ROW_NUMBER() OVER (
+#                             PARTITION BY user_id, la_quiz_game_id, session_group 
+#                             ORDER BY created_at
+#                         ) AS session_rank
+#                     FROM sessionized_data
+#                 )
+#                 SELECT COUNT(*) AS total FROM ranked_entries WHERE session_rank = 1;
+#             """)
+#             total = cursor.fetchone()['total']
+
+#         return jsonify({'data': results, 'total': total}), 200
+
+#     except Exception as e:
+#         return jsonify({'error': str(e)}), 500
+#     finally:
+#         connection.close()
+
+
+@app.route('/api/game_questions', methods=['POST'])
+def get_game_questions():
+    try:
+        data = request.get_json()
+        game_code = data.get("game_code")
+
+        connection = get_db_connection()
+        with connection.cursor(pymysql.cursors.DictCursor) as cursor:
+            sql = """
+            WITH RECURSIVE split_questions AS (
+                SELECT 
+                    game_code,
+                    TRIM(BOTH '[]' FROM questions) AS cleaned_questions,
+                    1 AS pos,
+                    SUBSTRING_INDEX(TRIM(BOTH '[]' FROM questions), ',', 1) AS question_id,
+                    SUBSTRING(TRIM(BOTH '[]' FROM questions), LENGTH(SUBSTRING_INDEX(TRIM(BOTH '[]' FROM questions), ',', 1)) + 2) AS remaining
+                FROM lifeapp.la_quiz_games
+                WHERE questions != '0' AND game_code = %s
+
+                UNION ALL
+
+                SELECT 
+                    game_code,
+                    cleaned_questions,
+                    pos + 1,
+                    SUBSTRING_INDEX(remaining, ',', 1),
+                    SUBSTRING(remaining, LENGTH(SUBSTRING_INDEX(remaining, ',', 1)) + 2)
+                FROM split_questions
+                WHERE remaining != ''
+            )
+
+            SELECT 
+                sq.game_code,
+                laq.id AS question_id,
+                laq.title AS question_title,
+                laq.la_level_id,
+                laq.la_topic_id,
+                CASE 
+                    WHEN laq.type = 2 THEN 'Quiz'
+                    WHEN laq.type = 3 THEN 'Riddle'
+                    WHEN laq.type = 4 THEN 'Puzzle'
+                    ELSE 'Default'
+                END AS game_type,
+                CASE
+                    WHEN laq.question_type = 1 THEN 'Text'
+                    WHEN laq.question_type = 2 THEN 'Image'
+                    ELSE 'Default'
+                END AS question_type,
+                CASE
+                    WHEN laq.answer_option_id = laqo.id THEN 1
+                    ELSE 0
+                END AS is_answer,
+                laqo.title AS answer_option
+            FROM split_questions sq
+            INNER JOIN lifeapp.la_questions laq ON laq.id = CAST(TRIM(sq.question_id) AS UNSIGNED)
+            INNER JOIN lifeapp.la_question_options laqo ON laq.id = laqo.question_id
+            ORDER BY sq.game_code, sq.pos;
+            """
+            cursor.execute(sql, (game_code,))
+            questions = cursor.fetchall()
+
+        return jsonify(questions), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        connection.close()
+
+
+
+
+###################################################################################
+###################################################################################
+######################## RESOURCES/STUDENT_RELATED/MISSION APIs ######################
+###################################################################################
+###################################################################################
+@app.route('/api/missions_resource', methods=['POST'])
+def get_missions_resource():
+    try:
+        connection = get_db_connection()
+        with connection.cursor() as cursor:
+            cursor.execute("""
+                SELECT 
+                    lam.id, 
+                    lam.title, 
+                    lam.description, 
+                    lam.question,
+                    CASE 
+                        WHEN lam.type = 1 THEN 'Mission'
+                        WHEN lam.type = 2 THEN 'Quiz'
+                        WHEN lam.type = 3 THEN 'Riddle'
+                        WHEN lam.type = 4 THEN 'Puzzle'
+                        WHEN lam.type = 5 THEN 'Jigyasa'
+                        WHEN lam.type = 6 THEN 'Pragya'
+                        ELSE 'Default'
+                    END AS type,
+                    CASE 
+                        WHEN lam.allow_for = 1 THEN 'All'
+                        ELSE 'Teacher'
+                    END AS allow_for,
+                    las.title AS subject,
+                    lal.title AS level,
+                    lam.status As status
+                FROM lifeapp.la_missions lam
+                INNER JOIN lifeapp.la_subjects las ON las.id = lam.la_subject_id 
+                INNER JOIN lifeapp.la_levels lal ON lal.id = lam.la_level_id
+            """)
+            data = cursor.fetchall()
+        return jsonify(data), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        connection.close()
+
+
+@app.route('/api/add_mission', methods=['POST'])
+def add_mission():
+    try:
+        connection = get_db_connection()
+        with connection.cursor() as cursor:
+            form = request.form
+            subject_id = form.get('subject')
+            level_id = form.get('level')
+            type_id = form.get('type')
+            allow_for = form.get('allow_for')
+            title = form.get('title')
+            description = form.get('description')
+            question = form.get('question')
+
+            # Handle files
+            image = request.files.get('image')
+            document = request.files.get('document')
+            datetime_str = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            image_path = None
+            doc_path = None
+            status = form.get('status')
+
+            if image:
+                image_path = f"uploads/images/{image.filename}"
+                image.save(image_path)
+            if document:
+                doc_path = f"uploads/docs/{document.filename}"
+                document.save(doc_path)
+
+            sql = """
+                INSERT INTO lifeapp.la_missions 
+                (la_subject_id, la_level_id, type, allow_for, title, description, question, image, document, created_at, updated_at, status)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            """
+            cursor.execute(sql, (subject_id, level_id, type_id, allow_for, title, description, question, image_path, doc_path, datetime_str, datetime_str, int(status)))
+            connection.commit()
+            new_id = cursor.lastrowid
+
+            return jsonify({'id': new_id, 'title': title, 'subject': subject_id, 'level': level_id, 'type': type_id})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        connection.close()
+
+
+@app.route('/api/delete_mission', methods=['POST'])
+def delete_mission():
+    try:
+        connection = get_db_connection()
+        mission_id = request.json.get('id')
+        with connection.cursor() as cursor:
+            cursor.execute("DELETE FROM lifeapp.la_missions WHERE id = %s", (mission_id,))
+            connection.commit()
+        return jsonify({'success': True}), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        connection.close()
+
+@app.route('/api/update_mission', methods=['POST'])
+def update_mission():
+    try:
+        connection = get_db_connection()
+        with connection.cursor() as cursor:
+            form = request.form
+            mission_id = form.get('id')
+            subject_id = form.get('subject')
+            level_id = form.get('level')
+            type_id = form.get('type')
+            allow_for = form.get('allow_for')
+            title = form.get('title')
+            description = form.get('description')
+            question = form.get('question')
+            status = form.get('status')
+
+            # Handle optional files
+            image = request.files.get('image')
+            document = request.files.get('document')
+
+            image_path = None
+            doc_path = None
+
+            if image:
+                image_path = f"uploads/images/{image.filename}"
+                image.save(image_path)
+            if document:
+                doc_path = f"uploads/docs/{document.filename}"
+                document.save(doc_path)
+            datetime_str = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            # Base update query
+            update_sql = """
+                UPDATE lifeapp.la_missions
+                SET la_subject_id=%s, la_level_id=%s, type=%s, allow_for=%s, 
+                    title=%s, description=%s, question=%s, updated_at=%s, status=%s
+            """
+            params = [subject_id, level_id, type_id, allow_for, title, description, question, datetime_str, status]
+
+            # Add image/document only if provided
+            if image_path:
+                update_sql += ", image=%s"
+                params.append(image_path)
+            if doc_path:
+                update_sql += ", document=%s"
+                params.append(doc_path)
+
+            update_sql += " WHERE id=%s"
+            params.append(mission_id)
+
+            cursor.execute(update_sql, tuple(params))
+            connection.commit()
+
+            return jsonify({'success': True}), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        connection.close()
+
 if __name__ == '__main__':
     app.run(debug=True)
