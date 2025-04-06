@@ -2840,7 +2840,7 @@ def get_session_participants():
 
 ###################################################################################
 ###################################################################################
-######################## RESOURCES/STUDENT_RELATED/QUIZ APIs ######################
+############### RESOURCES/STUDENT_RELATED/QUIZ SESSIONS APIs ######################
 ###################################################################################
 ###################################################################################
 @app.route('/api/quiz_sessions', methods=['POST'])
@@ -3061,12 +3061,75 @@ def get_game_questions():
     finally:
         connection.close()
 
+@app.route('/api/game_questions_with_answers', methods=['POST'])
+def get_game_questions_with_answers():
+    try:
+        data = request.get_json()
+        game_id = data.get("game_id")
+        user_id = data.get("user_id")
+
+        connection = get_db_connection()
+        with connection.cursor(pymysql.cursors.DictCursor) as cursor:
+            sql = """
+            WITH RECURSIVE split_questions AS (
+                SELECT 
+                    game_code,
+                    TRIM(BOTH '[]' FROM questions) AS cleaned_questions,
+                    1 AS pos,
+                    SUBSTRING_INDEX(TRIM(BOTH '[]' FROM questions), ',', 1) AS question_id,
+                    SUBSTRING(TRIM(BOTH '[]' FROM questions), LENGTH(SUBSTRING_INDEX(TRIM(BOTH '[]' FROM questions), ',', 1)) + 2) AS remaining
+                FROM lifeapp.la_quiz_games
+                WHERE questions != '0' AND game_code = %s
+
+                UNION ALL
+
+                SELECT 
+                    game_code,
+                    cleaned_questions,
+                    pos + 1,
+                    SUBSTRING_INDEX(remaining, ',', 1),
+                    SUBSTRING(remaining, LENGTH(SUBSTRING_INDEX(remaining, ',', 1)) + 2)
+                FROM split_questions
+                WHERE remaining != ''
+            )
+
+            SELECT 
+                sq.pos                                  AS question_position,
+                sq.question_id                          AS question_id,
+                laq.title                               AS question_title,
+                laqo.id                                 AS option_id,
+                laqo.title                              AS option_text,
+                laqo.id = laq.answer_option_id          AS is_correct_option,
+                ans.la_question_option_id = laqo.id     AS selected_by_user,
+                COALESCE(ans.is_correct, 0)             AS user_is_correct,
+                ans.coins                               AS coins_awarded
+            FROM split_questions sq
+            JOIN lifeapp.la_questions laq 
+              ON laq.id = CAST(TRIM(sq.question_id) AS UNSIGNED)
+            JOIN lifeapp.la_question_options laqo 
+              ON laq.id = laqo.question_id
+            LEFT JOIN lifeapp.la_quiz_game_question_answers ans
+              ON ans.la_quiz_game_id = %s
+             AND ans.user_id = %s
+             AND ans.la_question_id = laq.id
+            ORDER BY sq.pos, laqo.id;
+            """
+            cursor.execute(sql, (game_id, game_id, user_id))
+            rows = cursor.fetchall()
+
+        return jsonify(rows), 200
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        connection.close()
+
 
 
 
 ###################################################################################
 ###################################################################################
-######################## RESOURCES/STUDENT_RELATED/MISSION APIs ######################
+##################### RESOURCES/STUDENT_RELATED/MISSION APIs ######################
 ###################################################################################
 ###################################################################################
 @app.route('/api/missions_resource', methods=['POST'])
@@ -3224,6 +3287,115 @@ def update_mission():
         return jsonify({'error': str(e)}), 500
     finally:
         connection.close()
+
+
+###################################################################################
+###################################################################################
+############## RESOURCES/STUDENT_RELATED/QUIZ questions APIs ######################
+###################################################################################
+###################################################################################
+
+@app.route('/api/quiz_questions', methods=['POST'])
+def get_quiz_questions():
+    data =  request.get_json() or {}
+    subject_id = data.get('subject_id')
+    level_id = data.get('level_id')
+    status = data.get('status')
+
+    connection = get_db_connection()
+    try: 
+        with connection.cursor() as cursor:
+
+            base_query = """
+                SELECT laq.id, laq.title as question_title, lal.title as level_title, las.title as subject_title,
+                    CASE WHEN laq.status = 0 THEN 'Inactive' ELSE 'Active' END as status,
+                    laq.la_topic_id,
+                    CASE 
+                        WHEN laq.type = 2 THEN 'Quiz'
+                        WHEN laq.type = 3 THEN 'Riddle'
+                        WHEN laq.type = 4 THEN 'Puzzle'
+                        ELSE 'Default'
+                    END as game_type,
+                    CASE 
+                        WHEN laq.question_type = 1 THEN 'Text'
+                        WHEN laq.question_type = 2 THEN 'Image'
+                        ELSE 'Default'
+                    END as question_type,
+                    CASE 
+                        WHEN laq.answer_option_id = laqo.id THEN 1 ELSE 0
+                    END as is_answer,
+                    laqo.title as answer_option
+                FROM lifeapp.la_question_options laqo
+                INNER JOIN lifeapp.la_questions laq ON laq.id = laqo.question_id
+                INNER JOIN lifeapp.la_levels lal ON lal.id = laq.la_level_id
+                INNER JOIN lifeapp.la_subjects las ON las.id = laq.la_subject_id
+                WHERE 1 = 1
+            """
+            filters = []
+            if subject_id:
+                base_query += " AND laq.la_subject_id = %s"
+                filters.append(subject_id)
+            if level_id:
+                base_query += " AND laq.la_level_id = %s"
+                filters.append(level_id)
+
+            if status in ('0', '1'):
+                base_query += " AND laq.status = %s"
+                filters.append(int(status))
+
+            cursor.execute(base_query, filters)
+            results = cursor.fetchall()
+
+            return jsonify(results)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        connection.close()
+
+@app.route('/api/add_quiz_question', methods=['POST'])
+def add_quiz_question():
+    data = request.get_json() or {}
+    question_title = data['question_title']
+    subject_id = data['subject_id']
+    level_id = data['level_id']
+    topic_id = data.get('topic_id', 1)
+    created_by = data.get('created_by', 1)
+    question_type = data.get('question_type', 1)
+    game_type = data.get('type', 2)
+    status = data.get('status', 1)
+    options = data['options']  # list of dicts: [{"title": "Option 1", "is_correct": true}, ...]
+    datetime_str = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    connection = get_db_connection()
+    try:
+        cursor = connection.cursor()
+
+        cursor.execute("""
+            INSERT INTO lifeapp.la_questions (title, la_subject_id, la_level_id, la_topic_id, created_by, question_type, type, status, created_at, updated_at)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        """, (question_title, subject_id, level_id, topic_id, created_by, question_type, game_type, status, datetime_str, datetime_str))
+        question_id = cursor.lastrowid
+
+        answer_option_id = None
+        for option in options:
+            cursor.execute("INSERT INTO lifeapp.la_question_options (question_id, title, created_at, updated_at) VALUES (%s, %s, %s, %s)",
+                        (question_id, option['title'], datetime_str, datetime_str))
+            option_id = cursor.lastrowid
+            if option.get('is_correct'):
+                answer_option_id = option_id
+
+        # update the correct answer id in the question
+        cursor.execute("UPDATE lifeapp.la_questions SET answer_option_id = %s WHERE id = %s",
+                    (answer_option_id, question_id))
+
+        connection.commit()
+        #connection.close()
+
+        return jsonify({"success": True, "question_id": question_id})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        connection.close()
+
 
 if __name__ == '__main__':
     app.run(debug=True)

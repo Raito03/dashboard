@@ -281,6 +281,7 @@ export function Sidebar() {
                     <NavItem href="/student_related/mission" label="Mission" isNested />
                     <NavItem href="/student_related/jigyasa" label="Jigyasa" isNested />
                     <NavItem href="/student_related/pragya" label="Pragya" isNested />
+                    <NavItem href="/student_related/quiz" label="Quiz" isNested />
                     <NavItem href="/student_related/vision" label="Vision" isNested />
                     <NavItem href="/student_related/quiz_sessions" label="Quiz Sessions" isNested />
                     </div>
