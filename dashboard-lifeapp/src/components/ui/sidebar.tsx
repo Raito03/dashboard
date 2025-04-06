@@ -278,9 +278,11 @@ export function Sidebar() {
                 {
                   openSections.student_related && (
                     <div className="pl-4 space-y-0.5">
-                    <NavItem href="/student_related/quiz_sessions" label="Quiz Sessions" isNested />
                     <NavItem href="/student_related/mission" label="Mission" isNested />
+                    <NavItem href="/student_related/jigyasa" label="Jigyasa" isNested />
+                    <NavItem href="/student_related/pragya" label="Pragya" isNested />
                     <NavItem href="/student_related/vision" label="Vision" isNested />
+                    <NavItem href="/student_related/quiz_sessions" label="Quiz Sessions" isNested />
                     </div>
                   )
                 }

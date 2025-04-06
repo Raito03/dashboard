@@ -26,7 +26,7 @@ interface Mission {
     status: number;
 }
 
-export default function StudentRelatedMission() {
+export default function StudentRelatedJigyasa() {
     const [missions, setMissions] = useState<Mission[]>([]);
     const [loading, setLoading] = useState(true);
     const [currentPage, setCurrentPage] = useState(1);
@@ -172,7 +172,7 @@ export default function StudentRelatedMission() {
     };
     
     const [filterStatus, setFilterStatus] = useState('');
-    const [filterType, setFilterType] = useState('Mission');
+    const [filterType, setFilterType] = useState('Jigyasa');
     const [filterSubject, setFilterSubject] = useState('');
     const [filterLevel, setFilterLevel] = useState('');
     const [filteredData, setFilteredData] = useState<Mission[]>([]);
@@ -215,8 +215,8 @@ export default function StudentRelatedMission() {
             <div className="page-wrapper" style={{ marginLeft: '250px' }}>
                 <div className="page-body">
                     <div className="container-xl pt-4 pb-4 space-y-4">
-                        <h2 className="text-xl font-semibold">Missions</h2>
-                        <button className="px-4 py-2 bg-sky-900 text-white rounded w-[15%]" onClick={() => setOpenModal(true)}>Add New Mission</button>
+                        <h2 className="text-xl font-semibold">Jigyasa</h2>
+                        <button className="px-4 py-2 bg-sky-900 text-white rounded w-[15%]" onClick={() => setOpenModal(true)}>Add New Jigyasa</button>
 
                         {loading ? (
                             <div className="flex justify-center py-10">
@@ -244,11 +244,11 @@ export default function StudentRelatedMission() {
                                         className="border rounded px-3 py-2"
                                     >
                                         <option value="">All Types</option>
+                                        <option value="Jigyasa">Jigyasa</option>
                                         <option value="Mission">Mission</option>
                                         {/* <option value="Quiz">Quiz</option>
                                         <option value="Riddle">Riddle</option>
                                         <option value="Puzzle">Puzzle</option> */}
-                                        <option value="Jigyasa">Jigyasa</option>
                                         <option value="Pragya">Pragya</option>
                                     </select>
 
@@ -288,7 +288,7 @@ export default function StudentRelatedMission() {
                                     <button
                                          onClick={() => {
                                             setFilterStatus('');
-                                            setFilterType('Mission');
+                                            setFilterType('Jigyasa');
                                             setFilterSubject('');
                                             setFilterLevel('');
                                           }}
