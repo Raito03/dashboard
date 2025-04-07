@@ -804,7 +804,7 @@ export default function StudentRelatedQuiz() {
                 <button type="button" className="btn-close" onClick={() => setShowTopicDeleteModal(false)}></button>
               </div>
               <div className="modal-body">
-                <p>Are you sure you want to delete the topic "{JSON.parse(topicToDelete.title).en}"?</p>
+                <p>Are you sure you want to delete the topic= {JSON.parse(topicToDelete.title).en}?</p>
               </div>
               <div className="modal-footer">
                 <button className="btn btn-secondary" onClick={() => setShowTopicDeleteModal(false)}>Cancel</button>
