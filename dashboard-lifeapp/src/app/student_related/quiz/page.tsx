@@ -21,6 +21,7 @@ interface QuizQuestion {
     question_title: string;
     subject_title: string;
     level_title: string;
+    topic_title: string | null;
     status: string;
     question_type?: string;
     options: {
@@ -41,14 +42,25 @@ type Level = {
   title: string;
 };
 
+type Topic = {
+    id: number;
+    title: string; // stored as JSON string, so you'll parse it when displaying
+    la_subject_id: string;
+    la_level_id: string;
+    status: string;
+    allow_for: string;
+    type: string;
+  };
+
 export default function StudentRelatedQuiz() {
     const [questions, setQuestions] = useState<QuizQuestion[]>([]);
     const [subjects, setSubjects] = useState<Subject[]>([]);
     const [levels, setLevels] = useState<Level[]>([]);
-
-    const [filters, setFilters] = useState({ subject_id: '', level_id: '', status: '' });
+    const [topics, setTopics] = useState<Topic[]>([]);
+    const [filters, setFilters] = useState({ subject_id: '', level_id: '', status: '', topic_id: '' });
     const [loading, setLoading] = useState(false);
     const [showModal, setShowModal] = useState(false);
+    const [showTopicListModal, setShowTopicListModal] = useState(false);
     const [confirmDelete, setConfirmDelete] = useState(false);
     const [questionToDelete, setQuestionToDelete] = useState<number | null>(null);
 
@@ -56,11 +68,32 @@ export default function StudentRelatedQuiz() {
         question_title: '',
         subject_id: '',
         level_id: '',
+        topic_id: '',
         status: '1',
         type: '2',
         question_type: '1',
         options: ['', '', '', ''],
         correct_index: 0,
+    });
+
+
+    // New state for editing a quiz question
+    const [showQuizEditModal, setShowQuizEditModal] = useState(false);
+    const [quizToEdit, setQuizToEdit] = useState<QuizQuestion | null>(null);
+
+    // Topic management states
+    const [showTopicAddModal, setShowTopicAddModal] = useState(false);
+    const [showTopicEditModal, setShowTopicEditModal] = useState(false);
+    const [showTopicDeleteModal, setShowTopicDeleteModal] = useState(false);
+    const [topicToEdit, setTopicToEdit] = useState<Topic | null>(null);
+    const [topicToDelete, setTopicToDelete] = useState<Topic | null>(null);
+    const [newTopic, setNewTopic] = useState({
+        title: '',
+        la_subject_id: '',
+        la_level_id: '',
+        status: '1',
+        allow_for: '1',
+        type: '2',
     });
 
     useEffect(() => {
@@ -77,9 +110,12 @@ export default function StudentRelatedQuiz() {
           })
             .then(res => res.json())
             .then(data => {
-              console.log('Levels response:', data);
+            //   console.log('Levels response:', data);
               setLevels(data);  // <- might need to change to setLevels(data.levels) or similar
             });
+        fetch(`${api_startpoint}/api/topics`, { method: 'POST' })
+            .then(res => res.json())
+            .then(setTopics);
     }, []);
 
     useEffect(() => {
@@ -91,7 +127,8 @@ export default function StudentRelatedQuiz() {
         const payload = {
             subject_id: filters.subject_id,
             level_id: filters.level_id,
-            status: filters.status
+            status: filters.status,
+            topic_id: filters.topic_id,
         };
         const res = await fetch(`${api_startpoint}/api/quiz_questions`, {
             method: 'POST',
@@ -107,6 +144,7 @@ export default function StudentRelatedQuiz() {
                     question_title: curr.question_title,
                     subject_title: curr.subject_title,
                     level_title: curr.level_title,
+                    topic_title: curr.topic_title,
                     status: curr.status,
                     options: []
                 };
@@ -162,6 +200,81 @@ export default function StudentRelatedQuiz() {
     const paginatedQuestions = questions.slice(indexOfFirst, indexOfLast);
     const totalPages = Math.ceil(questions.length / questionsPerPage);
 
+
+    // Open edit modal and prefill quizToEdit
+    const openEditQuizModal = (q: QuizQuestion) => {
+        setQuizToEdit(q);
+        setShowQuizEditModal(true);
+    };
+
+    const handleUpdateQuiz = async () => {
+        if (!quizToEdit) return;
+        // Prepare payload by converting options if necessary
+        const payload = {
+        ...quizToEdit,
+        options: quizToEdit.options.map((opt, idx) => ({
+            title: opt.title,
+            is_correct: idx === quizToEdit.options.findIndex(o => o.is_answer === 1) ? 1 : 0
+        }))
+        };
+        await fetch(`${api_startpoint}/api/update_quiz_question/${quizToEdit.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+        });
+        setShowQuizEditModal(false);
+        fetchData();
+    };
+
+    // Topic management handlers
+    const handleAddTopic = async () => {
+        await fetch(`${api_startpoint}/api/add_topic`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newTopic)
+        });
+        setShowTopicAddModal(false);
+        // Refresh topics list
+        fetch(`${api_startpoint}/api/topics`, { method: 'POST' })
+        .then(res => res.json())
+        .then(setTopics);
+    };
+
+    const openEditTopicModal = (topic: Topic) => {
+        setTopicToEdit(topic);
+        setShowTopicEditModal(true);
+    };
+
+    const handleUpdateTopic = async () => {
+        if (!topicToEdit) return;
+        await fetch(`${api_startpoint}/api/update_topic/${topicToEdit.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(topicToEdit)
+        });
+        setShowTopicEditModal(false);
+        fetch(`${api_startpoint}/api/topics`, { method: 'POST' })
+        .then(res => res.json())
+        .then(setTopics);
+    };
+
+    const openDeleteTopicModal = (topic: Topic) => {
+        setTopicToDelete(topic);
+        setShowTopicDeleteModal(true);
+    };
+
+    const handleDeleteTopic = async () => {
+        if (!topicToDelete) return;
+        await fetch(`${api_startpoint}/api/delete_topic/${topicToDelete.id}`, {
+        method: 'DELETE',
+        });
+        setShowTopicDeleteModal(false);
+        setTopicToDelete(null);
+        fetch(`${api_startpoint}/api/topics`, { method: 'POST' })
+        .then(res => res.json())
+        .then(setTopics);
+    };
+
     return  (
         <div className={`page bg-body ${inter.className} font-sans`}>
             <Sidebar />
@@ -175,29 +288,49 @@ export default function StudentRelatedQuiz() {
                             </div>
                             
                             <button className="btn btn-primary d-flex align-items-center" onClick={() => setShowModal(true)}><IconPlus className="me-2" /> Add New Quiz</button>
+                            <button
+                                className="btn btn-info d-flex align-items-center"
+                                onClick={() => setShowTopicListModal(true)}
+                                >
+                                Topics List
+                            </button>
+
+                            <button className="btn btn-secondary d-flex align-items-center" onClick={() => setShowTopicAddModal(true)}>
+                                <IconPlus className="me-2" /> Add New Set/Topic
+                            </button>
                         </div>
 
+                        {/* Filters */}
                         <div className="row g-2 mb-4">
-                            <div className="col-md-4">
+                            <div className="col-md-3">
                                 <label className="form-label">Subject</label>
                                 <select className="form-select "  style={{ color: 'black !important' }} onChange={(e) => setFilters({ ...filters, subject_id: e.target.value })}>
                                     <option value=''>All Subjects</option>
                                     {subjects.map(sub => <option key={sub.id} value={sub.id}>{JSON.parse(sub.title).en}</option>)}
                                 </select>
                             </div>
-                            <div className="col-md-4">
+                            <div className="col-md-3">
                                 <label className="form-label">Level</label>
                                 <select className="form-select" onChange={(e) => setFilters({ ...filters, level_id: e.target.value })}>
                                     <option value=''>All Levels</option>
                                     {levels.map(lv => <option key={lv.id} value={lv.id}>{JSON.parse(lv.title).en}</option>)}
                                 </select>
                             </div>
-                            <div className="col-md-4">
+                            <div className="col-md-3">
                                 <label className="form-label">Status</label>
                                 <select className="form-select" onChange={(e) => setFilters({ ...filters, status: e.target.value })}>
                                     <option value=''>All</option>
                                     <option value='1'>Active</option>
                                     <option value='0'>Inactive</option>
+                                </select>
+                            </div>
+                            <div className="col-md-3">
+                                <label className="form-label">Topic/Set</label>
+                                <select className="form-select" onChange={(e) => setFilters({ ...filters, topic_id: e.target.value })}>
+                                <option value=''>All Topics</option>
+                                {topics.map((topic: Topic) => (
+                                    <option key={topic.id} value={topic.id}>{JSON.parse(topic.title).en}</option>
+                                ))}
                                 </select>
                             </div>
                         </div>
@@ -214,10 +347,15 @@ export default function StudentRelatedQuiz() {
                                             <div>
                                                 <div className="fw-bold">{JSON.parse(q.question_title).en}</div>
                                                 <div className="text-muted small">
-                                                    Subject: {JSON.parse(q.subject_title).en} | Level: {JSON.parse(q.level_title).en}
+                                                    Subject: {JSON.parse(q.subject_title).en} | Level: {JSON.parse(q.level_title).en} | Topic: {q.topic_title ? JSON.parse(q.topic_title).en : 'N/A'}
                                                 </div>
                                             </div>
-                                            <button className="btn btn-danger" onClick={() => confirmDeleteQuestion(q.id)}><IconTrash /> Delete</button>
+                                            <div className="">
+                                                <button className="btn btn-secondary me-2" onClick={() => openEditQuizModal(q)}>
+                                                    <IconEdit /> Edit
+                                                </button>
+                                                <button className="btn btn-danger" onClick={() => confirmDeleteQuestion(q.id)}><IconTrash /> Delete</button>
+                                            </div>
                                         </div>
                                         <div className="row">
                                             {q.options.map((opt, idx) => (
@@ -254,6 +392,8 @@ export default function StudentRelatedQuiz() {
                     </div>
                 </div>
             </div>
+
+            {/* Add Quiz Modal */}
             {showModal && (
                 <div className="modal d-block bg-black bg-opacity-50" tabIndex={-1}>
                     <div className="modal-dialog">
@@ -292,6 +432,15 @@ export default function StudentRelatedQuiz() {
                                     ))}
                                 </div>
                                 <div className="mb-2">
+                                    <label className="form-label">Topic/Set</label>
+                                    <select className="form-select" value={newQuestion.topic_id} onChange={(e) => setNewQuestion({ ...newQuestion, topic_id: e.target.value })}>
+                                        <option value=''>Select Topic</option>
+                                        {topics.map((topic: Topic) => (
+                                        <option key={topic.id} value={topic.id}>{JSON.parse(topic.title).en}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div className="mb-2">
                                     <label className="form-label">Correct Option</label>
                                     <select className="form-select" value={newQuestion.correct_index} onChange={(e) => setNewQuestion({ ...newQuestion, correct_index: parseInt(e.target.value) })}>
                                         {newQuestion.options.map((_, idx) => (
@@ -307,7 +456,7 @@ export default function StudentRelatedQuiz() {
                     </div>
                 </div>
             )}
-
+            {/* Delete Quiz Modal */}
             {confirmDelete && (
                 <div className="modal d-block" tabIndex={-1}>
                     <div className="modal-dialog">
@@ -325,6 +474,239 @@ export default function StudentRelatedQuiz() {
                             </div>
                         </div>
                     </div>
+                </div>
+            )}
+
+            {/* Edit Quiz Modal */}
+            {showQuizEditModal && quizToEdit && (
+                <div className="modal d-block" tabIndex={-1}>
+                <div className="modal-dialog">
+                    <div className="modal-content">
+                    <div className="modal-header">
+                        <h5 className="modal-title">Edit Quiz Question</h5>
+                        <button type="button" className="btn-close" onClick={() => setShowQuizEditModal(false)}></button>
+                    </div>
+                    <div className="modal-body">
+                        <div className="mb-2">
+                        <label className="form-label">Question Title</label>
+                        <textarea className="form-control" value={quizToEdit.question_title} onChange={(e) =>
+                            setQuizToEdit({ ...quizToEdit, question_title: e.target.value })
+                        } />
+                        </div>
+                        <div className="mb-2">
+                        <label className="form-label">Subject</label>
+                        <select className="form-select" value={quizToEdit.subject_title} onChange={(e) => {
+                            /* In a real app, you'd map the subject title change to subject id */
+                        }}>
+                            {/* Render subjects options if needed */}
+                        </select>
+                        </div>
+                        <div className="mb-2">
+                        <label className="form-label">Level</label>
+                        <select className="form-select" value={quizToEdit.level_title} onChange={(e) => {
+                            /* In a real app, map to level id */
+                        }}>
+                            {/* Render levels options if needed */}
+                        </select>
+                        </div>
+                        <div className="mb-2">
+                        <label className="form-label">Topic/Set</label>
+                        <select className="form-select" value={quizToEdit.topic_title || ''} onChange={(e) => {
+                            /* Map to topic id if necessary */
+                        }}>
+                            {/* Render topics options if needed */}
+                        </select>
+                        </div>
+                        {/* For simplicity, editing options can be implemented similarly */}
+                        <div className="mb-2">
+                        {quizToEdit.options.map((opt, i) => (
+                            <div key={i} className="mb-2">
+                            <label className="form-label">Option {i + 1}</label>
+                            <input
+                                className="form-control"
+                                value={opt.title}
+                                onChange={(e) => {
+                                const newOptions = [...quizToEdit.options];
+                                newOptions[i].title = e.target.value;
+                                setQuizToEdit({ ...quizToEdit, options: newOptions });
+                                }}
+                            />
+                            </div>
+                        ))}
+                        </div>
+                        <div className="mb-2">
+                        <label className="form-label">Correct Option</label>
+                        <select className="form-select" onChange={(e) => {
+                            const correctIdx = parseInt(e.target.value);
+                            // Update options to mark the correct answer
+                            const updatedOptions = quizToEdit.options.map((opt, idx) => ({
+                            ...opt,
+                            is_answer: idx === correctIdx ? 1 : 0
+                            }));
+                            setQuizToEdit({ ...quizToEdit, options: updatedOptions });
+                        }}>
+                            {quizToEdit.options.map((_, idx) => (
+                            <option key={idx} value={idx}>Option {idx + 1}</option>
+                            ))}
+                        </select>
+                        </div>
+                    </div>
+                    <div className="modal-footer">
+                        <button className="btn btn-primary" onClick={handleUpdateQuiz}>Save Changes</button>
+                    </div>
+                    </div>
+                </div>
+                </div>
+            )}
+            {/* Add New Topic/Set Modal */}
+            {showTopicAddModal && (
+                <div className="modal d-block bg-black bg-opacity-50" tabIndex={-1}>
+                <div className="modal-dialog">
+                    <div className="modal-content">
+                    <div className="modal-header">
+                        <h5 className="modal-title">Add New Set/Topic</h5>
+                        <button type="button" className="btn-close" onClick={() => setShowTopicAddModal(false)}></button>
+                    </div>
+                    <div className="modal-body">
+                        <div className="mb-2">
+                        <label className="form-label">Topic Title</label>
+                        <input className="form-control" value={newTopic.title} onChange={(e) => setNewTopic({ ...newTopic, title: e.target.value })} />
+                        </div>
+                        <div className="mb-2">
+                        <label className="form-label">Subject</label>
+                        <select className="form-select" value={newTopic.la_subject_id} onChange={(e) => setNewTopic({ ...newTopic, la_subject_id: e.target.value })}>
+                            <option value=''>Select Subject</option>
+                            {subjects.map((sub: Subject) => (
+                            <option key={sub.id} value={sub.id}>{JSON.parse(sub.title).en}</option>
+                            ))}
+                        </select>
+                        </div>
+                        <div className="mb-2">
+                        <label className="form-label">Level</label>
+                        <select className="form-select" value={newTopic.la_level_id} onChange={(e) => setNewTopic({ ...newTopic, la_level_id: e.target.value })}>
+                            <option value=''>Select Level</option>
+                            {levels.map((lv: Level) => (
+                            <option key={lv.id} value={lv.id}>{JSON.parse(lv.title).en}</option>
+                            ))}
+                        </select>
+                        </div>
+                    </div>
+                    <div className="modal-footer">
+                        <button className="btn btn-primary" onClick={handleAddTopic}>Submit</button>
+                    </div>
+                    </div>
+                </div>
+                </div>
+            )}
+            {/* Show Topic Modal */}
+            {showTopicListModal && (
+            <div className="modal d-block bg-black bg-opacity-50" tabIndex={-1}>
+                <div className="modal-dialog modal-lg">
+                <div className="modal-content">
+                    <div className="modal-header">
+                    <h5 className="modal-title">Topics List</h5>
+                    <button type="button" className="btn-close" onClick={() => setShowTopicListModal(false)}></button>
+                    </div>
+                    <div className="modal-body">
+                    <table className="table table-striped">
+                        <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Topic Title</th>
+                            <th>Subject</th>
+                            <th>Level</th>
+                            <th>Status</th>
+                            <th>Actions</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        {topics.map((topic: Topic) => (
+                            <tr key={topic.id}>
+                            <td>{topic.id}</td>
+                            <td>{JSON.parse(topic.title).en}</td>
+                            <td>{/* Optionally, map the subject id to its title */}</td>
+                            <td>{/* Optionally, map the level id to its title */}</td>
+                            <td>{topic.status === '1' ? 'Active' : 'Inactive'}</td>
+                            <td>
+                                <button className="btn btn-secondary btn-sm me-2" onClick={() => openEditTopicModal(topic)}>
+                                Edit
+                                </button>
+                                <button className="btn btn-danger btn-sm" onClick={() => openDeleteTopicModal(topic)}>
+                                Delete
+                                </button>
+                            </td>
+                            </tr>
+                        ))}
+                        </tbody>
+                    </table>
+                    </div>
+                    <div className="modal-footer">
+                    <button className="btn btn-secondary" onClick={() => setShowTopicListModal(false)}>Close</button>
+                    </div>
+                </div>
+                </div>
+            </div>
+            )}
+    
+            {/* Edit Topic Modal */}
+            {showTopicEditModal && topicToEdit && (
+                <div className="modal d-block bg-black bg-opacity-50" tabIndex={-1}>
+                <div className="modal-dialog">
+                    <div className="modal-content">
+                    <div className="modal-header">
+                        <h5 className="modal-title">Edit Topic</h5>
+                        <button type="button" className="btn-close" onClick={() => setShowTopicEditModal(false)}></button>
+                    </div>
+                    <div className="modal-body">
+                        <div className="mb-2">
+                        <label className="form-label">Topic Title</label>
+                        <input className="form-control" value={topicToEdit.title || ""} onChange={(e) => setTopicToEdit({ ...topicToEdit!, title: e.target.value })} />
+                        </div>
+                        <div className="mb-2">
+                        <label className="form-label">Subject</label>
+                        <select className="form-select" value={topicToEdit.la_subject_id || ""} onChange={(e) => setTopicToEdit({ ...topicToEdit!, la_subject_id: e.target.value })}>
+                            <option value=''>Select Subject</option>
+                            {subjects.map((sub: Subject) => (
+                            <option key={sub.id} value={sub.id}>{JSON.parse(sub.title).en}</option>
+                            ))}
+                        </select>
+                        </div>
+                        <div className="mb-2">
+                        <label className="form-label">Level</label>
+                        <select className="form-select" value={topicToEdit.la_level_id || ""} onChange={(e) => setTopicToEdit({ ...topicToEdit!, la_level_id: e.target.value })}>
+                            <option value=''>Select Level</option>
+                            {levels.map((lv: Level) => (
+                            <option key={lv.id} value={lv.id}>{JSON.parse(lv.title).en}</option>
+                            ))}
+                        </select>
+                        </div>
+                    </div>
+                    <div className="modal-footer">
+                        <button className="btn btn-primary" onClick={handleUpdateTopic}>Save Changes</button>
+                    </div>
+                    </div>
+                </div>
+                </div>
+            )}
+
+            {/* Delete Topic Modal */}
+            {showTopicDeleteModal && topicToDelete && (
+                <div className="modal d-block bg-black bg-opacity-50" tabIndex={-1}>
+                <div className="modal-dialog">
+                    <div className="modal-content">
+                    <div className="modal-header">
+                        <h5 className="modal-title">Confirm Delete Topic</h5>
+                        <button type="button" className="btn-close" onClick={() => setShowTopicDeleteModal(false)}></button>
+                    </div>
+                    <div className="modal-body">
+                        <p>Are you sure you want to delete the topic = {JSON.parse(topicToDelete.title).en}?</p>
+                    </div>
+                    <div className="modal-footer">
+                        <button className="btn btn-secondary" onClick={() => setShowTopicDeleteModal(false)}>Cancel</button>
+                        <button className="btn btn-danger" onClick={handleDeleteTopic}>Delete</button>
+                    </div>
+                    </div>
+                </div>
                 </div>
             )}
         </div>

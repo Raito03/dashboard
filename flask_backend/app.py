@@ -684,6 +684,143 @@ def search():
         connection.close()
 
 
+@app.route('/api/add_student', methods=['POST'])
+def add_student():
+    data = request.get_json() or {}
+
+    # Basic student fields
+    name         = data.get('name')
+    guardian     = data.get('guardian_name')
+    email        = data.get('email')
+    username     = data.get('username')
+    mobile_no    = data.get('mobile_no')
+    dob          = data.get('dob')
+    grade        = data.get('grade')
+    city         = data.get('city')
+    state        = data.get('state')
+    school_id    = data.get('school_id')
+    school_name  = data.get('school_name')
+    school_code  = data.get('school_code')
+
+    # Validate required
+    if not all([name, email, username, mobile_no]):
+        return jsonify({'error': 'Missing required fields'}), 400
+
+    conn = get_db_connection()
+    try:
+        # If user passed school_name instead of ID, look it up
+        if not school_id and school_name:
+            with conn.cursor() as cur:
+                cur.execute("SELECT id FROM lifeapp.schools WHERE name = %s", (school_name,))
+                row = cur.fetchone()
+                if not row:
+                    return jsonify({'error': f"Unknown school '{school_name}'"}), 400
+                school_id = row['id']
+
+        sql = """
+          INSERT INTO lifeapp.users
+            (name, guardian_name, email, username, mobile_no, dob,
+             grade, city, state, school_id, school_code, type, created_at)
+          VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,3,NOW())
+        """
+        params = (
+          name, guardian, email, username, mobile_no, dob,
+          grade, city, state, school_id, school_code
+        )
+        with conn.cursor() as cur:
+            cur.execute(sql, params)
+            conn.commit()
+            new_id = cur.lastrowid
+
+        return jsonify({'success': True, 'id': new_id}), 201
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+    finally:
+        conn.close()
+
+@app.route('/api/edit_student/<int:user_id>', methods=['PUT'])
+def edit_student(user_id):
+    data = request.get_json() or {}
+    # Fields we allow editing
+    name         = data.get('name')
+    guardian     = data.get('guardian_name')
+    email        = data.get('email')
+    username     = data.get('username')
+    mobile_no    = data.get('mobile_no')
+    dob          = data.get('dob')
+    grade        = data.get('grade')
+    city         = data.get('city')
+    state        = data.get('state')
+    school_id    = data.get('school_id')
+    school_name  = data.get('school_name')
+    school_code  = data.get('school_code')
+
+    conn = get_db_connection()
+    try:
+        # resolve school_name → school_id if needed
+        if not school_id and school_name:
+            with conn.cursor() as cur:
+                cur.execute("SELECT id FROM lifeapp.schools WHERE name = %s", (school_name,))
+                row = cur.fetchone()
+                if not row:
+                    return jsonify({'error': f"Unknown school '{school_name}'"}), 400
+                school_id = row['id']
+
+        # Build dynamic SET clause
+        updates = []
+        params = []
+        for field, val in [
+            ('name', name), ('guardian_name', guardian),
+            ('email', email), ('username', username),
+            ('mobile_no', mobile_no), ('dob', dob),
+            ('grade', grade), ('city', city), ('state', state),
+            ('school_id', school_id), ('school_code', school_code)
+        ]:
+            if val is not None:
+                updates.append(f"{field} = %s")
+                params.append(val)
+        if not updates:
+            return jsonify({'error': 'No fields to update'}), 400
+
+        sql = f"""
+          UPDATE lifeapp.users
+             SET {', '.join(updates)}
+           WHERE id = %s
+        """
+        params.append(user_id)
+
+        with conn.cursor() as cur:
+            cur.execute(sql, tuple(params))
+            conn.commit()
+
+        return jsonify({'success': True}), 200
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+    finally:
+        conn.close()
+
+@app.route('/api/delete_student', methods=['POST'])
+def delete_student():
+    data = request.get_json() or {}
+    user_id = data.get('id')
+    if not user_id:
+        return jsonify({'error': 'Missing student ID'}), 400
+
+    try:
+        conn = get_db_connection()
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM lifeapp.users WHERE id = %s", (user_id,))
+            conn.commit()
+        return jsonify({'success': True}), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        conn.close()
+
 
 @app.route('/api/coupon_redeem_search', methods=['GET'])
 def fetch_coupon_redeem_list():
@@ -3295,21 +3432,79 @@ def update_mission():
 ###################################################################################
 ###################################################################################
 
+# @app.route('/api/quiz_questions', methods=['POST'])
+# def get_quiz_questions():
+#     data =  request.get_json() or {}
+#     subject_id = data.get('subject_id')
+#     level_id = data.get('level_id')
+#     status = data.get('status')
+
+#     connection = get_db_connection()
+#     try: 
+#         with connection.cursor() as cursor:
+
+#             base_query = """
+#                 SELECT laq.id, laq.title as question_title, lal.title as level_title, las.title as subject_title,
+#                     CASE WHEN laq.status = 0 THEN 'Inactive' ELSE 'Active' END as status,
+#                     laq.la_topic_id,
+#                     CASE 
+#                         WHEN laq.type = 2 THEN 'Quiz'
+#                         WHEN laq.type = 3 THEN 'Riddle'
+#                         WHEN laq.type = 4 THEN 'Puzzle'
+#                         ELSE 'Default'
+#                     END as game_type,
+#                     CASE 
+#                         WHEN laq.question_type = 1 THEN 'Text'
+#                         WHEN laq.question_type = 2 THEN 'Image'
+#                         ELSE 'Default'
+#                     END as question_type,
+#                     CASE 
+#                         WHEN laq.answer_option_id = laqo.id THEN 1 ELSE 0
+#                     END as is_answer,
+#                     laqo.title as answer_option
+#                 FROM lifeapp.la_question_options laqo
+#                 INNER JOIN lifeapp.la_questions laq ON laq.id = laqo.question_id
+#                 INNER JOIN lifeapp.la_levels lal ON lal.id = laq.la_level_id
+#                 INNER JOIN lifeapp.la_subjects las ON las.id = laq.la_subject_id
+#                 WHERE 1 = 1
+#             """
+#             filters = []
+#             if subject_id:
+#                 base_query += " AND laq.la_subject_id = %s"
+#                 filters.append(subject_id)
+#             if level_id:
+#                 base_query += " AND laq.la_level_id = %s"
+#                 filters.append(level_id)
+
+#             if status in ('0', '1'):
+#                 base_query += " AND laq.status = %s"
+#                 filters.append(int(status))
+
+#             cursor.execute(base_query, filters)
+#             results = cursor.fetchall()
+
+#             return jsonify(results)
+#     except Exception as e:
+#         return jsonify({'error': str(e)}), 500
+#     finally:
+#         connection.close()
+
 @app.route('/api/quiz_questions', methods=['POST'])
 def get_quiz_questions():
-    data =  request.get_json() or {}
+    data = request.get_json() or {}
     subject_id = data.get('subject_id')
     level_id = data.get('level_id')
     status = data.get('status')
-
+    topic_id = data.get('topic_id')
+    
     connection = get_db_connection()
-    try: 
+    try:
         with connection.cursor() as cursor:
-
             base_query = """
                 SELECT laq.id, laq.title as question_title, lal.title as level_title, las.title as subject_title,
                     CASE WHEN laq.status = 0 THEN 'Inactive' ELSE 'Active' END as status,
                     laq.la_topic_id,
+                    lat.title as topic_title,
                     CASE 
                         WHEN laq.type = 2 THEN 'Quiz'
                         WHEN laq.type = 3 THEN 'Riddle'
@@ -3329,6 +3524,7 @@ def get_quiz_questions():
                 INNER JOIN lifeapp.la_questions laq ON laq.id = laqo.question_id
                 INNER JOIN lifeapp.la_levels lal ON lal.id = laq.la_level_id
                 INNER JOIN lifeapp.la_subjects las ON las.id = laq.la_subject_id
+                LEFT JOIN lifeapp.la_topics lat ON laq.la_topic_id = lat.id
                 WHERE 1 = 1
             """
             filters = []
@@ -3338,14 +3534,15 @@ def get_quiz_questions():
             if level_id:
                 base_query += " AND laq.la_level_id = %s"
                 filters.append(level_id)
-
-            if status in ('0', '1'):
+            if status is not None and status != "":
                 base_query += " AND laq.status = %s"
-                filters.append(int(status))
-
+                filters.append(status)
+            if topic_id:
+                base_query += " AND laq.la_topic_id = %s"
+                filters.append(topic_id)
+                
             cursor.execute(base_query, filters)
             results = cursor.fetchall()
-
             return jsonify(results)
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -3391,6 +3588,148 @@ def add_quiz_question():
         #connection.close()
 
         return jsonify({"success": True, "question_id": question_id})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        connection.close()
+
+@app.route('/api/update_quiz_question/<int:question_id>', methods=['PUT'])
+def update_quiz_question(question_id):
+    from datetime import datetime
+    data = request.get_json() or {}
+    question_title = data.get('question_title')
+    subject_id = data.get('subject_id')
+    level_id = data.get('level_id')
+    topic_id = data.get('topic_id')
+    status = data.get('status', 1)
+    question_type = data.get('question_type', 1)
+    game_type = data.get('type', 2)
+    options = data.get('options')  # list of dicts, e.g. [{"title": "Option 1", "is_correct": 1}, ...]
+    datetime_str = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    
+    connection = get_db_connection()
+    try:
+        cursor = connection.cursor()
+        # Update the question record
+        cursor.execute("""
+            UPDATE lifeapp.la_questions 
+            SET title = %s, la_subject_id = %s, la_level_id = %s, la_topic_id = %s, status = %s,
+                question_type = %s, type = %s, updated_at = %s
+            WHERE id = %s
+        """, (question_title, subject_id, level_id, topic_id, status, question_type, game_type, datetime_str, question_id))
+        connection.commit()
+        
+        # Remove existing options
+        cursor.execute("DELETE FROM lifeapp.la_question_options WHERE question_id = %s", (question_id,))
+        connection.commit()
+        
+        answer_option_id = None
+        for option in options:
+            cursor.execute("""
+                INSERT INTO lifeapp.la_question_options (question_id, title, created_at, updated_at)
+                VALUES (%s, %s, %s, %s)
+            """, (question_id, option['title'], datetime_str, datetime_str))
+            option_id = cursor.lastrowid
+            if option.get('is_correct'):
+                answer_option_id = option_id
+        
+        # Update the correct answer id
+        cursor.execute("UPDATE lifeapp.la_questions SET answer_option_id = %s WHERE id = %s",
+                       (answer_option_id, question_id))
+        connection.commit()
+        return jsonify({"success": True, "question_id": question_id})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        connection.close()
+
+
+@app.route('/api/topics', methods=['POST'])
+def get_topics():
+    """Fetch all topics (sets)."""
+    connection = get_db_connection()
+    try:
+        with connection.cursor() as cursor:
+            sql = "SELECT * FROM lifeapp.la_topics ORDER BY id"
+            cursor.execute(sql)
+            topics = cursor.fetchall()
+        return jsonify(topics)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        connection.close()
+
+@app.route('/api/add_topic', methods=['POST'])
+def add_topic():
+    data = request.get_json() or {}
+    title = data.get('title')
+    la_subject_id = data.get('la_subject_id')
+    la_level_id = data.get('la_level_id')
+    status = data.get('status', 1)
+    allow_for = data.get('allow_for', 1)
+    topic_type = data.get('type', 2)
+    datetime_str = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    connection = get_db_connection()
+    try:
+        with connection.cursor() as cursor:
+            sql = """
+            INSERT INTO lifeapp.la_topics (title, status, created_at, updated_at, allow_for, type, la_subject_id, la_level_id)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+            """
+            cursor.execute(sql, (title, status, datetime_str, datetime_str, allow_for, topic_type, la_subject_id, la_level_id))
+            topic_id = cursor.lastrowid
+            connection.commit()
+            return jsonify({"success": True, "topic_id": topic_id})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        connection.close()
+
+# Similarly, you can create update_topic and delete_topic endpoints.
+
+@app.route('/api/update_topic/<int:topic_id>', methods=['PUT'])
+def update_topic(topic_id):
+    from datetime import datetime
+    data = request.get_json() or {}
+    title = data.get('title')
+    la_subject_id = data.get('la_subject_id')
+    la_level_id = data.get('la_level_id')
+    status = data.get('status', 1)
+    allow_for = data.get('allow_for', 1)
+    topic_type = data.get('type', 2)
+    datetime_str = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+
+    connection = get_db_connection()
+    try:
+        with connection.cursor() as cursor:
+            sql = """
+                UPDATE lifeapp.la_topics
+                SET title = %s,
+                    la_subject_id = %s,
+                    la_level_id = %s,
+                    status = %s,
+                    allow_for = %s,
+                    type = %s,
+                    updated_at = %s
+                WHERE id = %s
+            """
+            cursor.execute(sql, (title, la_subject_id, la_level_id, status, allow_for, topic_type, datetime_str, topic_id))
+            connection.commit()
+            return jsonify({"success": True, "topic_id": topic_id})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        connection.close()
+
+@app.route('/api/delete_topic/<int:topic_id>', methods=['DELETE'])
+def delete_topic(topic_id):
+    connection = get_db_connection()
+    try:
+        with connection.cursor() as cursor:
+            sql = "DELETE FROM lifeapp.la_topics WHERE id = %s"
+            cursor.execute(sql, (topic_id,))
+            connection.commit()
+            return jsonify({"success": True, "topic_id": topic_id})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
     finally:

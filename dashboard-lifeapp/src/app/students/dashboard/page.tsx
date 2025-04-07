@@ -252,6 +252,7 @@ function SearchableDropdown({
   
 const api_startpoint = 'https://lifeapp-api-vv1.vercel.app'
 //const api_startpoint = 'http://127.0.0.1:5000'
+
 export default function SchoolDashboard() {
     const [totalStudents, setTotalStudents] = useState<number>(0)
     const [selectedState, setSelectedState] = useState("");
@@ -562,6 +563,151 @@ export default function SchoolDashboard() {
         }
     };
     
+    // ````````````````` ADD MODAL ``````````````````````````````````````````
+    const [isAddOpen, setIsAddOpen] = useState(false);
+    const [newStudent, setNewStudent] = useState({
+        name: '',
+        guardian_name: '',
+        email: '',
+        username: '',
+        mobile_no: '',
+        dob: '',
+        grade: '',
+        city: '',
+        state: '',
+        school_id: '',
+        school_code: '',
+        school_name: '',
+    });
+    const [addError, setAddError] = useState<string | null>(null);
+    const [adding, setAdding] = useState(false);
+    
+      // Handler for form field changes
+    const handleNewChange = (field: string, value: string) => {
+    setNewStudent(s => ({ ...s, [field]: value }));
+    };
+      
+      // Submit “Add Student”
+    const handleAddStudent = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setAdding(true);
+        setAddError(null);
+        try {
+          const res = await fetch(`${api_startpoint}/api/add_student`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(newStudent),
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || 'Failed to add');
+          setIsAddOpen(false);
+          handleSearch();              // refresh table
+          // clear form
+          setNewStudent({
+            name:'', guardian_name:'', email:'', username:'',
+            mobile_no:'', dob:'', grade:'', city:'', state:'',
+            school_id:'', school_code:'', school_name: '',
+          });
+        } catch (err: any) {
+          setAddError(err.message);
+        } finally {
+          setAdding(false);
+        }
+    };
+
+
+    // ````````````````` EDIT MODAL ``````````````````````````````````````````
+    const [isEditOpen, setIsEditOpen] = useState(false);
+    const [editingStudent, setEditingStudent] = useState<any>(null);
+    const [editError, setEditError] = useState<string|null>(null);
+    const [editing, setEditing] = useState(false);
+
+    // Open the modal, prefill form
+    const openEdit = (row: any) => {
+    setEditingStudent({
+        id: row.id,
+        name: row.name,
+        guardian_name: row.guardian_name,
+        email: row.email,
+        username: row.username,
+        mobile_no: row.mobile_no,
+        dob: row.dob?.split(' ')[0] || '',
+        grade: String(row.grade || ''),
+        state: row.state || '',
+        city: row.city || '',
+        school_id: String(row.school_id || ''),
+        school_name: row.school_name || '',
+        school_code: row.school_code || ''
+    });
+    setIsEditOpen(true);
+    };
+
+    // Handle field changes
+    const handleEditChange = (field: string, value: string) => {
+    setEditingStudent((s: any) => ({ ...s, [field]: value }));
+    };
+
+    // Submit edit
+    const handleEditSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setEditing(true);
+    setEditError(null);
+    try {
+        const { id, ...payload } = editingStudent;
+        const res = await fetch(`${api_startpoint}/api/edit_student/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Failed to edit');
+        setIsEditOpen(false);
+        handleSearch();  // refresh table
+    } catch (err: any) {
+        setEditError(err.message);
+    } finally {
+        setEditing(false);
+    }
+    };
+
+
+    // ````````````````` DELETE MODAL ``````````````````````````````````````````
+    // Delete modal state
+    const [isDeleteOpen, setIsDeleteOpen] = useState(false);
+    const [deletingStudent, setDeletingStudent] = useState<{ id: number; name: string } | null>(null);
+    const [deleteError, setDeleteError] = useState<string | null>(null);
+    const [deleting, setDeleting] = useState(false);
+
+    // Open the delete modal
+    const openDelete = (row: any) => {
+    setDeletingStudent({ id: row.id, name: row.name });
+    setDeleteError(null);
+    setIsDeleteOpen(true);
+    };
+
+    // Perform the delete
+    const handleDelete = async () => {
+    if (!deletingStudent) return;
+    setDeleting(true);
+    setDeleteError(null);
+    try {
+        const res = await fetch(`${api_startpoint}/api/delete_student`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: deletingStudent.id }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Delete failed');
+        setIsDeleteOpen(false);
+        handleSearch();  // refresh table
+    } catch (err: any) {
+        setDeleteError(err.message);
+    } finally {
+        setDeleting(false);
+    }
+    };
+
+
     const [chartOptions, setChartOptions] = useState<any>(null);
     const [geoData, setGeoData] = useState<DemographData[]>([]);
     const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -1687,7 +1833,9 @@ export default function SchoolDashboard() {
                                 Export
                             </button>
 
-                            <button className="btn btn-success d-inline-flex align-items-center">
+                            <button className="btn btn-success d-inline-flex align-items-center"
+                                onClick={() => setIsAddOpen(true)}
+                                >
                                 <Plus className="me-2" size={16} />
                                 Add Student
                             </button>
@@ -1774,13 +1922,13 @@ export default function SchoolDashboard() {
                                                             <td >
                                                                 <button
                                                                 className="btn btn-sm btn-primary me-2 "
-                                                                //onClick={() => handleEdit(row)}
+                                                                onClick={() => openEdit(row)}
                                                                 >
                                                                 <IconEdit size={16} />
                                                                 </button>
                                                                 <button
                                                                 className="btn btn-sm btn-danger "
-                                                                //onClick={() => handleDelete(row)}
+                                                                onClick={() => openDelete(row)}
                                                                 >
                                                                 <IconTrash size={16} />
                                                                 </button>
@@ -1817,6 +1965,338 @@ export default function SchoolDashboard() {
                             </div>
                         </div>
 
+
+                         {/* ───── Add Student Modal ───── */}
+                        {isAddOpen && (
+                        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+                            <form
+                            onSubmit={handleAddStudent}
+                            className="bg-white rounded-lg p-6 w-full max-w-lg space-y-2 overflow-auto max-h-[90vh]"
+                            >
+                            <h2 className="text-xl font-semibold">Add Student</h2>
+                            {addError && <div className="text-red-600">{addError}</div>}
+                            <div className="d-flex flex-col gap-3">
+                                <input
+                                    name="name"
+                                    placeholder="Name"
+                                    value={newStudent.name}
+                                    onChange={e => handleNewChange('name', e.target.value)}
+                                    className="w-full border p-2 rounded"
+                                    required
+                                />
+                                <input
+                                    name="guardian_name"
+                                    placeholder="Guardian Name"
+                                    value={newStudent.guardian_name}
+                                    onChange={e => handleNewChange('guardian_name', e.target.value)}
+                                    className="w-full border p-2 rounded"
+                                />
+                                <input
+                                    name="email"
+                                    type="email"
+                                    placeholder="Email"
+                                    value={newStudent.email}
+                                    onChange={e => handleNewChange('email', e.target.value)}
+                                    className="w-full border p-2 rounded"
+                                    required
+                                />
+                                <input
+                                    name="username"
+                                    placeholder="Username"
+                                    value={newStudent.username}
+                                    onChange={e => handleNewChange('username', e.target.value)}
+                                    className="w-full border p-2 rounded"
+                                    required
+                                />
+                                <input
+                                    name="mobile_no"
+                                    placeholder="Mobile No."
+                                    value={newStudent.mobile_no}
+                                    onChange={e => handleNewChange('mobile_no', e.target.value)}
+                                    className="w-full border p-2 rounded"
+                                    required
+                                />
+                                <div className="">
+                                    <label className="block text-sm mb-1 ">Date of Birth</label>
+                                    <input
+                                        name="dob"
+                                        type="date"
+                                        placeholder="DOB"
+                                        value={newStudent.dob}
+                                        onChange={e => handleNewChange('dob', e.target.value)}
+                                        className="w-full border p-2 rounded"
+                                    />
+                                </div>
+                                
+                            </div>
+                            
+
+                            {/* Dropdowns: Grade, State, City, School */}
+                            <div className="d-flex flex-col gap-2">
+                                <div>
+                                <label className="block text-sm mb-1">Grade</label>
+                                <select
+                                    className="form-select w-full border p-2 rounded"
+                                    value={newStudent.grade}
+                                    onChange={e => handleNewChange('grade', e.target.value)}
+                                    required
+                                >
+                                    <option value="">Select Grade</option>
+                                    {Array.from({ length: 12 }, (_, i) => i + 1).map(g => (
+                                    <option key={g} value={String(g)}>
+                                        Grade {g}
+                                    </option>
+                                    ))}
+                                </select>
+                                </div>
+                                <div>
+                                <label className="block text-sm mb-1">State</label>
+                                <SearchableDropdown
+                                    options={states}
+                                    placeholder="Select State"
+                                    value={newStudent.state}
+                                    onChange={val => handleNewChange('state', val)}
+                                    isLoading={isStatesLoading}
+                                />
+                                </div>
+                                <div>
+                                <label className="block text-sm mb-1">City</label>
+                                <SearchableDropdown
+                                    options={cities}
+                                    placeholder="Select City"
+                                    value={newStudent.city}
+                                    onChange={val => handleNewChange('city', val)}
+                                    isLoading={isCitiesLoading}
+                                />
+                                </div>
+                                
+                                <div>
+                                     <label className="block text-sm mb-1">School</label>
+                                     <SearchableDropdown
+                                       options={schools}
+                                       placeholder="Select School"
+                                       value={newStudent.school_name || ''}
+                                       onChange={val => {
+                                         handleNewChange('school_name', val);
+                                         handleNewChange('school_id', ''); // clear any manual ID
+                                          }}
+                                       isLoading={isSchoolsLoading}
+                                     />
+                                  </div>
+                            </div>
+
+                            <div className="d-flex flex-row gap-4 w-[90%]">
+                                <input
+                                name="school_id"
+                                placeholder="School ID"
+                                value={newStudent.school_id}
+                                onChange={e => handleNewChange('school_id', e.target.value)}
+                                className="w-full border p-2 rounded"
+                                />
+                                <input
+                                name="school_code"
+                                placeholder="School Code"
+                                value={newStudent.school_code}
+                                onChange={e => handleNewChange('school_code', e.target.value)}
+                                className="w-full border p-2 rounded"
+                                />
+                            </div>
+
+                            <div className="flex justify-end gap-2 mt-4">
+                                <button
+                                type="button"
+                                onClick={() => setIsAddOpen(false)}
+                                disabled={adding}
+                                className="px-4 py-2 border rounded"
+                                >
+                                Cancel
+                                </button>
+                                <button
+                                type="submit"
+                                disabled={adding}
+                                className="px-4 py-2 bg-green-600 text-white rounded"
+                                >
+                                {adding ? 'Adding…' : 'Add Student'}
+                                </button>
+                            </div>
+                            </form>
+                        </div>
+                        )}
+
+
+                        {/* ───── Edit Student Modal ───── */}
+                        {isEditOpen && editingStudent && (
+                        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+                            <form
+                            onSubmit={handleEditSubmit}
+                            className="bg-white rounded-lg p-6 w-full max-w-lg space-y-2 overflow-auto max-h-[90vh]"
+                            >
+                            <h2 className="text-xl font-semibold">Edit Student</h2>
+                            {editError && <div className="text-red-600">{editError}</div>}
+                            <div className="d-flex flex-col gap-3">
+                                <input
+                                    placeholder="Name"
+                                    value={editingStudent.name ?? ''}
+                                    onChange={e => handleEditChange('name', e.target.value)}
+                                    className="w-full border p-2 rounded"
+                                    required
+                                />
+                                <input
+                                    placeholder="Guardian Name"
+                                    value={editingStudent.guardian_name ?? ''}
+                                    onChange={e => handleEditChange('guardian_name', e.target.value)}
+                                    className="w-full border p-2 rounded"
+                                />
+                                <input
+                                    type="email"
+                                    placeholder="Email"
+                                    value={editingStudent.email ?? ''}
+                                    onChange={e => handleEditChange('email', e.target.value)}
+                                    className="w-full border p-2 rounded"
+                                    required
+                                />
+                                <input
+                                    placeholder="Username"
+                                    value={editingStudent.username ?? ''}
+                                    onChange={e => handleEditChange('username', e.target.value)}
+                                    className="w-full border p-2 rounded"
+                                    required
+                                />
+                                <input
+                                    placeholder="Mobile No."
+                                    value={editingStudent.mobile_no ?? ''}
+                                    onChange={e => handleEditChange('mobile_no', e.target.value)}
+                                    className="w-full border p-2 rounded"
+                                    required
+                                />
+                                <div className="">
+                                    <label className="block text-sm mb-1 ">Date of Birth</label>
+                                    <input
+                                        type="date"
+                                        placeholder="DOB"
+                                        value={editingStudent.dob ?? ''}
+                                        onChange={e => handleEditChange('dob', e.target.value)}
+                                        className="w-full border p-2 rounded"
+                                    />
+                                </div>
+                            </div>
+                            {/* Grade, State, City, School dropdowns */}
+                            <div className="d-flex flex-col gap-2">
+                                <div>
+                                <label className="block text-sm mb-1">Grade</label>
+                                <select
+                                    className="form-select w-full border p-2 rounded"
+                                    value={editingStudent.grade ?? ''}
+                                    onChange={e => handleEditChange('grade', e.target.value)}
+                                    required
+                                >
+                                    <option value="">Select Grade</option>
+                                    {Array.from({ length: 12 }, (_, i) => i + 1).map(g => (
+                                    <option key={g} value={String(g)}>
+                                        Grade {g}
+                                    </option>
+                                    ))}
+                                </select>
+                                </div>
+                                <div>
+                                <label className="block text-sm mb-1">State</label>
+                                <SearchableDropdown
+                                    options={states}
+                                    placeholder="Select State"
+                                    value={editingStudent.state ?? ''}
+                                    onChange={val => handleEditChange('state', val)}
+                                    isLoading={isStatesLoading}
+                                />
+                                </div>
+                                <div>
+                                <label className="block text-sm mb-1">City</label>
+                                <SearchableDropdown
+                                    options={cities}
+                                    placeholder="Select City"
+                                    value={editingStudent.city ?? ''}
+                                    onChange={val => handleEditChange('city', val)}
+                                    isLoading={isCitiesLoading}
+                                />
+                                </div>
+                                <div>
+                                <label className="block text-sm mb-1">School</label>
+                                <SearchableDropdown
+                                    options={schools}
+                                    placeholder="Select School"
+                                    value={editingStudent.school_name ?? ''}
+                                    onChange={val => handleEditChange('school_name', val)}
+                                    isLoading={isSchoolsLoading}
+                                />
+                                </div>
+                            </div>
+
+                            {/* Optional overrides */}
+                            <div className="d-flex flex-row gap-2">
+                                <input
+                                placeholder="School ID"
+                                value={editingStudent.school_id ?? ''}
+                                onChange={e => handleEditChange('school_id', e.target.value)}
+                                className="w-full border p-2 rounded"
+                                />
+                                <input
+                                placeholder="School Code"
+                                value={editingStudent.school_code ?? ''}
+                                onChange={e => handleEditChange('school_code', e.target.value)}
+                                className="w-full border p-2 rounded"
+                                />
+                            </div>
+
+                            <div className="flex justify-end gap-2 mt-4">
+                                <button
+                                type="button"
+                                onClick={() => setIsEditOpen(false)}
+                                disabled={editing}
+                                className="px-4 py-2 border rounded"
+                                >
+                                Cancel
+                                </button>
+                                <button
+                                type="submit"
+                                disabled={editing}
+                                className="px-4 py-2 bg-sky-600 text-white rounded"
+                                >
+                                {editing ? 'Saving…' : 'Save Changes'}
+                                
+                                </button>
+                            </div>
+                            </form>
+                        </div>
+                        )}
+                        
+                        {/* ───── Delete Student Modal ───── */}
+                        {isDeleteOpen && deletingStudent && (
+                            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+                                <div className="bg-white rounded-lg p-6 w-full max-w-sm space-y-4">
+                                <h2 className="text-lg font-semibold">Confirm Delete</h2>
+                                <p>
+                                    Are you sure you want to delete{' '}
+                                    <span className="font-medium">{deletingStudent.name}</span>?
+                                </p>
+                                {deleteError && <p className="text-red-600">{deleteError}</p>}
+                                <div className="flex justify-end gap-2 mt-4">
+                                    <button
+                                    onClick={() => setIsDeleteOpen(false)}
+                                    disabled={deleting}
+                                    className="px-4 py-2 border rounded"
+                                    >
+                                    Cancel
+                                    </button>
+                                    <button
+                                    onClick={handleDelete}
+                                    disabled={deleting}
+                                    className="px-4 py-2 bg-red-600 text-white rounded"
+                                    >
+                                    {deleting ? 'Deleting…' : 'Delete'}
+                                    </button>
+                                </div>
+                                </div>
+                            </div>
+                        )}
 
                     </div>
                 </div>
