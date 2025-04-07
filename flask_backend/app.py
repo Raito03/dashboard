@@ -2261,20 +2261,50 @@ def delete_mentor():
 ###################################################################################
 ###################################################################################
 
+# @app.route('/api/subjects_list', methods=['POST'])
+# def get_subjects():
+#     """Fetch all subjects."""
+#     try:
+#         connection = get_db_connection()
+#         with connection.cursor() as cursor:
+#             sql = "SELECT id, title, heading, image, status FROM lifeapp.la_subjects ORDER BY id;"
+#             cursor.execute(sql)
+#             subjects = cursor.fetchall()
+#         return jsonify(subjects)
+#     except Exception as e:
+#         return jsonify({'error': str(e)}), 500
+#     finally:
+#         connection.close()
+
 @app.route('/api/subjects_list', methods=['POST'])
 def get_subjects():
-    """Fetch all subjects."""
+    """Fetch subjects with an optional status filter.
+       Expects a JSON payload with key 'status' that can be "1", "0", or "all".
+       "all" returns all subjects.
+    """
     try:
+        data = request.get_json() or {}
+        status = data.get('status', 'all')  # Default to "all" if not provided
+
         connection = get_db_connection()
         with connection.cursor() as cursor:
-            sql = "SELECT id, title, heading, image, status FROM lifeapp.la_subjects ORDER BY id;"
-            cursor.execute(sql)
+            sql = "SELECT id, title, heading, image, status FROM lifeapp.la_subjects WHERE 1=1"
+            filters = []
+            if status != "all":
+                sql += " AND status = %s"
+                filters.append(int(status))
+            sql += " ORDER BY id;"
+            cursor.execute(sql, filters)
             subjects = cursor.fetchall()
         return jsonify(subjects)
     except Exception as e:
         return jsonify({'error': str(e)}), 500
     finally:
         connection.close()
+
+
+
+
 
 @app.route('/api/subjects_new', methods=['POST'])
 def create_subject():
@@ -3534,7 +3564,7 @@ def get_quiz_questions():
             if level_id:
                 base_query += " AND laq.la_level_id = %s"
                 filters.append(level_id)
-            if status is not None and status != "":
+            if status is not None and status != "" and status.lower() != "all":
                 base_query += " AND laq.status = %s"
                 filters.append(status)
             if topic_id:
@@ -3646,18 +3676,39 @@ def update_quiz_question(question_id):
 
 @app.route('/api/topics', methods=['POST'])
 def get_topics():
-    """Fetch all topics (sets)."""
+    data = request.get_json() or {}
+    la_subject_id = data.get('la_subject_id')
+    la_level_id = data.get('la_level_id')
+    status = data.get('status', '')  # Expect "1", "0", or "all"
+
     connection = get_db_connection()
     try:
         with connection.cursor() as cursor:
-            sql = "SELECT * FROM lifeapp.la_topics ORDER BY id"
-            cursor.execute(sql)
+            sql = """
+                SELECT * 
+                FROM lifeapp.la_topics 
+                WHERE 1=1
+            """
+            filters = []
+            if la_subject_id:
+                sql += " AND la_subject_id = %s"
+                filters.append(la_subject_id)
+            if la_level_id:
+                sql += " AND la_level_id = %s"
+                filters.append(la_level_id)
+            if status and status.lower() != "all":
+                sql += " AND status = %s"
+                filters.append(status)
+            sql += " ORDER BY id"
+            cursor.execute(sql, filters)
             topics = cursor.fetchall()
         return jsonify(topics)
     except Exception as e:
         return jsonify({'error': str(e)}), 500
     finally:
         connection.close()
+
+
 
 @app.route('/api/add_topic', methods=['POST'])
 def add_topic():
