@@ -37,6 +37,7 @@ type QuizQuestion = {
   level_title: string;
   topic_title: string | null;
   status: string;
+  index: string;
   question_type?: string;
   options: {
     title: string;
@@ -199,6 +200,7 @@ export default function StudentRelatedQuiz() {
           level_title: curr.level_title,
           topic_title: curr.topic_title,
           status: curr.status,
+          index: curr.index,
           options: []
         };
       }
@@ -476,7 +478,7 @@ export default function StudentRelatedQuiz() {
                       <div>
                         <div className="fw-bold">{JSON.parse(q.question_title).en}</div>
                         <div className="text-muted small">
-                          Subject: {JSON.parse(q.subject_title).en} | Level: {JSON.parse(q.level_title).en} | Topic: {q.topic_title ? JSON.parse(q.topic_title).en : 'N/A'}
+                          Subject: {JSON.parse(q.subject_title).en} | Level: {JSON.parse(q.level_title).en} | Topic: {q.topic_title ? JSON.parse(q.topic_title).en : 'N/A'} | Status: {q.status} | Index: {q.index}
                         </div>
                       </div>
                       <div>
@@ -602,6 +604,18 @@ export default function StudentRelatedQuiz() {
                   } />
                 </div>
                 <div className="mb-2">
+                  <label className="form-label">Status</label>
+                  <select
+                    className="form-select"
+                    value={quizToEdit.status || "1"}
+                    onChange={(e) => setQuizToEdit({ ...quizToEdit, status: e.target.value })}
+                  >
+                    <option value="1">Active</option>
+                    <option value="0">Inactive</option>
+                  </select>
+                </div>
+
+                <div className="mb-2">
                   {quizToEdit.options.map((opt, i) => (
                     <div key={i} className="mb-2">
                       <label className="form-label">Option {i + 1}</label>
@@ -684,23 +698,27 @@ export default function StudentRelatedQuiz() {
                     </tr>
                   </thead>
                   <tbody>
-                    {topics.map((topic: Topic) => (
-                      <tr key={topic.id}>
-                        <td>{topic.id}</td>
-                        <td>{JSON.parse(topic.title).en}</td>
-                        <td>{/* Optionally map topic.la_subject_id to subject title */}</td>
-                        <td>{/* Optionally map topic.la_level_id to level title */}</td>
-                        <td>{String(topic.status) === '1' ? 'Active' : 'Inactive'}</td>
-                        <td>
-                          <button className="btn btn-secondary btn-sm me-2" onClick={() => openEditTopicModal(topic)}>
-                            Edit
-                          </button>
-                          <button className="btn btn-danger btn-sm" onClick={() => openDeleteTopicModal(topic)}>
-                            Delete
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
+                    {topics.map((topic: Topic) => {
+                      const subject = subjects.find((s: Subject) => String(s.id) === String(topic.la_subject_id));
+                      const level = levels.find((l: Level) => String(l.id) === String(topic.la_level_id));
+                      return (
+                        <tr key={topic.id}>
+                          <td>{topic.id}</td>
+                          <td>{JSON.parse(topic.title).en}</td>
+                          <td>{subject ? JSON.parse(subject.title).en : 'N/A'}</td>
+                          <td>{level ? JSON.parse(level.title).en : 'N/A'}</td>
+                          <td>{String(topic.status) === '1' ? 'Active' : 'Inactive'}</td>
+                          <td>
+                            <button className="btn btn-secondary btn-sm me-2" onClick={() => openEditTopicModal(topic)}>
+                              Edit
+                            </button>
+                            <button className="btn btn-danger btn-sm" onClick={() => openDeleteTopicModal(topic)}>
+                              Delete
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
@@ -744,6 +762,17 @@ export default function StudentRelatedQuiz() {
                     ))}
                   </select>
                 </div>
+                <div className="mb-2">
+                  <label className="form-label">Status</label>
+                  <select
+                    className="form-select"
+                    value={newTopic.status}
+                    onChange={(e) => setNewTopic({ ...newTopic, status: e.target.value })}
+                  >
+                    <option value="1">Active</option>
+                    <option value="0">Inactive</option>
+                  </select>
+                </div>
               </div>
               <div className="modal-footer">
                 <button className="btn btn-primary" onClick={handleAddTopic}>Submit</button>
@@ -783,6 +812,17 @@ export default function StudentRelatedQuiz() {
                     {levels.map((lv: Level) => (
                       <option key={lv.id} value={lv.id}>{JSON.parse(lv.title).en}</option>
                     ))}
+                  </select>
+                </div>
+                <div className="mb-2">
+                  <label className="form-label">Status</label>
+                  <select
+                    className="form-select"
+                    value={topicToEdit.status || "1"}
+                    onChange={(e) => setTopicToEdit({ ...topicToEdit!, status: e.target.value })}
+                  >
+                    <option value="1">Active</option>
+                    <option value="0">Inactive</option>
                   </select>
                 </div>
               </div>

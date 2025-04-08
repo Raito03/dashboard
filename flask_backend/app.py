@@ -3532,7 +3532,7 @@ def get_quiz_questions():
         with connection.cursor() as cursor:
             base_query = """
                 SELECT laq.id, laq.title as question_title, lal.title as level_title, las.title as subject_title,
-                    CASE WHEN laq.status = 0 THEN 'Inactive' ELSE 'Active' END as status,
+                    CASE WHEN laq.status = 0 THEN 'Inactive' ELSE 'Active' END as status, laq.index,
                     laq.la_topic_id,
                     lat.title as topic_title,
                     CASE 
@@ -3646,7 +3646,7 @@ def update_quiz_question(question_id):
             SET title = %s, la_subject_id = %s, la_level_id = %s, la_topic_id = %s, status = %s,
                 question_type = %s, type = %s, updated_at = %s
             WHERE id = %s
-        """, (question_title, subject_id, level_id, topic_id, status, question_type, game_type, datetime_str, question_id))
+        """, (question_title, subject_id, level_id, topic_id, int(status), question_type, game_type, datetime_str, question_id))
         connection.commit()
         
         # Remove existing options
@@ -3727,7 +3727,7 @@ def add_topic():
             INSERT INTO lifeapp.la_topics (title, status, created_at, updated_at, allow_for, type, la_subject_id, la_level_id)
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
             """
-            cursor.execute(sql, (title, status, datetime_str, datetime_str, allow_for, topic_type, la_subject_id, la_level_id))
+            cursor.execute(sql, (title, int(status), datetime_str, datetime_str, allow_for, topic_type, la_subject_id, la_level_id))
             topic_id = cursor.lastrowid
             connection.commit()
             return jsonify({"success": True, "topic_id": topic_id})
@@ -3764,7 +3764,7 @@ def update_topic(topic_id):
                     updated_at = %s
                 WHERE id = %s
             """
-            cursor.execute(sql, (title, la_subject_id, la_level_id, status, allow_for, topic_type, datetime_str, topic_id))
+            cursor.execute(sql, (title, la_subject_id, la_level_id, int(status), allow_for, topic_type, datetime_str, topic_id))
             connection.commit()
             return jsonify({"success": True, "topic_id": topic_id})
     except Exception as e:
