@@ -184,7 +184,7 @@ export default function LessonPlanLanguage() {
 
             {/* Add & Edit Modal */}
             {showEditModal && editingRow && (
-                <div className="modal show d-block">
+                <div className="modal show d-block bg-black bg-opacity-50">
                     <div className="modal-dialog">
                         <div className="modal-content">
                             <div className="modal-header">
@@ -207,7 +207,7 @@ export default function LessonPlanLanguage() {
                 </div>
             )}
             {showAddModal && (
-                <div className="modal show d-block">
+                <div className="modal show d-block bg-black bg-opacity-50">
                     <div className="modal-dialog">
                         <div className="modal-content">
                             <div className="modal-header">
