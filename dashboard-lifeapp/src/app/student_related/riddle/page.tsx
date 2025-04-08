@@ -45,7 +45,7 @@ type QuizQuestion = {
   }[];
 };
 
-export default function StudentRelatedQuiz() {
+export default function StudentRelatedRiddle() {
   // Data arrays
   const [questions, setQuestions] = useState<QuizQuestion[]>([]);
   const [subjects, setSubjects] = useState<Subject[]>([]);
@@ -80,7 +80,7 @@ export default function StudentRelatedQuiz() {
     level_id: '',
     topic_id: '',
     status: '1',
-    type: '2',
+    type: '3',
     question_type: '1',
     options: ['', '', '', ''],
     correct_index: 0,
@@ -166,7 +166,7 @@ export default function StudentRelatedQuiz() {
         level_id: selectedLevel,
         status: selectedStatus,
         topic_id: selectedTopic,
-        type: 2,
+        type: 3, //riddle
       };
       setCurrentPage(1);
       // Instead of setFilters(newFilters) + fetchData(), call fetchData(newFilters) directly
@@ -357,12 +357,12 @@ export default function StudentRelatedQuiz() {
             {/* Header */}
             <div className="d-flex justify-content-between align-items-center mb-3">
               <div className="d-flex flex-col">
-                <h2 className="text-xl font-semibold pb-0 mb-0">Quiz Questions</h2>
-                <h5 className="text-muted pb-0 mb-0">{questions.length} quiz questions found</h5>
+                <h2 className="text-xl font-semibold pb-0 mb-0">Riddle Questions</h2>
+                <h5 className="text-muted pb-0 mb-0">{questions.length} riddles found</h5>
               </div>
               <div className="d-flex gap-2">
                 <button className="btn btn-primary d-flex align-items-center" onClick={() => setShowQuizModal(true)}>
-                  <IconPlus className="me-2" /> Add New Quiz
+                  <IconPlus className="me-2" /> Add New Riddle
                 </button>
                 {/* <button className="btn btn-info d-flex align-items-center" onClick={() => setShowTopicListModal(true)}>
                   Topics List
@@ -524,12 +524,12 @@ export default function StudentRelatedQuiz() {
           <div className="modal-dialog">
             <div className="modal-content">
               <div className="modal-header">
-                <h5 className="modal-title">Add New Quiz</h5>
+                <h5 className="modal-title">Add New Riddle</h5>
                 <button type="button" className="btn-close" onClick={() => setShowQuizModal(false)}></button>
               </div>
               <div className="modal-body">
                 <div className="mb-2">
-                  <label className="form-label">Question Title</label>
+                  <label className="form-label">Riddle Title</label>
                   <textarea className="form-control" value={newQuestion.question_title} onChange={(e) => setNewQuestion({ ...newQuestion, question_title: e.target.value })} />
                 </div>
                 <div className="mb-2">
@@ -594,12 +594,12 @@ export default function StudentRelatedQuiz() {
           <div className="modal-dialog">
             <div className="modal-content">
               <div className="modal-header">
-                <h5 className="modal-title">Edit Quiz Question</h5>
+                <h5 className="modal-title">Edit Riddle Question</h5>
                 <button type="button" className="btn-close" onClick={() => setShowQuizEditModal(false)}></button>
               </div>
               <div className="modal-body">
                 <div className="mb-2">
-                  <label className="form-label">Question Title</label>
+                  <label className="form-label">Riddle Title</label>
                   <textarea className="form-control" value={quizToEdit.question_title} onChange={(e) =>
                     setQuizToEdit({ ...quizToEdit, question_title: e.target.value })
                   } />
@@ -666,7 +666,7 @@ export default function StudentRelatedQuiz() {
                 <button type="button" className="btn-close" onClick={() => setConfirmDeleteQuiz(false)}></button>
               </div>
               <div className="modal-body">
-                <p>Are you sure you want to delete this question?</p>
+                <p>Are you sure you want to delete this Riddle?</p>
               </div>
               <div className="modal-footer">
                 <button className="btn btn-secondary" onClick={() => setConfirmDeleteQuiz(false)}>Cancel</button>

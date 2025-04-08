@@ -12,6 +12,7 @@ import { BarChart3, Download, Plus, Search, XCircle } from 'lucide-react';
 
   
 const api_startpoint = 'https://lifeapp-api-vv1.vercel.app'
+//const api_startpoint = 'http://127.0.0.1:5000'
 
 export default function MissionPage() {
     const [selectedFromDate, setSelectedFromDate] = useState(""); // New state for From Date
@@ -22,14 +23,18 @@ export default function MissionPage() {
     const [currentPage, setCurrentPage] = useState<number>(0);
     const rowsPerPage = 50;
     const [isTableLoading, setIsTableLoading] = useState(false);
-
+    // Add two new state variables for the school ID and mobile no filters
+    const [selectedSchoolID, setSelectedSchoolID] = useState("");
+    const [selectedMobileNo, setSelectedMobileNo] = useState("");
     // Handler for search button
     const handleSearch = async () => {
         const filters = {
             mission_acceptance: selectedMissionAcceptance,
             assigned_by: selectedAssignedBy,
             from_date: selectedFromDate, // Include the From Date filter
-            to_date: selectedToDate      // Include the To Date filter
+            to_date: selectedToDate,      // Include the To Date filter
+            school_id: selectedSchoolID,  // new filter
+            mobile_no: selectedMobileNo,  // new filter
         };
 
         setIsTableLoading(true); // Set loading to true when search starts
@@ -67,6 +72,8 @@ export default function MissionPage() {
         setSelectedFromDate(""); // Clear the From Date
         setSelectedToDate("");   // Clear the To Date
         // Clear other filters...
+        setSelectedSchoolID("");
+        setSelectedMobileNo("");
         setTableData([]);
     };
 
@@ -183,6 +190,24 @@ export default function MissionPage() {
                                                 className="form-control"
                                                 value={selectedToDate}
                                                 onChange={(e) => setSelectedToDate(e.target.value)}
+                                            />
+                                        </div>
+                                        <div className="col-12 col-md-6 col-lg-3">
+                                            <input
+                                                type="text"
+                                                placeholder="School ID"
+                                                className="form-control"
+                                                value={selectedSchoolID}
+                                                onChange={(e) => setSelectedSchoolID(e.target.value)}
+                                            />
+                                        </div>
+                                        <div className="col-12 col-md-6 col-lg-3">
+                                            <input
+                                                type="text"
+                                                placeholder="Mobile No"
+                                                className="form-control"
+                                                value={selectedMobileNo}
+                                                onChange={(e) => setSelectedMobileNo(e.target.value)}
                                             />
                                         </div>
                                     </div>

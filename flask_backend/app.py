@@ -938,6 +938,16 @@ def mission_search():
         sql += " AND cte.Requested_At <= %s"
         params.append(to_date)
 
+    # NEW: Add filter for School ID and Mobile No.
+    school_id = filters.get('school_id')
+    if school_id:
+        sql += " AND u.school_id = %s"
+        params.append(school_id)
+    mobile_no = filters.get('mobile_no')
+    if mobile_no:
+        sql += " AND u.mobile_no = %s"
+        params.append(mobile_no)
+
     sql += " ;"
     
     try:
@@ -3526,7 +3536,7 @@ def get_quiz_questions():
     level_id = data.get('level_id')
     status = data.get('status')
     topic_id = data.get('topic_id')
-    
+    game_type_filter = data.get('type')
     connection = get_db_connection()
     try:
         with connection.cursor() as cursor:
@@ -3570,7 +3580,9 @@ def get_quiz_questions():
             if topic_id:
                 base_query += " AND laq.la_topic_id = %s"
                 filters.append(topic_id)
-                
+            if game_type_filter:
+                base_query += " AND laq.type = %s"
+                filters.append(game_type_filter) 
             cursor.execute(base_query, filters)
             results = cursor.fetchall()
             return jsonify(results)
@@ -3727,7 +3739,7 @@ def add_topic():
             INSERT INTO lifeapp.la_topics (title, status, created_at, updated_at, allow_for, type, la_subject_id, la_level_id)
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
             """
-            cursor.execute(sql, (title, int(status), datetime_str, datetime_str, allow_for, topic_type, la_subject_id, la_level_id))
+            cursor.execute(sql, (title, int(status), datetime_str, datetime_str, allow_for, int(topic_type), la_subject_id, la_level_id))
             topic_id = cursor.lastrowid
             connection.commit()
             return jsonify({"success": True, "topic_id": topic_id})

@@ -282,6 +282,8 @@ export function Sidebar() {
                     <NavItem href="/student_related/jigyasa" label="Jigyasa" isNested />
                     <NavItem href="/student_related/pragya" label="Pragya" isNested />
                     <NavItem href="/student_related/quiz" label="Quiz" isNested />
+                    <NavItem href="/student_related/riddle" label="Riddle" isNested />
+                    <NavItem href="/student_related/puzzle" label="Puzzle" isNested />
                     <NavItem href="/student_related/vision" label="Vision" isNested />
                     <NavItem href="/student_related/quiz_sessions" label="Quiz Sessions" isNested />
                     </div>
@@ -318,6 +320,7 @@ export function Sidebar() {
                 <NavItem href="/settings/languages" label="Languages" isNested />
                 <NavItem href="/settings/sections" label="Sections" isNested />
                 <NavItem href="/settings/boards" label="Boards" isNested />
+                <NavItem href="/settings/topics" label="Topics" isNested />
             </div>
         )}
 
