@@ -3787,5 +3787,89 @@ def delete_topic(topic_id):
         connection.close()
 
 
+###################################################################################
+###################################################################################
+####################### SETTINGS/BOARDS APIs ######################################
+###################################################################################
+###################################################################################
+
+@app.route('/api/boards', methods=['POST'])
+def get_boards():
+    """Return all boards."""
+    connection = get_db_connection()
+    try:
+        with connection.cursor() as cursor:
+            sql = "SELECT id, name, status, created_at, updated_at FROM lifeapp.la_boards ORDER BY id;"
+            cursor.execute(sql)
+            boards = cursor.fetchall()
+        return jsonify(boards)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        connection.close()
+
+@app.route('/api/add_board', methods=['POST'])
+def add_board():
+    """Add a new board."""
+    data = request.get_json() or {}
+    name = data.get("name")
+    status = data.get("status", 1)
+    datetime_str = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    connection = get_db_connection()
+    try:
+        with connection.cursor() as cursor:
+            sql = """
+                INSERT INTO lifeapp.la_boards (name, status, created_at, updated_at)
+                VALUES (%s, %s, %s, %s)
+            """
+            cursor.execute(sql, (name, status, datetime_str, datetime_str))
+            board_id = cursor.lastrowid
+            connection.commit()
+        return jsonify({"success": True, "board_id": board_id})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        connection.close()
+
+@app.route('/api/update_board/<int:board_id>', methods=['PUT'])
+def update_board(board_id):
+    """Update an existing board."""
+    data = request.get_json() or {}
+    name = data.get("name")
+    status = data.get("status", 1)
+    datetime_str = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    connection = get_db_connection()
+    try:
+        with connection.cursor() as cursor:
+            sql = """
+                UPDATE lifeapp.la_boards
+                SET name = %s,
+                    status = %s,
+                    updated_at = %s
+                WHERE id = %s
+            """
+            cursor.execute(sql, (name, status, datetime_str, board_id))
+            connection.commit()
+        return jsonify({"success": True, "board_id": board_id})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        connection.close()
+
+@app.route('/api/delete_board/<int:board_id>', methods=['DELETE'])
+def delete_board(board_id):
+    """Delete a board."""
+    connection = get_db_connection()
+    try:
+        with connection.cursor() as cursor:
+            sql = "DELETE FROM lifeapp.la_boards WHERE id = %s"
+            cursor.execute(sql, (board_id,))
+            connection.commit()
+        return jsonify({"success": True, "board_id": board_id})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        connection.close()
+
 if __name__ == '__main__':
     app.run(debug=True)

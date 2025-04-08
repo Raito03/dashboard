@@ -317,6 +317,7 @@ export function Sidebar() {
                 <NavItem href="/settings/levels" label="Levels" isNested />
                 <NavItem href="/settings/languages" label="Languages" isNested />
                 <NavItem href="/settings/sections" label="Sections" isNested />
+                <NavItem href="/settings/boards" label="Boards" isNested />
             </div>
         )}
 
