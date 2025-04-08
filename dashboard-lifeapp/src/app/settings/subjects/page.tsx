@@ -26,8 +26,8 @@ interface RawSubject {
     status: string;
 }
 
- const api_startpoint = 'https://lifeapp-api-vv1.vercel.app'
-//const api_startpoint = 'http://127.0.0.1:5000'
+// const api_startpoint = 'https://lifeapp-api-vv1.vercel.app'
+const api_startpoint = 'http://127.0.0.1:5000'
 
 export default function SettingsSubject() {
     const [totalSubjects, setTotalSubjects] = useState<Slide[]>([])
@@ -36,7 +36,9 @@ export default function SettingsSubject() {
         try {
             setLoading(true);
             const res = await fetch(`${api_startpoint}/api/subjects_list`, {
-                method: 'POST'
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({})
             });
             const data: RawSubject[] = await res.json();
     
