@@ -3883,5 +3883,147 @@ def delete_board(board_id):
     finally:
         connection.close()
 
+
+###################################################################################
+###################################################################################
+####################### SETTINGS/GAME ENROLLMENTS APIs ############################
+###################################################################################
+###################################################################################
+
+# 1. List Enrollments - GET /enrollments
+@app.route('/enrollments', methods=['GET'])
+def list_enrollments():
+    try:
+        connection = get_db_connection()
+        with connection.cursor() as cursor:
+            query = "SELECT * FROM lifeapp.la_game_enrollments"
+            cursor.execute(query)
+            enrollments = cursor.fetchall()
+        connection.close()
+        return jsonify(enrollments), 200
+    except Exception as e:
+        logger.error("Error listing enrollments: %s", e)
+        return jsonify({"error": str(e)}), 500
+
+# 2. Add Enrollment - POST /enrollments
+@app.route('/enrollments', methods=['POST'])
+def add_enrollment():
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({"error": "No input data provided"}), 400
+
+        # Required fields
+        enrollment_code = data.get('enrollment_code')
+        type_val = data.get('type')
+        user_id = data.get('user_id')
+        unlock_enrollment_at = data.get('unlock_enrollment_at')  # Expecting ISO datetime string if provided
+
+        if not enrollment_code or type_val is None or not user_id:
+            return jsonify({"error": "Missing required fields: enrollment_code, `type`, and user_id"}), 400
+
+        # Parse unlock_enrollment_at if provided
+        unlock_time = None
+        if unlock_enrollment_at:
+            try:
+                unlock_time = datetime.fromisoformat(unlock_enrollment_at)
+            except ValueError:
+                return jsonify({"error": "Incorrect date format for unlock_enrollment_at. Use ISO format."}), 400
+
+        # Set created_at and updated_at to current UTC time
+        created_at = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        updated_at = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+
+        connection = get_db_connection()
+        with connection.cursor() as cursor:
+            sql = """
+                INSERT INTO lifeapp.la_game_enrollments 
+                (enrollment_code, `type`, user_id, unlock_enrollment_at, created_at, updated_at)
+                VALUES (%s, %s, %s, %s, %s, %s)
+            """
+            cursor.execute(sql, (enrollment_code, type_val, user_id, unlock_time, created_at, updated_at))
+            enrollment_id = cursor.lastrowid
+        connection.commit()
+        connection.close()
+
+        return jsonify({"message": "Enrollment created", "id": enrollment_id}), 201
+
+    except Exception as e:
+        logger.error("Error adding enrollment: %s", e)
+        return jsonify({"error": str(e)}), 500
+
+# 3. Edit Enrollment - PUT /enrollments/<id>
+@app.route('/enrollments/<int:enrollment_id>', methods=['PUT'])
+def edit_enrollment(enrollment_id):
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({"error": "No input data provided"}), 400
+
+        update_fields = []
+        params = []
+
+        if "enrollment_code" in data:
+            update_fields.append("enrollment_code = %s")
+            params.append(data["enrollment_code"])
+        if "type" in data:
+            update_fields.append("`type` = %s")
+            params.append(data["type"])
+        if "user_id" in data:
+            update_fields.append("user_id = %s")
+            params.append(data["user_id"])
+        if "unlock_enrollment_at" in data:
+            unlock_enrollment_at = data["unlock_enrollment_at"]
+            if unlock_enrollment_at:
+                try:
+                    unlock_dt = datetime.fromisoformat(unlock_enrollment_at)
+                except ValueError:
+                    return jsonify({"error": "Incorrect date format for unlock_enrollment_at. Use ISO format."}), 400
+            else:
+                unlock_dt = None
+            update_fields.append("unlock_enrollment_at = %s")
+            params.append(unlock_dt)
+
+        if not update_fields:
+            return jsonify({"error": "No valid fields provided for update"}), 400
+
+        # Always update the updated_at column
+        updated_at = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        update_fields.append("updated_at = %s")
+        params.append(updated_at)
+
+        # Add enrollment id to the parameters for WHERE clause
+        params.append(enrollment_id)
+
+        set_clause = ", ".join(update_fields)
+        connection = get_db_connection()
+        with connection.cursor() as cursor:
+            sql = f"UPDATE lifeapp.la_game_enrollments SET {set_clause} WHERE id = %s"
+            cursor.execute(sql, tuple(params))
+        connection.commit()
+        connection.close()
+
+        return jsonify({"message": "Enrollment updated"}), 200
+
+    except Exception as e:
+        logger.error("Error editing enrollment: %s", e)
+        return jsonify({"error": str(e)}), 500
+
+# 4. Delete Enrollment - DELETE /enrollments/<id>
+@app.route('/enrollments/<int:enrollment_id>', methods=['DELETE'])
+def delete_enrollment(enrollment_id):
+    try:
+        connection = get_db_connection()
+        with connection.cursor() as cursor:
+            sql = "DELETE FROM lifeapp.la_game_enrollments WHERE id = %s"
+            cursor.execute(sql, (enrollment_id,))
+        connection.commit()
+        connection.close()
+        return jsonify({"message": "Enrollment deleted"}), 200
+    except Exception as e:
+        logger.error("Error deleting enrollment: %s", e)
+        return jsonify({"error": str(e)}), 500
+    
+
 if __name__ == '__main__':
     app.run(debug=True)
