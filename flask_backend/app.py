@@ -3891,7 +3891,7 @@ def delete_board(board_id):
 ###################################################################################
 
 # 1. List Enrollments - GET /enrollments
-@app.route('/enrollments', methods=['GET'])
+@app.route('/api/enrollments', methods=['GET'])
 def list_enrollments():
     try:
         connection = get_db_connection()
@@ -3906,21 +3906,17 @@ def list_enrollments():
         return jsonify({"error": str(e)}), 500
 
 # 2. Add Enrollment - POST /enrollments
-@app.route('/enrollments', methods=['POST'])
+@app.route('/api/enrollments', methods=['POST'])
 def add_enrollment():
     try:
-        data = request.get_json()
-        if not data:
-            return jsonify({"error": "No input data provided"}), 400
-
-        # Required fields
-        enrollment_code = data.get('enrollment_code')
+        data = request.get_json() or {}
+        # Removed enrollment_code input; it is now generated automatically.
         type_val = data.get('type')
         user_id = data.get('user_id')
         unlock_enrollment_at = data.get('unlock_enrollment_at')  # Expecting ISO datetime string if provided
 
-        if not enrollment_code or type_val is None or not user_id:
-            return jsonify({"error": "Missing required fields: enrollment_code, `type`, and user_id"}), 400
+        if type_val is None or not user_id:
+            return jsonify({"error": "Missing required fields: type and user_id"}), 400
 
         # Parse unlock_enrollment_at if provided
         unlock_time = None
@@ -3930,30 +3926,40 @@ def add_enrollment():
             except ValueError:
                 return jsonify({"error": "Incorrect date format for unlock_enrollment_at. Use ISO format."}), 400
 
-        # Set created_at and updated_at to current UTC time
         created_at = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        updated_at = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        updated_at = created_at
 
         connection = get_db_connection()
-        with connection.cursor() as cursor:
+        try:
+            cursor = connection.cursor()
+            # Insert without enrollment_code
             sql = """
                 INSERT INTO lifeapp.la_game_enrollments 
-                (enrollment_code, `type`, user_id, unlock_enrollment_at, created_at, updated_at)
-                VALUES (%s, %s, %s, %s, %s, %s)
+                (type, user_id, unlock_enrollment_at, created_at, updated_at)
+                VALUES (%s, %s, %s, %s, %s)
             """
-            cursor.execute(sql, (enrollment_code, type_val, user_id, unlock_time, created_at, updated_at))
+            cursor.execute(sql, (type_val, user_id, unlock_time, created_at, updated_at))
             enrollment_id = cursor.lastrowid
-        connection.commit()
-        connection.close()
 
-        return jsonify({"message": "Enrollment created", "id": enrollment_id}), 201
+            # Generate enrollment_code as a 4-digit string (with leading zeroes)
+            enrollment_code = f"{enrollment_id:04d}"
+            # Update the same record with the enrollment_code
+            cursor.execute(
+                "UPDATE lifeapp.la_game_enrollments SET enrollment_code = %s WHERE id = %s",
+                (enrollment_code, enrollment_id)
+            )
+            connection.commit()
+        finally:
+            connection.close()
+
+        return jsonify({"message": "Enrollment created", "id": enrollment_id, "enrollment_code": enrollment_code}), 201
 
     except Exception as e:
         logger.error("Error adding enrollment: %s", e)
         return jsonify({"error": str(e)}), 500
 
 # 3. Edit Enrollment - PUT /enrollments/<id>
-@app.route('/enrollments/<int:enrollment_id>', methods=['PUT'])
+@app.route('/api/enrollments/<int:enrollment_id>', methods=['PUT'])
 def edit_enrollment(enrollment_id):
     try:
         data = request.get_json()
@@ -4010,7 +4016,7 @@ def edit_enrollment(enrollment_id):
         return jsonify({"error": str(e)}), 500
 
 # 4. Delete Enrollment - DELETE /enrollments/<id>
-@app.route('/enrollments/<int:enrollment_id>', methods=['DELETE'])
+@app.route('/api/enrollments/<int:enrollment_id>', methods=['DELETE'])
 def delete_enrollment(enrollment_id):
     try:
         connection = get_db_connection()

@@ -39,18 +39,19 @@ export default function SettingsGameEnrollments() {
 
     // New enrollment state (for add modal)
     const [newEnrollment, setNewEnrollment] = useState({
-        enrollment_code: '',
-        type: '5', // default "Jigyasa" (5). Use "6" for Pragya.
+        // Remove enrollment_code from here.
+        type: '5',         // default to "Jigyasa"
         user_id: '',
-        unlock_enrollment_at: '', // ISO formatted date/time (optional)
+        unlock_enrollment_at: '',
     });
+      
 
     // Function to fetch enrollments
     const fetchEnrollments = async () => {
         setLoading(true);
         try {
         // GET endpoint for listing enrollments
-        const res = await fetch(`${api_startpoint}/enrollments`, {
+        const res = await fetch(`${api_startpoint}/api/enrollments`, {
             method: 'GET',
         });
         const data = await res.json();
@@ -83,28 +84,29 @@ export default function SettingsGameEnrollments() {
 
     const handleAddEnrollment = async () => {
         try {
-        const payload = {
-            enrollment_code: newEnrollment.enrollment_code,
-            type: newEnrollment.type,
+          const payload = {
+            // enrollment_code is not sent
+            type: newEnrollment.type,  // must be 5 or 6
             user_id: newEnrollment.user_id,
             unlock_enrollment_at: newEnrollment.unlock_enrollment_at || null,
-        };
-        const res = await fetch(`${api_startpoint}/enrollments`, {
+          };
+          const res = await fetch(`${api_startpoint}/api/enrollments`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload),
-        });
-        const data = await res.json();
-        if (data.success) {
+          });
+          const data = await res.json();
+          if (data.success) {
             setShowAddModal(false);
-            // Reset new enrollment state
-            setNewEnrollment({ enrollment_code: '', type: '5', user_id: '', unlock_enrollment_at: '' });
-            fetchEnrollments();
-        }
+            // Reset enrollment form
+            setNewEnrollment({ type: '5', user_id: '', unlock_enrollment_at: '' });
+            fetchEnrollments(); // refresh the table
+          }
         } catch (error) {
-        console.error("Error adding enrollment:", error);
+          console.error("Error adding enrollment:", error);
         }
-    };
+      };
+      
 
     const openEditModal = (enrollment: Enrollment) => {
         setEnrollmentToEdit(enrollment);
@@ -120,7 +122,7 @@ export default function SettingsGameEnrollments() {
             user_id: enrollmentToEdit.user_id,
             unlock_enrollment_at: enrollmentToEdit.unlock_enrollment_at,
         };
-        const res = await fetch(`${api_startpoint}/enrollments/${enrollmentToEdit.id}`, {
+        const res = await fetch(`${api_startpoint}/api/enrollments/${enrollmentToEdit.id}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload),
@@ -144,7 +146,7 @@ export default function SettingsGameEnrollments() {
     const handleDeleteEnrollment = async () => {
         if (!enrollmentToDelete) return;
         try {
-        const res = await fetch(`${api_startpoint}/enrollments/${enrollmentToDelete.id}`, {
+        const res = await fetch(`${api_startpoint}/api/enrollments/${enrollmentToDelete.id}`, {
             method: 'DELETE',
         });
         const data = await res.json();
@@ -269,7 +271,7 @@ export default function SettingsGameEnrollments() {
                 <button type="button" className="btn-close" onClick={() => setShowAddModal(false)}></button>
               </div>
               <div className="modal-body">
-                <div className="mb-3">
+                {/* <div className="mb-3">
                   <label className="form-label">Enrollment Code</label>
                   <input
                     type="text"
@@ -279,7 +281,7 @@ export default function SettingsGameEnrollments() {
                       setNewEnrollment({ ...newEnrollment, enrollment_code: e.target.value })
                     }
                   />
-                </div>
+                </div> */}
                 <div className="mb-3">
                   <label className="form-label">User ID</label>
                   <input
