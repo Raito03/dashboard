@@ -158,8 +158,8 @@ function SearchableDropdown({
   );
 }
 
-const api_startpoint = 'https://lifeapp-api-vv1.vercel.app'
-
+//const api_startpoint = 'https://lifeapp-api-vv1.vercel.app'
+const api_startpoint = 'http://152.42.239.141:5000'
 // ------------------- MAIN COMPONENT -------------------
 export default function SchoolData() {
   // ---------- State Variables ----------

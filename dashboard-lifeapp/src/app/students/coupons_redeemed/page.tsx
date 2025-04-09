@@ -23,7 +23,8 @@ interface CouponRedemption {
     'Coupon Redeemed Date': string;
 }
 
-const api_startpoint = 'https://lifeapp-api-vv1.vercel.app'
+// const api_startpoint = 'https://lifeapp-api-vv1.vercel.app'
+const api_startpoint = 'http://152.42.239.141:5000'
 
 export default function CouponsRedeemed() {
     const [isClient, setIsClient] = useState(false);

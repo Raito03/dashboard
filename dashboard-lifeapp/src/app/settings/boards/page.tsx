@@ -7,8 +7,8 @@ const inter = Inter({ subsets: ['latin'] });
 import { Sidebar } from '@/components/ui/sidebar';
 import { IconPlus, IconTrash, IconEdit } from '@tabler/icons-react';
 
-const api_startpoint = 'https://lifeapp-api-vv1.vercel.app'
-//const api_startpoint = 'http://127.0.0.1:5000'
+//const api_startpoint = 'https://lifeapp-api-vv1.vercel.app'
+const api_startpoint = 'http://152.42.239.141:5000'
 
 
 type Board = {

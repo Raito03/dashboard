@@ -139,7 +139,7 @@ export function Sidebar() {
             <NavItem href="/students/dashboard" label="Dashboard" isNested />
             <NavItem href="/students/mission" label="Mission" isNested />
             <NavItem href="/students/coupons_redeemed" label="Coupon Redeemed" isNested />
-            <NavItem href="/students/quiz" label="Quiz" isNested />
+            {/* <NavItem href="/students/quiz" label="Quiz" isNested /> */}
             
             {/* <NavItem
               href="/interface/authentication"

@@ -5,8 +5,8 @@ import { Sidebar } from '@/components/ui/sidebar';
 import '@tabler/core/dist/css/tabler.min.css';
 import NumberFlow from '@number-flow/react';
 
-const api_startpoint = 'https://lifeapp-api-vv1.vercel.app'
-//const api_startpoint = 'http://127.0.0.1:5000'
+//const api_startpoint = 'https://lifeapp-api-vv1.vercel.app'
+const api_startpoint = 'http://152.42.239.141:5000'
 
 const inter = Inter({ subsets: ['latin'] });
 import dynamic from 'next/dynamic'
