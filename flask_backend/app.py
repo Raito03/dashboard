@@ -440,6 +440,63 @@ def get_coupons_used_count():
     finally:
         connection.close()
 
+@app.route('/api/histogram_level_subject_challenges_complete', methods=['POST'])
+def get_histogram_data_level_subject_challenges_complete():
+    """
+    Returns data for a histogram that shows, for each level (la_level_id),
+    counts of mission completes grouped by subject id (la_subject_id).
+    """
+    try:
+        connection = get_db_connection()
+        with connection.cursor() as cursor:
+            sql = """
+                SELECT 
+                    COUNT(*) AS count, 
+                    las.title AS subject_title, 
+                    lal.title AS level_title
+                FROM lifeapp.la_mission_completes lamc 
+                INNER JOIN lifeapp.la_missions lam ON lam.id = lamc.la_mission_id
+                INNER JOIN lifeapp.la_subjects las ON lam.la_subject_id = las.id
+                INNER JOIN lifeapp.la_levels lal ON lam.la_level_id = lal.id
+                GROUP BY lam.la_subject_id, lam.la_level_id
+                ORDER BY lam.la_subject_id, lam.la_level_id;
+
+            """
+            cursor.execute(sql)
+            results = cursor.fetchall()
+        return jsonify(results), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    finally:
+        connection.close()
+
+@app.route('/api/histogram_topic_level_subject_quizgames', methods=['POST'])
+def get_histogram_topic_level_subject_quizgames():
+    try:
+        connection = get_db_connection()
+        with connection.cursor() as cursor:
+            sql = """
+                SELECT 
+                    COUNT(*) AS count,
+                    las.title AS subject_title,
+                    lal.title AS level_title
+                FROM lifeapp.la_quiz_games laqg
+                INNER JOIN lifeapp.la_subjects las ON laqg.la_subject_id = las.id
+                INNER JOIN lifeapp.la_topics lat ON lat.id = laqg.la_topic_id
+                INNER JOIN lifeapp.la_levels lal ON lat.la_level_id = lal.id  -- use topic’s level
+                WHERE las.status = 1
+                GROUP BY laqg.la_subject_id, lat.la_level_id
+                ORDER BY las.title, lal.title;
+                """
+
+            cursor.execute(sql)
+            result = cursor.fetchall()
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        connection.close()
+
 
 @app.route('/api/total-student-count', methods=['GET'])
 def get_total_student_count():
@@ -614,8 +671,16 @@ def search():
         sql += " AND u.state = %s"
         params.append(state)
     if school:
-        sql += " AND ls.name = %s"
-        params.append(school)
+        if isinstance(school, list):
+            if len(school) == 1:
+                sql += " AND ls.name = %s"
+                params.append(school[0])
+            else:
+                sql += " AND ls.name IN %s"
+                params.append(tuple(school))
+        else:
+            sql += " AND ls.name = %s"
+            params.append(school)
     if city:
         sql += " AND u.city = %s"
         params.append(city)
@@ -869,68 +934,60 @@ def mission_search():
     
     # Build the base query with the CTE, including mission count aggregations
     sql = """
-            with cte as (
+            WITH cte AS (
                 SELECT 
-                    m.id AS Mission_Id, 
-                    m.title AS Mission_Title, 
+                    m.id AS Mission_ID,
+                    m.title AS Mission_Title,
                     CASE 
-                        WHEN u.name IS NULL THEN 'self' 
-                        WHEN u.type = 3 THEN 'self' 
-                        ELSE u.name 
-                    END AS Approved_By, 
+                        WHEN ma.teacher_id IS NULL OR ma.teacher_id = u.id THEN 'Self'
+                        ELSE t.name 
+                    END AS Assigned_By,
+                    u.id AS Student_ID,
+                    u.name AS Student_Name,
+                    u.school_id AS School_ID,
+                    s.name AS School_Name,
                     CASE 
-                        when mc.approved_at is not null then 'Approved'
-                        when mc.rejected_at is null then 'Requested'
-                        else 'Rejected'
-                    END as Status,
-                    mc.user_id AS Student_Id, 
-                    mc.created_at AS Requested_At, 
-                    mc.points AS Total_Points, 
-                    mc.timing AS Each_Mission_Timing 
-                FROM lifeapp.la_missions m 
-                LEFT JOIN lifeapp.la_mission_assigns lma ON m.id = lma.la_mission_id
-                LEFT JOIN lifeapp.users u ON u.id = lma.teacher_id 
-                LEFT JOIN lifeapp.la_mission_completes mc ON m.id = mc.la_mission_id
-                )
-            select 
-                cte.Mission_Id,
-                u.name as Student_Name,
-                u.school_id,
-                ls.name as School_Name,
-                cte.Mission_Title,
-                cte.Approved_By,
-                cte.Status,
-                cte.Student_Id,
-                cte.Requested_At,
-                cte.Total_Points,
-                cte.Each_Mission_Timing,
-                u.mobile_no,
-                u.dob,
-                u.grade,
-                u.city,
-                u.state,
-                u.address,
-                u.earn_coins,
-                u.heart_coins,
-                u.brain_coins
-            from cte inner join lifeapp.users u on cte.Student_id = u.id
-                    inner join lifeapp.schools ls on ls.id = u.school_id
+                        WHEN mc.approved_at IS NOT NULL THEN 'Approved'
+                        WHEN mc.rejected_at IS NOT NULL THEN 'Rejected'
+                        ELSE 'Requested'
+                    END AS Status,
+                    mc.created_at AS Requested_At,
+                    mc.points AS Total_Points,
+                    mc.timing AS Each_Mission_Timing,
+                    u.mobile_no,
+                    u.dob,
+                    u.grade,
+                    u.city,
+                    u.state,
+                    u.address,
+                    u.earn_coins,
+                    u.heart_coins,
+                    u.brain_coins
+                FROM lifeapp.la_missions m
+                LEFT JOIN lifeapp.la_mission_assigns ma ON m.id = ma.la_mission_id
+                LEFT JOIN lifeapp.users t ON ma.teacher_id = t.id
+                LEFT JOIN lifeapp.users u ON ma.user_id = u.id
+                LEFT JOIN lifeapp.la_mission_completes mc 
+                    ON m.id = mc.la_mission_id AND mc.user_id = u.id
+                LEFT JOIN lifeapp.schools s ON u.school_id = s.id
+            )
+            SELECT * FROM cte
+            WHERE 1=1
+
     """
     params = []
     
-    if mission_acceptance:
-        if mission_acceptance == 'Accepted':
-            sql += " AND cte.Status = 'Approved' "
-        elif mission_acceptance == 'Rejected':
-            sql += " AND cte.Status = 'Rejected' "
-        else:
-            sql += " AND cte.Status = 'Requested' "
+    if mission_acceptance and mission_acceptance in ("Approved", "Requested", "Rejected"):
+        sql += " AND cte.Status = %s"
+        params.append(mission_acceptance)
+
     if assigned_by:
-        if assigned_by == 'Teacher':
-            sql += " AND cte.Approved_By != 'self' "
-        else:
-            sql += " AND cte.Approved_By = 'self' "
-    # Add date range filters
+        if assigned_by.lower() == "self":
+            sql += " AND cte.Assigned_By = 'Self'"
+        elif assigned_by.lower() == "teacher":
+            sql += " AND cte.Assigned_By <> 'Self'"
+
+    # Filter for creation date range
     if from_date:
         sql += " AND cte.Requested_At >= %s"
         params.append(from_date)
@@ -941,14 +998,14 @@ def mission_search():
     # NEW: Add filter for School ID and Mobile No.
     school_id = filters.get('school_id')
     if school_id:
-        sql += " AND u.school_id = %s"
+        sql += " AND cte.School_ID = %s"
         params.append(school_id)
     mobile_no = filters.get('mobile_no')
     if mobile_no:
-        sql += " AND u.mobile_no = %s"
+        sql += " AND cte.mobile_no = %s"
         params.append(mobile_no)
 
-    sql += " ;"
+    sql += " ORDER BY cte.Requested_At DESC ;"
     
     try:
         connection = get_db_connection()
@@ -977,7 +1034,54 @@ def get_teacher_states():
     finally:
         connection.close()
 
-        
+
+@app.route('/api/teachers-by-grade-subject-section', methods=['POST'])
+def teachers_by_grade_subject_section():
+    """
+    This endpoint returns teacher counts broken down by la_grade_id (grade),
+    by subject (from las.title), and further by section (from lass.name).
+    """
+    connection = get_db_connection()
+    try:
+        with connection.cursor() as cursor:
+            sql = """
+                SELECT COUNT(*) AS count, 
+                       las.title, 
+                       la_grade_id, 
+                       lass.name AS section
+                FROM lifeapp.la_teacher_grades latg 
+                INNER JOIN lifeapp.la_subjects las ON las.id = latg.la_subject_id 
+                INNER JOIN lifeapp.la_sections lass ON lass.id = latg.la_section_id
+                WHERE las.status = 1
+                GROUP BY la_subject_id, la_grade_id, la_section_id
+                ORDER BY la_subject_id, la_grade_id, la_section_id;
+            """
+            cursor.execute(sql)
+            rows = cursor.fetchall()
+            # Optionally, if las.title is stored as a JSON string, convert it.
+            # For example, if rows[0]['title'] is '{"en": "Science"}':
+            for row in rows:
+                try:
+                    title_json = json.loads(row['title'])
+                    # Use "en" language if available, else fallback.
+                    row['subject'] = title_json.get('en', row['title'])
+                except Exception:
+                    row['subject'] = row['title']
+            
+            # Return only the keys we care about: grade, subject, section and count
+            result = [{
+                'grade': row['la_grade_id'],
+                'subject': row['subject'],
+                'section': row['section'],
+                'count': row['count']
+            } for row in rows]
+
+            return jsonify(result)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        connection.close()
+
 @app.route('/api/teacher_dashboard_search', methods=['POST'])
 def fetch_teacher_dashboard():
     filters = request.get_json() or {}
@@ -2133,15 +2237,9 @@ def get_total_points_redeemed():
 @app.route('/api/total-missions-completed-assigned-by-teacher', methods = ['POST'])
 def get_total_missions_completed_assigned_by_teacher():
     sql  = """
-        WITH mission_counts AS (
-            SELECT COUNT(*) AS mission_count
-            FROM lifeapp.la_mission_assigns lama
-            INNER JOIN lifeapp.la_mission_completes lamc 
-                ON lamc.la_mission_id = lama.la_mission_id
-            GROUP BY lama.teacher_id, lama.user_id
-        )
-        SELECT SUM(mission_count) AS total_missions_completed
-        FROM mission_counts;
+        SELECT count(*) as count FROM lifeapp.la_mission_assigns lama INNER JOIN lifeapp.la_mission_completes lamc 
+            ON lamc.la_mission_id = lama.la_mission_id
+                and lamc.user_id =lama.user_id;
     """
     try:
         connection = get_db_connection()
@@ -2808,19 +2906,42 @@ def get_count_school_rate_dashboard():
 ###################################################################################
 @app.route('/api/mentors', methods=['POST'])
 def get_mentors():
-    """Fetch list of mentors."""
+    """Fetch list of mentors with optional filters for state, mobile number, and mentor_code."""
     try:
         filters = request.get_json() or {}
+        state_filter = filters.get('state')
+        mobile_filter = filters.get('mobile_no')
+        mentor_code_filter = filters.get('mentor_code')
+        
         connection = get_db_connection()
         with connection.cursor() as cursor:
-            sql = "select id,name,email,mobile_no,pin, gender, dob, state, city from lifeapp.users where `type` = 4;"
-            cursor.execute(sql)
+            # Base query: selecting mentors (type 4)
+            sql = """
+                SELECT id, name, email, mobile_no, pin, gender, dob, state, city 
+                FROM lifeapp.users 
+                WHERE `type` = 4
+            """
+            conditions = []
+            params = []
+            if state_filter:
+                conditions.append(" state = %s")
+                params.append(state_filter)
+            if mobile_filter:
+                conditions.append(" mobile_no = %s")
+                params.append(mobile_filter)
+            if mentor_code_filter:
+                conditions.append(" pin = %s")
+                params.append(mentor_code_filter)
+            if conditions:
+                sql += " AND " + " AND ".join(conditions)
+            cursor.execute(sql, tuple(params))
             result = cursor.fetchall()
         return jsonify(result)
     except Exception as e:
         return jsonify({'error': str(e)}), 500
     finally:
         connection.close()
+
 
 @app.route('/api/add_mentor', methods=['POST'])
 def add_mentor():
@@ -3025,54 +3146,45 @@ def get_quiz_sessions():
     try:
         connection = get_db_connection()
         with connection.cursor() as cursor:
-            cursor.execute("""
-                WITH sessionized_data AS (
-                    SELECT 
-                        *,
-                        @session_group := CASE 
-                            WHEN TIMESTAMPDIFF(SECOND, @prev_created_at, created_at) > 5 
-                                 OR @prev_user_id != user_id 
-                                 OR @prev_game_id != la_quiz_game_id 
-                            THEN @session_group + 1 
-                            ELSE @session_group 
-                        END AS session_group,
-                        @prev_created_at := created_at,
-                        @prev_user_id := user_id,
-                        @prev_game_id := la_quiz_game_id
-                    FROM 
-                        lifeapp.la_quiz_game_results,
-                        (SELECT @prev_created_at := NULL, @prev_user_id := NULL, @prev_game_id := NULL, @session_group := 0) vars
-                    ORDER BY 
-                        user_id, la_quiz_game_id, created_at
-                ),
-                ranked_entries AS (
-                    SELECT 
-                        *,
-                        ROW_NUMBER() OVER (
-                            PARTITION BY user_id, la_quiz_game_id, session_group 
-                            ORDER BY created_at
-                        ) AS session_rank
-                    FROM sessionized_data
-                )
+            sql = """
                 SELECT 
-                    id,
-                    la_quiz_game_id,
-                    user_id,
-                    total_questions,
-                    total_correct_answers,
-                    coins,
-                    created_at,
-                    updated_at
-                FROM ranked_entries
-                WHERE session_rank = 1
-                ORDER BY user_id, la_quiz_game_id, created_at;
-            """)
+                    laqg.id,
+                    laqg.user_id,
+                    laqg.game_code AS game_id,
+                    las.title AS subject_title,
+                    lal.title AS level_title,
+                    lat.title AS topic_title,
+                    laqg.time AS time_taken,
+                    laqgr.total_questions,
+                    laqgr.total_correct_answers,
+                    u.name AS user_name,
+                    ls.name AS school_name,
+                    u.earn_coins,
+                    u.heart_coins,
+                    u.brain_coins
+                FROM lifeapp.la_quiz_games laqg
+                INNER JOIN lifeapp.la_quiz_game_results laqgr 
+                    ON laqg.game_code = laqgr.la_quiz_game_id
+                    AND laqg.user_id = laqgr.user_id
+                INNER JOIN lifeapp.users u 
+                    ON u.id = laqg.user_id
+                INNER JOIN lifeapp.la_subjects las 
+                    ON las.id = laqg.la_subject_id
+                INNER JOIN lifeapp.la_levels lal 
+                    ON lal.id = laqg.la_level_id
+                INNER JOIN lifeapp.la_topics lat 
+                    ON lat.id = laqg.la_topic_id
+                INNER JOIN lifeapp.schools ls 
+                    ON ls.id = u.school_id;
+            """
+            cursor.execute(sql)
             result = cursor.fetchall()
         return jsonify(result), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500
     finally:
         connection.close()
+
 # @app.route('/api/quiz_sessions', methods=['POST'])
 # def get_quiz_sessions():
 #     try:

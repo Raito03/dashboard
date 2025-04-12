@@ -24,8 +24,8 @@ import error from 'next/error';
 interface SearchableDropdownProps {
     options: string[];
     placeholder: string;
-    value: string;
-    onChange: (value: string) => void;
+    value: string[];
+    onChange: (value: string[]) => void;
     isLoading?: boolean;
     maxDisplayItems?: number;
 }
@@ -162,7 +162,10 @@ function SearchableDropdown({
     }, [isOpen]);
 
     const handleSelect = (option: string) => {
-        onChange(option);
+        const newValues = value.includes(option)
+            ? value.filter(item => item !== option)
+            : [...value, option];
+        onChange(newValues);
         setIsOpen(false);
         setSearchTerm("");
         setDebouncedSearchTerm("");
@@ -176,7 +179,7 @@ function SearchableDropdown({
 
     // Calculate if there are more items to load
     const hasMoreItems = filteredOptions.length > displayedItems;
-  
+    
     return (
         <div className="relative" ref={dropdownRef}>
             <div
@@ -187,7 +190,7 @@ function SearchableDropdown({
                 aria-haspopup="listbox"
             >
                 <span className={value ? "text-gray-900" : "text-gray-500"}>
-                    {isLoading ? "Loading..." : (value || placeholder)}
+                    {isLoading ? "Loading..." : (value.length ? `${value.length} selected` : placeholder)}
                 </span>
                 <ChevronDown className="h-4 w-4 text-gray-500"/>
             </div>
@@ -220,6 +223,12 @@ function SearchableDropdown({
                                             className="cursor-pointer px-3 py-2 text-gray-900 hover:bg-purple-50"
                                             onClick={() => handleSelect(option)}
                                         >
+                                            <input
+                                                type="checkbox"
+                                                checked={value.includes(option)}
+                                                readOnly
+                                                className="mr-2 h-4 w-4 text-sky-900 rounded border-gray-300 focus:ring-purple-500"
+                                            />
                                             {option}
                                         </div>
                                     ))
@@ -252,8 +261,9 @@ function SearchableDropdown({
   
 // const api_startpoint = 'https://lifeapp-api-vv1.vercel.app'
 const api_startpoint = 'http://152.42.239.141:5000'
+// const api_startpoint = 'http://127.0.0.1:5000'
 
-export default function SchoolDashboard() {
+export default function StudentDashboard() {
     const [totalStudents, setTotalStudents] = useState<number>(0)
     const [selectedState, setSelectedState] = useState("");
     useEffect(() => {
@@ -371,7 +381,7 @@ export default function SchoolDashboard() {
     // For city fetching - optimized but independent of state
     const [schools, setSchools] = useState<string[]>([]);
     const [isSchoolsLoading, setIsSchoolsLoading] = useState(false);
-    const [selectedSchools, setSelectedSchools] = useState("");
+    const [selectedSchools, setSelectedSchools] = useState<string[]>([]);
     useEffect(() => {
         async function fetchSchools() {
             // Check cache first
@@ -459,7 +469,7 @@ export default function SchoolDashboard() {
     const handleSearch = async () => {
         const filters = {
             state: selectedState,
-            school: selectedSchools,
+            school: selectedSchools.length > 0 ? selectedSchools : undefined,
             city: selectedCity,
             grade: selectedGrade,
             mission_type: '',
@@ -498,7 +508,7 @@ export default function SchoolDashboard() {
     const handleClear = () => {
         setSelectedState("");
         setSelectedCity("");
-        setSelectedSchools("");
+        setSelectedSchools([]);
         setSelectedGrade("");
         // setSelectedMissionType("");
         setSelectedMissionAcceptance("");
@@ -949,7 +959,7 @@ export default function SchoolDashboard() {
                 })
                 const data = await res.json()
                 if (data && data.length > 0) {
-                    setTmcAssignedByTeacher(data[0].total_missions_completed)
+                    setTmcAssignedByTeacher(data[0].count)
                 }
             } catch (error) {
                 console.error('Error fetching user count:', error)
@@ -1112,6 +1122,42 @@ export default function SchoolDashboard() {
     const handleModalClose = () => {
         setModalOpen(false);
     };
+
+    // State for the quiz data, loading indicator, modal visibility and pagination
+    const [quizData, setQuizData] = useState<any[]>([]);
+    const [isQuizLoading, setIsQuizLoading] = useState<boolean>(false);
+    const [openQuizTopicLevelModal, setOpenQuizTopicLevelModal] = useState<boolean>(false);
+    const [currentQuizPage, setCurrentQuizPage] = useState<number>(0);
+    const rowsPerPageQuiz = 10;
+
+    // Fetch quiz data (with count, subject_title, level_title) from API
+    useEffect(() => {
+        async function fetchQuizData() {
+        setIsQuizLoading(true);
+        try {
+            const res = await fetch(`${api_startpoint}/api/histogram_topic_level_subject_quizgames`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+            });
+            const raw = await res.json();
+            setQuizData(raw);
+        } catch (err) {
+            console.error("Error fetching quiz data:", err);
+        }
+        setIsQuizLoading(false);
+        }
+        fetchQuizData();
+    }, [api_startpoint]);
+
+    // Function to calculate the total count of quizzes
+    const totalQuiz = quizData.reduce((sum, row) => sum + Number(row.count), 0);
+
+    // Paginate the quiz data
+    const paginatedQuizData = quizData.slice(
+        currentQuizPage * rowsPerPageQuiz,
+        (currentQuizPage + 1) * rowsPerPageQuiz
+    );
+
     return(
         <div className={`page bg-light ${inter.className} font-sans`}>
             <Sidebar />
@@ -1271,7 +1317,23 @@ export default function SchoolDashboard() {
                                     </div>
                                 </div>
                             </div>
+                            <div className="col-sm-4 col-lg-4" onClick={() => setOpenQuizTopicLevelModal(true)}>
+                                <div className="card cursor-pointer hover:shadow-lg transition-shadow">
+                                    <div className="card-body">
+                                        <div className="d-flex align-items-center">
+                                            <div className="bg-yellow-900 rounded-circle p-3 text-white me-3">
+                                                <IconTrophy size={24} />
+                                            </div>
+                                            <div>
+                                                <div className="subheader">View Quiz Completions</div>
+                                                <div className="text-muted">Click to see Quiz completion details by students</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
+                        
                         {/* <div className="row g-4 mb-4">
                             {
                                 isLoading ? (
@@ -1641,7 +1703,120 @@ export default function SchoolDashboard() {
                                 </div>
                             </div>
                         )}
+                        {/*Total number of quiz submitted by students  in each level for each subject in the Life app*/}
+                        {/* Modal for Quiz Data */}
+                        {openQuizTopicLevelModal && (
+                            <div className="modal fade show" style={{ display: 'block', backgroundColor: 'rgba(0,0,0,0.5)' }}>
+                            <div className="modal-dialog modal-lg">
+                                <div className="modal-content">
+                                <div className="modal-header">
+                                    <h5 className="modal-title">Quiz Statistics by Subject and Level</h5>
+                                    <button 
+                                    type="button" 
+                                    className="btn-close" 
+                                    onClick={() => setOpenQuizTopicLevelModal(false)}
+                                    ></button>
+                                </div>
+                                <div className="modal-body">
+                                    {isQuizLoading ? (
+                                    <div className="text-center">
+                                        <div className="spinner-border text-info" role="status">
+                                        <span className="visually-hidden">Loading...</span>
+                                        </div>
+                                        <p className="mt-2">Loading quiz data...</p>
+                                    </div>
+                                    ) : quizData.length === 0 ? (
+                                    <div className="text-center text-muted">
+                                        <p>No quiz data available.</p>
+                                    </div>
+                                    ) : (
+                                    <div className="table-responsive">
+                                        <table className="table table-striped table-hover">
+                                        <thead>
+                                            <tr>
+                                            <th>Subject</th>
+                                            <th>Level</th>
+                                            <th>Count</th>
+                                            <th>Percentage</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {paginatedQuizData.map((row, index) => {
+                                            let subject = '';
+                                            try {
+                                                const parsedSubject = JSON.parse(row.subject_title);
+                                                subject = parsedSubject.en || '';
+                                            } catch (error) {
+                                                subject = row.subject_title;
+                                            }
+                                            let level = '';
+                                            try {
+                                                const parsedLevel = JSON.parse(row.level_title);
+                                                level = parsedLevel.en || '';
+                                            } catch (error) {
+                                                level = row.level_title;
+                                            }
+                                            const percentage = totalQuiz > 0 
+                                                ? ((Number(row.count) / totalQuiz) * 100).toFixed(3) 
+                                                : '0.00';
 
+                                            return (
+                                                <tr key={index}>
+                                                <td>{subject}</td>
+                                                <td>{level}</td>
+                                                <td>{Number(row.count).toLocaleString()}</td>
+                                                <td>{percentage}%</td>
+                                                </tr>
+                                            );
+                                            })}
+                                        </tbody>
+                                        <tfoot>
+                                            <tr className="table-active">
+                                            <td colSpan={2}><strong>Total</strong></td>
+                                            <td><strong>{totalQuiz.toLocaleString()}</strong></td>
+                                            <td><strong>100%</strong></td>
+                                            </tr>
+                                        </tfoot>
+                                        </table>
+                                        {/* Pagination Controls */}
+                                        <div className="d-flex justify-content-between mt-3">
+                                        <button 
+                                            className="btn btn-secondary"
+                                            onClick={() => setCurrentQuizPage(prev => Math.max(prev - 1, 0))}
+                                            disabled={currentQuizPage === 0}
+                                        >
+                                            Previous
+                                        </button>
+                                        <div className="d-flex align-items-center">
+                                            <span className="mx-2">
+                                            Page {currentQuizPage + 1} of {Math.ceil(quizData.length / rowsPerPageQuiz) || 1}
+                                            </span>
+                                        </div>
+                                        <button 
+                                            className="btn btn-secondary"
+                                            onClick={() => setCurrentQuizPage(prev => 
+                                            (prev + 1) * rowsPerPageQuiz < quizData.length ? prev + 1 : prev)}
+                                            disabled={(currentQuizPage + 1) * rowsPerPageQuiz >= quizData.length}
+                                        >
+                                            Next
+                                        </button>
+                                        </div>
+                                    </div>
+                                    )}
+                                </div>
+                                <div className="modal-footer">
+                                    <button 
+                                    type="button" 
+                                    className="btn btn-secondary" 
+                                    onClick={() => setOpenQuizTopicLevelModal(false)}
+                                    >
+                                    Close
+                                    </button>
+                                </div>
+                                </div>
+                            </div>
+                            </div>
+                        )}
 
 
                         <div className="card shadow-sm border-0 mb-4">
@@ -1690,8 +1865,8 @@ export default function SchoolDashboard() {
                                         <SearchableDropdown
                                             options={states}
                                             placeholder="Select State"
-                                            value={selectedState}
-                                            onChange={setSelectedState}
+                                            value={selectedState ? [selectedState] : []} // Convert to array
+                                            onChange={(vals) => setSelectedState(vals[0] || '')} // Take first value
                                             isLoading={isStatesLoading}
                                             maxDisplayItems={200}
                                             
@@ -1703,8 +1878,8 @@ export default function SchoolDashboard() {
                                         <SearchableDropdown
                                             options={cities}
                                             placeholder="Select city"
-                                            value={selectedCity}
-                                            onChange={setSelectedCity}
+                                            value={selectedCity ? [selectedCity] : []} // Convert to array
+                                            onChange={(vals) => setSelectedCity(vals[0] || '')} // Take first value
                                             isLoading={isCitiesLoading}
                                             maxDisplayItems={200}
                                         />
@@ -2054,8 +2229,8 @@ export default function SchoolDashboard() {
                                 <SearchableDropdown
                                     options={states}
                                     placeholder="Select State"
-                                    value={newStudent.state}
-                                    onChange={val => handleNewChange('state', val)}
+                                    value={newStudent.state? [newStudent.state]: []}
+                                    onChange={(vals) => handleNewChange('state', vals[0]||'')}
                                     isLoading={isStatesLoading}
                                 />
                                 </div>
@@ -2064,25 +2239,25 @@ export default function SchoolDashboard() {
                                 <SearchableDropdown
                                     options={cities}
                                     placeholder="Select City"
-                                    value={newStudent.city}
-                                    onChange={val => handleNewChange('city', val)}
+                                    value={newStudent.city? [newStudent.city]:[]}
+                                    onChange={(vals) => handleNewChange('city', vals[0] || '')}
                                     isLoading={isCitiesLoading}
                                 />
                                 </div>
                                 
                                 <div>
-                                     <label className="block text-sm mb-1">School</label>
-                                     <SearchableDropdown
-                                       options={schools}
-                                       placeholder="Select School"
-                                       value={newStudent.school_name || ''}
-                                       onChange={val => {
-                                         handleNewChange('school_name', val);
-                                         handleNewChange('school_id', ''); // clear any manual ID
-                                          }}
-                                       isLoading={isSchoolsLoading}
-                                     />
-                                  </div>
+                                    <label className="block text-sm mb-1">School</label>
+                                    <SearchableDropdown
+                                        options={schools}
+                                        placeholder="Select School"
+                                        value={newStudent.school_name ? [newStudent.school_name] : []}
+                                        onChange={(vals) => {
+                                        handleNewChange('school_name', vals[0] || ''); // Take first selected school
+                                        handleNewChange('school_id', ''); // clear any manual ID
+                                        }}
+                                        isLoading={isSchoolsLoading}
+                                    />
+                                </div>
                             </div>
 
                             <div className="d-flex flex-row gap-4 w-[90%]">
@@ -2199,22 +2374,22 @@ export default function SchoolDashboard() {
                                 </select>
                                 </div>
                                 <div>
-                                <label className="block text-sm mb-1">State</label>
-                                <SearchableDropdown
-                                    options={states}
-                                    placeholder="Select State"
-                                    value={editingStudent.state ?? ''}
-                                    onChange={val => handleEditChange('state', val)}
-                                    isLoading={isStatesLoading}
-                                />
+                                    <label className="block text-sm mb-1">State</label>
+                                    <SearchableDropdown
+                                        options={states}
+                                        placeholder="Select State"
+                                        value={editingStudent.state ? [editingStudent.state] : []}
+                                        onChange={(vals) => handleEditChange('state', vals[0] || '')}
+                                        isLoading={isStatesLoading}
+                                    />
                                 </div>
                                 <div>
                                 <label className="block text-sm mb-1">City</label>
                                 <SearchableDropdown
                                     options={cities}
                                     placeholder="Select City"
-                                    value={editingStudent.city ?? ''}
-                                    onChange={val => handleEditChange('city', val)}
+                                    value={editingStudent.city ? [editingStudent.city] : []}
+                                    onChange={(vals) => handleEditChange('city', vals[0] || '')}
                                     isLoading={isCitiesLoading}
                                 />
                                 </div>
@@ -2223,8 +2398,8 @@ export default function SchoolDashboard() {
                                 <SearchableDropdown
                                     options={schools}
                                     placeholder="Select School"
-                                    value={editingStudent.school_name ?? ''}
-                                    onChange={val => handleEditChange('school_name', val)}
+                                    value={editingStudent.school_name ? [editingStudent.school_name] : []}
+                                    onChange={(vals) => handleEditChange('school_name', vals[0] || '')}
                                     isLoading={isSchoolsLoading}
                                 />
                                 </div>

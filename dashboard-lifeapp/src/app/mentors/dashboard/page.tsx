@@ -9,6 +9,7 @@ import { ChevronDown } from 'lucide-react';
 const inter = Inter({ subsets: ['latin'] });
 //const api_startpoint = 'https://lifeapp-api-vv1.vercel.app'
 const api_startpoint = 'http://152.42.239.141:5000'
+// const api_startpoint = 'http://127.0.0.1:5000'
 
 interface StatCardProps {
   title: string;
@@ -27,6 +28,7 @@ interface FilterState {
   startDate: string;
   endDate: string;
   mobileNumber: string;
+  mentorCode: string;
 }
 
 interface TableData {
@@ -262,7 +264,8 @@ export default function MentorsDashboard() {
     SessionCompleted: '',
     startDate: '',
     endDate: '',
-    mobileNumber: ''
+    mobileNumber: '',
+    mentorCode: ''
   });
 
   const stats = [
@@ -288,21 +291,48 @@ export default function MentorsDashboard() {
     setFilters(prev => ({ ...prev, [key]: value }));
   };
 
+  // const handleClear = () => {
+  //   setFilters({
+  //     school: '',
+  //     grade: '',
+  //     state: '',
+  //     city: '',
+  //     Company: '',
+  //     Session: '',
+  //     SessionBooked: '',
+  //     SessionCompleted: '',
+  //     startDate: '',
+  //     endDate: '',
+  //     mobileNumber: '',
+  //     mentorCode: ''
+  //   });
+  // };
+
   const handleClear = () => {
-    setFilters({
-      school: '',
-      grade: '',
-      state: '',
-      city: '',
-      Company: '',
-      Session: '',
-      SessionBooked: '',
-      SessionCompleted: '',
-      startDate: '',
-      endDate: '',
-      mobileNumber: '',
-    });
+    const isAlreadyClear =
+      filters.state === '' &&
+      filters.mobileNumber === '' &&
+      filters.mentorCode === '';
+    
+    if (!isAlreadyClear) {
+      setFilters({
+        school: '',
+        grade: '',
+        state: '',
+        city: '',
+        Company: '',
+        Session: '',
+        SessionBooked: '',
+        SessionCompleted: '',
+        startDate: '',
+        endDate: '',
+        mobileNumber: '',
+        mentorCode: ''
+      });
+      fetchMentors();
+    }
   };
+  
 
   const handleSearch = () => {
     console.log('Searching with filters:', filters);
@@ -353,23 +383,32 @@ export default function MentorsDashboard() {
 
   const fetchMentors = () => {
     setLoading(true);
+    // Construct payload including new filters
+    const payload = {
+      state: filters.state,          // the mentor's state filter
+      mobile_no: filters.mobileNumber, // use the same key your backend expects (e.g., mobile_no)
+      mentor_code: filters.mentorCode  // e.g., this might map to mentor.pin
+      // add any extra filters if needed
+    };
+  
     fetch(`${api_startpoint}/api/mentors`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({}),
+      body: JSON.stringify(payload),
     })
       .then((response) => response.json())
       .then((data) => {
         setMentors(data);
-        setLoading(false); // <-- Hide loading indicator after data is loaded
+        setLoading(false);
       })
       .catch((error) => {
         console.error("Error fetching mentors:", error);
-        setLoading(false); // <-- Hide loading even if there's an error
+        setLoading(false);
       });
   };
+  
 
   const addMentor = () => {
     fetch(`${api_startpoint}/api/add_mentor`, {
@@ -572,10 +611,77 @@ export default function MentorsDashboard() {
       <div className="page-wrapper" style={{ marginLeft: '250px' }}>
         <div className='page-body'>
           <div className='container-xl pt-4 pb-4 space-y-4'>
-            <h2 className="text-xl font-semibold">Mentors List</h2>
-            <button className="btn btn-primary mb-3 w-1/6" onClick={() => setShowAddModal(true)}>
-              <IconPlus size={18} /> Add Mentor
-            </button>
+            <h2 className="text-xl font-semibold mb-0">Mentors List</h2>
+            {/* Count Card */}
+            <div className="mb-4 d-flex flex-row gap-2">
+                <div className="bg-white rounded-sm border p-3 shadow-sm w-[10%] h-[10%]">
+                  <h6 className="text-sm text-gray-500">Total Mentors</h6>
+                  <p className="text-2xl font-bold text-gray-800">{mentors.length}</p>
+                </div>
+                <div className="flex justify-center justify-items-center  w-1/6 h-1/2">
+                  <button className="btn btn-primary text-center mb-0 " onClick={() => setShowAddModal(true)}>
+                    <IconPlus size={18} /> Add Mentor
+                  </button>
+                </div>
+                
+            </div>
+            
+            <div className="mb-4">
+              
+
+              {/* Filters Section */}
+              <div className="flex flex-row gap-4">
+                {/* State Filter */}
+                <div>
+                  <label className="form-label">State</label>
+                  <input
+                    type="text"
+                    className="form-control"
+                    placeholder="Enter State"
+                    value={filters.state}
+                    onChange={(e) => setFilters(prev => ({ ...prev, state: e.target.value }))}
+                  />
+                </div>
+                {/* Mobile Number Filter */}
+                <div>
+                  <label className="form-label">Mobile No</label>
+                  <input
+                    type="text"
+                    className="form-control"
+                    placeholder="Enter Mobile Number"
+                    value={filters.mobileNumber}
+                    onChange={(e) => setFilters(prev => ({ ...prev, mobileNumber: e.target.value }))}
+                  />
+                </div>
+                {/* Mentor Code Filter */}
+                <div>
+                  <label className="form-label">Mentor Code</label>
+                  <input
+                    type="text"
+                    className="form-control"
+                    placeholder="Enter Mentor Code"
+                    value={filters.mentorCode}
+                    onChange={(e) => setFilters(prev => ({ ...prev, mentorCode: e.target.value }))}
+                  />
+                </div>
+              </div>
+              {/* Search & Clear Buttons */}
+              <div className="flex gap-4 mt-4">
+                <button className="btn btn-success" onClick={fetchMentors}>
+                  Search
+                </button>
+                <button
+                  className="btn btn-warning"
+                  onClick={() => {
+                    handleClear();
+                    fetchMentors();
+                  }}
+                >
+                  Clear
+                </button>
+              </div>
+            </div>
+
             <div className="card">
               <div className="table-responsive">
               {loading ? (

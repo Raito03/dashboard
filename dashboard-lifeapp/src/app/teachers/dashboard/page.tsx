@@ -27,6 +27,14 @@ import { endpointWriteToDisk } from 'next/dist/build/swc/generated-native';
 
 
 const HighchartsReact = dynamic(() => import('highcharts-react-official'), { ssr: false });
+import Highcharts from 'highcharts';
+// import Drilldown from 'highcharts/modules/drilldown';
+// if (typeof Highcharts === 'object') {
+//     Drilldown(Highcharts);
+// }
+
+const ReactECharts = dynamic(() => import('echarts-for-react'), { ssr: false });
+
 interface DemographData {
     state: string;
     count: string;
@@ -232,6 +240,7 @@ function SearchableDropdown({
 
 // const api_startpoint = 'https://lifeapp-api-vv1.vercel.app'
 const api_startpoint = 'http://152.42.239.141:5000'
+// const api_startpoint = 'http://127.0.0.1:5000'
 
 export default function TeachersDashboard() {
     const [states, setStates] = useState<string[]>([]);
@@ -724,6 +733,435 @@ export default function TeachersDashboard() {
         setSelectedRow(null);
         }
     };
+
+    // New state for the detailed teacher distribution data
+    const [detailedData, setDetailedData] = useState<any[]>([]);
+
+    // Fetch the detailed breakdown from the new API endpoint
+    useEffect(() => {
+    const fetchDetailedData = async () => {
+        try {
+        const res = await fetch(`${api_startpoint}/api/teachers-by-grade-subject-section`, {
+            method: 'POST'
+        });
+        const data = await res.json();
+        setDetailedData(data);
+        } catch (error) {
+        console.error("Error fetching teacher grade-subject data:", error);
+        }
+    };
+    fetchDetailedData();
+    }, []);
+
+    const [graphChartOptions, setGraphChartOptions] = useState<any>(null);
+
+    // useEffect(() => {
+        
+    //     const drilldownModule: any = require('highcharts/modules/drilldown');
+    //     if (drilldownModule && typeof drilldownModule === "function") {
+    //         drilldownModule(Highcharts);
+    //     }
+    //     if (!detailedData || detailedData.length === 0) return;
+
+    //     // Create a mapping: grade -> subject -> { total, sections: { section: count } }
+    //     const groupData: Record<string, Record<string, { total: number; sections: Record<string, number> }>> = {};
+
+    //     detailedData.forEach(row => {
+    //         const grade = row.grade;
+    //         const subject = row.subject;
+    //         const section = row.section;
+    //         const count = Number(row.count);
+
+    //         if (!groupData[grade]) {
+    //         groupData[grade] = {};
+    //         }
+    //         if (!groupData[grade][subject]) {
+    //         groupData[grade][subject] = { total: 0, sections: {} };
+    //         }
+    //         groupData[grade][subject].total += count;
+    //         groupData[grade][subject].sections[section] = (groupData[grade][subject].sections[section] || 0) + count;
+    //     });
+
+    //     // Get all unique grades (as strings) in sorted order
+    //     const gradeCategories = Object.keys(groupData)
+    //         .map(Number)
+    //         .sort((a, b) => a - b)
+    //         .map(String);
+
+    //     // Create a set of all subjects across grades
+    //     const subjectsSet = new Set<string>();
+    //     Object.values(groupData).forEach(subjectObj => {
+    //         Object.keys(subjectObj).forEach(subject => subjectsSet.add(subject));
+    //     });
+    //     const subjects = Array.from(subjectsSet);
+
+    //     // Build the main series: one series per subject
+    //     const seriesData = subjects.map(subject => {
+    //         // For each grade category, determine count for this subject (or 0 if not present)
+    //         const dataPoints = gradeCategories.map(grade => {
+    //         const gradeData = groupData[grade];
+    //         if (gradeData && gradeData[subject]) {
+    //             return {
+    //             y: gradeData[subject].total,
+    //             drilldown: `${grade}-${subject}`  // unique id for drilldown
+    //             };
+    //         }
+    //         return { y: 0 };
+    //         });
+    //         return { name: subject, data: dataPoints };
+    //     });
+
+    //     // Build drilldown series: one for each grade and subject combination
+    //     const drilldownSeries: any[] = [];
+    //     gradeCategories.forEach(grade => {
+    //         const gradeData = groupData[grade];
+    //         if (gradeData) {
+    //         Object.keys(gradeData).forEach(subject => {
+    //             const sections = gradeData[subject].sections;
+    //             // Create drilldown data array: each section and its count
+    //             const drilldownData = Object.entries(sections).map(([section, count]) => [section, count]);
+    //             drilldownSeries.push({
+    //             id: `${grade}-${subject}`,
+    //             name: `Grade ${grade} - ${subject}`,
+    //             data: drilldownData
+    //             });
+    //         });
+    //         }
+    //     });
+
+    //     // Set the Highcharts chart options
+    //     setGraphChartOptions({
+    //         chart: { type: 'column' },
+    //         title: { text: 'Teachers Distribution by Grade and Subject' },
+    //         xAxis: {
+    //         categories: gradeCategories,
+    //         title: { text: 'Grade' }
+    //         },
+    //         yAxis: {
+    //         min: 0,
+    //         title: { text: 'Teacher Count' }
+    //         },
+    //         legend: {
+    //         align: 'center',
+    //         verticalAlign: 'bottom',
+    //         },
+    //         tooltip: {
+    //         shared: true,
+    //         useHTML: true,
+    //         headerFormat: '<small>Grade {point.key}</small><br/>'
+    //         },
+    //         plotOptions: {
+    //         series: {
+    //             borderWidth: 0,
+    //             dataLabels: { enabled: true, format: '{point.y}' }
+    //         }
+    //         },
+    //         series: seriesData,
+    //         drilldown: {
+    //             series: drilldownSeries,
+    //             activeAxisLabelStyle: {
+    //                 textDecoration: 'underline',
+    //                 color: '#0077BE'
+    //             }
+    //         }
+    //     });
+    // }, [detailedData]);
+    // useEffect(() => {
+    //     const fetchDataAndInitChart = async () => {
+    //       // Initialize Highcharts with drilldown module
+    //       const HighchartsBase = await import('highcharts');
+    //       const DrilldownModule = await import('highcharts/modules/drilldown');
+    //       DrilldownModule.default(HighchartsBase.default);
+      
+    //       // Process API data
+    //       const groupData: Record<string, Record<string, Record<string, number>>> = {};
+      
+    //       detailedData.forEach(row => {
+    //         const grade = row.la_grade_id;
+    //         const subject = row.name?.en || 'Unknown Subject';
+    //         const section = row.title?.en || 'No Section';
+    //         const count = Number(row.count);
+      
+    //         if (!groupData[grade]) groupData[grade] = {};
+    //         if (!groupData[grade][subject]) groupData[grade][subject] = {};
+    //         groupData[grade][subject][section] = (groupData[grade][subject][section] || 0) + count;
+    //       });
+      
+    //       // Prepare chart data
+    //       const grades = Object.keys(groupData).sort((a, b) => parseInt(a) - parseInt(b));
+    //       // Define types for chart data
+    //         interface SeriesDataPoint {
+    //             name: string;
+    //             y: number;
+    //             drilldown: string;
+    //         }
+
+    //         interface DrilldownSeries {
+    //             id: string;
+    //             name: string;
+    //             data: Array<{
+    //             name: string;
+    //             y: number;
+    //             drilldown?: string;
+    //             }>;
+    //         }
+
+    //         // Initialize typed arrays
+    //         const seriesData: SeriesDataPoint[] = [];
+    //         const drilldownSeries: DrilldownSeries[] = [];
+      
+    //       // Create main series and drilldowns
+    //       grades.forEach(grade => {
+    //         const gradeSubjects = groupData[grade];
+    //         Object.keys(gradeSubjects).forEach(subject => {
+    //           const sections = gradeSubjects[subject];
+    //           const total = Object.values(sections).reduce((sum, val) => sum + val, 0);
+              
+    //           // Main series data point
+    //           seriesData.push({
+    //             name: `Grade ${grade} - ${subject}`,
+    //             y: total,
+    //             drilldown: `${grade}-${subject}`
+    //           });
+      
+    //           // Drilldown series
+    //           drilldownSeries.push({
+    //             id: `${grade}-${subject}`,
+    //             name: `Grade ${grade} - ${subject}`,
+    //             data: Object.entries(sections).map(([section, count]) => ({
+    //               name: section,
+    //               y: count,
+    //               drilldown: `${grade}-${subject}-${section}`
+    //             }))
+    //           });
+    //         });
+    //       });
+      
+    //       // Set chart options
+    //       setGraphChartOptions({
+    //         chart: { type: 'column' },
+    //         title: { text: 'Teacher Distribution by Grade, Subject, and Section' },
+    //         xAxis: { type: 'category' },
+    //         yAxis: { title: { text: 'Teacher Count' } },
+    //         plotOptions: {
+    //           column: {
+    //             stacking: 'normal',
+    //             dataLabels: { enabled: true }
+    //           }
+    //         },
+    //         series: [{
+    //           name: 'Teachers',
+    //           data: seriesData
+    //         }],
+    //         drilldown: {
+    //           series: drilldownSeries,
+    //           activeAxisLabelStyle: {
+    //             textDecoration: 'underline',
+    //             color: '#0077BE'
+    //           }
+    //         }
+    //       });
+    //     };
+      
+    //     if (detailedData.length > 0) fetchDataAndInitChart();
+    // }, [detailedData]);
+
+    interface DrilldownChartData {
+        grade: number | string;
+        subject: string;
+        section: string;
+        count: number;
+    }
+      
+      // Suppose detailedData is fetched from your API endpoint.
+    const TeachersDrilldownChart: React.FC<{ detailedData: DrilldownChartData[] }> = ({ detailedData }) => {
+        // We'll store the current chart option in state
+        const [chartOption, setChartOption] = useState<any>({});
+        // Whether we are in drilldown mode
+        const [drilled, setDrilled] = useState(false);
+        // Save the aggregated option so we can come back
+        const [aggregatedOption, setAggregatedOption] = useState<any>(null);
+        
+        useEffect(() => {
+            if (!detailedData || detailedData.length === 0) return;
+        
+            // Process the data into a nested structure:
+            const groupData: Record<
+            string,
+            Record<string, { total: number; sections: Record<string, number> }>
+            > = {};
+        
+            detailedData.forEach(row => {
+            const grade = row.grade.toString();
+            const subject = row.subject;
+            const section = row.section;
+            const count = Number(row.count);
+        
+            if (!groupData[grade]) {
+                groupData[grade] = {};
+            }
+            if (!groupData[grade][subject]) {
+                groupData[grade][subject] = { total: 0, sections: {} };
+            }
+            groupData[grade][subject].total += count;
+            groupData[grade][subject].sections[section] = (groupData[grade][subject].sections[section] || 0) + count;
+            });
+        
+            // Create a sorted list of grade categories (as strings)
+            const gradeCategories = Object.keys(groupData)
+            .map(Number)
+            .sort((a, b) => a - b)
+            .map(String);
+        
+            // Create the unique list of subjects across grades
+            const subjectsSet = new Set<string>();
+            Object.values(groupData).forEach(subjectObj => {
+            Object.keys(subjectObj).forEach(subject => subjectsSet.add(subject));
+            });
+            const subjects = Array.from(subjectsSet);
+        
+            // Build series for aggregated view: one series per subject
+            const seriesData = subjects.map(subject => {
+            return {
+                name: subject,
+                type: 'bar',
+                data: gradeCategories.map(grade => {
+                const gradeData = groupData[grade];
+                if (gradeData && gradeData[subject]) {
+                    return {
+                    value: gradeData[subject].total,
+                    // We pass the grade and subject together for drilldown later
+                    drillInfo: { grade, subject }
+                    };
+                }
+                return { value: 0 };
+                })
+            };
+            });
+        
+            const aggregated = {
+            // title: { text: 'Teachers Distribution by Grade and Subject' },
+            tooltip: {
+                trigger: 'axis'
+            },
+            legend: {
+                data: subjects
+            },
+            xAxis: {
+                type: 'category',
+                data: gradeCategories,
+                name: 'Grade'
+            },
+            yAxis: {
+                type: 'value',
+                name: 'Teacher Count'
+            },
+            series: seriesData,
+            graphic: {
+                elements: [
+                {
+                    type: 'text',
+                    left: 'center',
+                    bottom: 10, // distance from bottom of chart container
+                    style: {
+                    text: 'Note: Click on bars to drill down by section',
+                    font: '14px sans-serif',
+                    fill: '#555',
+                    }
+                }
+                ]
+            }
+            
+            };
+        
+            setAggregatedOption(aggregated);
+            setChartOption(aggregated);
+            setDrilled(false);
+        }, [detailedData]);
+        
+        // Handler for clicking on a bar to drill down
+            const onChartClick = (params: any) => {
+            // If already drilled, ignore
+            if (drilled) return;
+        
+            // params.data.drillInfo should exist if we set it in aggregated view
+            if (params.data && params.data.drillInfo) {
+                const { grade, subject } = params.data.drillInfo;
+                // Build drilldown option based on groupData for this grade and subject
+                // We recompute the grouping for the current grade:
+                const filteredData = detailedData.filter(row => row.grade.toString() === grade && row.subject === subject);
+                
+                // Build section breakdown: section -> total count
+                const sections: Record<string, number> = {};
+                filteredData.forEach(row => {
+                const section = row.section;
+                sections[section] = (sections[section] || 0) + row.count;
+                });
+        
+                // Create drilldown chart option
+                const drillOption = {
+                title: { text: `Detail for Grade ${grade} - ${subject}` },
+                tooltip: {},
+                xAxis: {
+                    type: 'category',
+                    data: Object.keys(sections),
+                    name: 'Section'
+                },
+                yAxis: {
+                    type: 'value',
+                    name: 'Teacher Count'
+                },
+                series: [{
+                    type: 'bar',
+                    data: Object.entries(sections).map(([section, count]) => ({ value: count, name: section }))
+                }],
+                graphic: {
+                    elements: [
+                    {
+                        type: 'text',
+                        left: 'center',
+                        bottom: 10, // distance from bottom of chart container
+                        style: {
+                        text: 'Note: Click on "Back" to go to the main graph',
+                        font: '14px sans-serif',
+                        fill: '#555',
+                        }
+                    }
+                    ]
+                }
+                
+                };
+        
+                setChartOption(drillOption);
+                setDrilled(true);
+            }
+            };
+        
+            // Handler to return to the aggregated view
+            const handleBack = () => {
+            if (aggregatedOption) {
+                setChartOption(aggregatedOption);
+                setDrilled(false);
+            }
+            };
+        
+            // Set up event handlers
+            const onEvents = {
+            'click': onChartClick
+        };
+        return (
+            <div>
+                {drilled && <button onClick={handleBack} style={{ marginBottom: '10px' }}>Back</button>}
+                <ReactECharts
+                option={chartOption}
+                onEvents={onEvents}
+                style={{ height: '500px', width: '100%' }}
+                />
+            </div>
+        );
+    }
+      
+    const [showGraphSectionModal, setShowGraphSectionModal] = useState(false);
     return (
         <div className={`page bg-light ${inter.className} font-sans`}>
             <Sidebar />
@@ -837,6 +1275,23 @@ export default function TeachersDashboard() {
                                             <div>
                                                 <div className="subheader">View Teachers by Grade</div>
                                                 <div className="text-muted">Click to expand detailed grade distribution</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div className="row g-4 mb-4">
+                            <div className="col-sm-4 col-lg-4" onClick={() => setShowGraphSectionModal(true)}>
+                                <div className="card cursor-pointer hover:shadow-lg transition-shadow">
+                                    <div className="card-body">
+                                        <div className="d-flex align-items-center">
+                                            <div className="bg-purple rounded-circle p-3 text-white me-3">
+                                                <IconSchool size={24} />
+                                            </div>
+                                            <div>
+                                                <div className="subheader">View Teachers Graph Distribution </div>
+                                                <div className="text-muted">Click to expand detailed grade and section and subject distribution</div>
                                             </div>
                                         </div>
                                     </div>
@@ -958,6 +1413,45 @@ export default function TeachersDashboard() {
                                     </div>
                                 </div>
                             </div>
+                        )}
+                        {/* Graph Section  Distribution Modal */}
+                        {showGraphSectionModal && (
+                        <div className="modal fade show" style={{ display: 'block', backgroundColor: 'rgba(0,0,0,0.5)' }}>
+                            <div className="modal-dialog modal-lg">
+                            <div className="modal-content">
+                                <div className="modal-header">
+                                <h5 className="modal-title">Teachers Graph Distribution</h5>
+                                <button
+                                    type="button"
+                                    className="btn btn-close"
+                                    onClick={() => setShowGraphSectionModal(false)}
+                                ></button>
+                                </div>
+                                <div className="modal-body">
+                                {!detailedData || detailedData.length === 0 ? (
+                                    <div className="text-center">
+                                    <div className="spinner-border text-purple" role="status" style={{ width: "8rem", height: "8rem" }}></div>
+                                    </div>
+                                ) : (
+                                    // <HighchartsReact
+                                    // highcharts={Highcharts}
+                                    // options={graphChartOptions}
+                                    // />
+                                    <TeachersDrilldownChart detailedData={detailedData} />
+                                )}
+                                </div>
+                                <div className="modal-footer">
+                                <button
+                                    type="button"
+                                    className="btn btn-secondary"
+                                    onClick={() => setShowGraphSectionModal(false)}
+                                >
+                                    Close
+                                </button>
+                                </div>
+                            </div>
+                            </div>
+                        </div>
                         )}
                         <div className="card shadow-sm border-0 mb-4">
                             <div className="card-body">

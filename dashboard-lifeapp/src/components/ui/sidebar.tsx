@@ -74,20 +74,22 @@ const NavItem = ({
           )}
           onClick={handleClick}
         >
-          {icon}
-          <span className="flex-grow">{label}</span>
+          <span className="flex-shrink-0">{icon}</span>
+          <span className="flex-1">{label}</span>
           {badge && (
             <span className="text-xs px-1.5 py-0.5 rounded-md bg-emerald-500/15 text-emerald-500">
               {badge}
             </span>
           )}
           {hasChildren && (
-            <ChevronDown
-              className={cn(
-                "h-3 w-3 transition-transform",
-                isOpen && "transform rotate-180"
-              )}
-            />
+            <span className="w-4 flex justify-center flex-shrink-0 ml-auto">
+              <ChevronDown
+                className={cn(
+                  "h-3 w-3 transition-transform",
+                  isOpen && "transform rotate-180"
+                )}
+              />
+            </span>
           )}
         </Link>
         {children}
@@ -139,6 +141,7 @@ export function Sidebar() {
             <NavItem href="/students/dashboard" label="Dashboard" isNested />
             <NavItem href="/students/mission" label="Mission" isNested />
             <NavItem href="/students/coupons_redeemed" label="Coupon Redeemed" isNested />
+            <NavItem href="/students/quiz_sessions" label="Quiz Sessions" isNested />
             {/* <NavItem href="/students/quiz" label="Quiz" isNested /> */}
             
             {/* <NavItem
@@ -277,7 +280,7 @@ export function Sidebar() {
                 />
                 {
                   openSections.student_related && (
-                    <div className="pl-4 space-y-0.5">
+                    <div className="!pl-4 space-y-0.5 ">
                     <NavItem href="/student_related/mission" label="Mission" isNested />
                     <NavItem href="/student_related/jigyasa" label="Jigyasa" isNested />
                     <NavItem href="/student_related/pragya" label="Pragya" isNested />
@@ -285,7 +288,7 @@ export function Sidebar() {
                     <NavItem href="/student_related/riddle" label="Riddle" isNested />
                     <NavItem href="/student_related/puzzle" label="Puzzle" isNested />
                     <NavItem href="/student_related/vision" label="Vision" isNested />
-                    <NavItem href="/student_related/quiz_sessions" label="Quiz Sessions" isNested />
+                    
                     </div>
                   )
                 }
@@ -296,7 +299,7 @@ export function Sidebar() {
                 />
                 
                 {openSections.resources_teachers && (
-                    <div className="pl-4 space-y-0.5">
+                    <div className="!pl-4 space-y-0.5">
                     <NavItem href="/teachers/competencies" label="Competencies" isNested />
                     <NavItem href="/teachers/concept-cartoon-header" label="Concept Cartoon header" isNested />
                     <NavItem href="/teachers/concept-cartoons" label="Concept Cartoon" isNested />

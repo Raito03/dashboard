@@ -11,8 +11,11 @@ const api_startpoint = 'http://152.42.239.141:5000'
 const inter = Inter({ subsets: ['latin'] });
 import dynamic from 'next/dynamic'
 
-
+import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from 'recharts'
 const HighchartsReact = dynamic(() => import('highcharts-react-official'), { ssr: false });
+import ReactECharts from 'echarts-for-react';
+
+// import type Highcharts from 'highcharts';
 // import Highcharts from 'highcharts/highmaps';
 // const Highcharts = dynamic(() => import('highcharts/highmaps'), { ssr: false });
 
@@ -107,42 +110,42 @@ export default function SchoolsDashboard() {
     { title: 'INACTIVE SCHOOLS', value: '-' }
   ];
 
-  const tableData: TableData[] = [
-    {
-      SrNo: 132470,
-      name: 'Live Teacher',
-      State: 'Delhi',
-      City: 'Delhi',
-      District: 'Central Delhi',
-      AppVisible: 'Yes',
-      LifeLab: 'Active',
-      Code: 'SCH001',
-      Status: 'Active'
-    },
-    // Add more sample rows for better visualization
-    {
-      SrNo: 132471,
-      name: 'Modern School',
-      State: 'Delhi',
-      City: 'Delhi',
-      District: 'South Delhi',
-      AppVisible: 'Yes',
-      LifeLab: 'Active',
-      Code: 'SCH002',
-      Status: 'Active'
-    },
-    {
-      SrNo: 132472,
-      name: 'Delhi Public School',
-      State: 'Delhi',
-      City: 'Delhi',
-      District: 'East Delhi',
-      AppVisible: 'No',
-      LifeLab: 'Inactive',
-      Code: 'SCH003',
-      Status: 'Inactive'
-    }
-  ];
+  // const tableData: TableData[] = [
+  //   {
+  //     SrNo: 132470,
+  //     name: 'Live Teacher',
+  //     State: 'Delhi',
+  //     City: 'Delhi',
+  //     District: 'Central Delhi',
+  //     AppVisible: 'Yes',
+  //     LifeLab: 'Active',
+  //     Code: 'SCH001',
+  //     Status: 'Active'
+  //   },
+  //   // Add more sample rows for better visualization
+  //   {
+  //     SrNo: 132471,
+  //     name: 'Modern School',
+  //     State: 'Delhi',
+  //     City: 'Delhi',
+  //     District: 'South Delhi',
+  //     AppVisible: 'Yes',
+  //     LifeLab: 'Active',
+  //     Code: 'SCH002',
+  //     Status: 'Active'
+  //   },
+  //   {
+  //     SrNo: 132472,
+  //     name: 'Delhi Public School',
+  //     State: 'Delhi',
+  //     City: 'Delhi',
+  //     District: 'East Delhi',
+  //     AppVisible: 'No',
+  //     LifeLab: 'Inactive',
+  //     Code: 'SCH003',
+  //     Status: 'Inactive'
+  //   }
+  // ];
 
   const handleFilterChange = (key: keyof FilterState, value: string) => {
     setFilters(prev => ({ ...prev, [key]: value }));
@@ -170,140 +173,205 @@ export default function SchoolsDashboard() {
   };
 
 
-
+  const [viewMode, setViewMode] = useState<'map' | 'graph'>('map')
+  const [barData, setBarData] = useState<any[]>([])
   const [chartOptions, setChartOptions] = useState<any>(null);
-    const [geoData, setGeoData] = useState<DemographData[]>([]);
-    const [errorMessage, setErrorMessage] = useState<string | null>(null);
-    const [HighchartsLib, setHighchartsLib] = useState<any>(null);
-    useEffect(() => {
-        // Load Highcharts on client-side only
-        // const HighchartsLoaded = require('highcharts/highmaps');
-        
-        const fetchDataDemographics = async () => {
-            const HighchartsLoaded = await import("highcharts/highmaps");
+  const [barChartOptions, setBarChartOptions] = useState<any>(null);
+  const [geoData, setGeoData] = useState<DemographData[]>([]);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [loading, setLoading] = useState<boolean>(true)
+  const [HighchartsLib, setHighchartsLib] = useState<any>(null);
+  useEffect(() => {
+      // Load Highcharts on client-side only
+      // const HighchartsLoaded = require('highcharts/highmaps');
+      
+      const fetchDataDemographics = async () => {
+          const HighchartsLoaded = await import("highcharts/highmaps");
+          setHighchartsLib(HighchartsLoaded);
+          try {
+              // Fetch India TopoJSON map
+              setLoading(true)
+              const topoResponse = await fetch(
+                  // "https://code.highcharts.com/mapdata/countries/in/custom/in-all-andaman-and-nicobar.topo.json"
+                  "https://code.highcharts.com/mapdata/countries/in/custom/in-all-disputed.topo.json"
+              );
+              
+              const topology = await topoResponse.json();
 
-            setHighchartsLib(HighchartsLoaded);
-            try {
-                // Fetch India TopoJSON map
-                const topoResponse = await fetch(
-                    // "https://code.highcharts.com/mapdata/countries/in/custom/in-all-andaman-and-nicobar.topo.json"
-                    "https://code.highcharts.com/mapdata/countries/in/custom/in-all-disputed.topo.json"
-                );
-                
-                const topology = await topoResponse.json();
+              // Fetch state-wise student count from API
+              const apiResponse = await fetch(`${api_startpoint}/api/count_school_state_dashboard`,{
+                  method: 'POST'
+              });
 
-                // Fetch state-wise student count from API
-                const apiResponse = await fetch(`${api_startpoint}/api/count_school_state_dashboard`,{
-                    method: 'POST'
-                });
+              const apiData: { count: number; state: string }[] = await apiResponse.json();
 
-                const apiData: { count: number; state: string }[] = await apiResponse.json();
+              setGeoData(apiData); // Store API data for debugging or future use
+              setBarData(apiData)
+              // Map API state names to Highcharts' region keys
+              const stateMappings: Record<string, string> = {
+                  "Tamil Nadu": "tamil nadu",     // Tamil Nadu gets "in-tn"
+                  "Telangana": "telangana",       // Telangana gets "in-tg" (instead of "in-tn")
+                  "Maharashtra": "maharashtra",
+                  "Karnataka": "karnataka",
+                  "Andhra Pradesh": "andhra pradesh",
+                  "Gujarat": "gujarat",
+                  "Madhya Pradesh": "madhya pradesh",
+                  "Odisha": "odisha",
+                  "West Bengal": "west bengal",
+                  "Delhi": "nct of delhi",
+                  "Uttar Pradesh": "uttar pradesh",
+                  "Jharkhand": "jharkhand",
+                  "Assam": "assam",
+                  "Chhattisgarh": "chhattisgarh",
+                  "Punjab": "punjab",
+                  "Bihar": "bihar",
+                  "Haryana": "haryana",
+                  "Daman and Diu": "daman and diu",
+                  "Chandigarh": "chandigarh",
+                  // "Pondicherry": "in-py",
+                  "Puducherry": "puducherry",
+                  "Rajasthan": "rajasthan",
+                  "Goa": "goa",
+                  "Kerala": "kerala",
+                  "Uttarakhand": "uttarakhand",
+                  "Himachal Pradesh": "himachal pradesh",
+                  // "Ladakh": "in-la",
+                  "Lakshadweep": "lakshadweep",
+                  "Sikkim": "nikkim",
+                  "Nagaland": "nagaland",
+                  "Dadara and Nagar Haveli": "dadara and nagar havelli",
+                  "Jammu and Kashmir": "jammu and kashmir",
+                  "Manipur": "manipur",
+                  "Arunanchal Pradesh": "arunanchal pradesh",
+                  "Meghalaya": "meghalaya",
+                  "Mizoram": "mizoram",
+                  "Tripura": "tripura",
+                  "Andaman and Nicobar Islands": "andaman and nicobar",
+              };
 
-                setGeoData(apiData); // Store API data for debugging or future use
+              // Transform API data into Highcharts format
+              const chartData: DemographChartdata[] = apiData
+              .map((item) => ({
+                  code: stateMappings[item.state] || '', // Use empty string if no mapping found
+                  value: Math.max(item.count, 1) // Ensure a minimum value of 1
+              }))
+              .filter((item) => item.code);
+              
+              // const mapData = apiData.map(item => {
+              //   return { 
+              //     'hc-key': stateMappings[item.state] || item.state.toLowerCase(), 
+              //     value: item.count 
+              //   }
+              // })
+              // console.log(chartData)
+              // Set up the chart options
+              const options = {
+                  chart: {
+                      map: topology,
+                  },
+                  title: {
+                      text: "Schools Distribution Across India",
+                  },
+                  subtitle: {
+                      text: "Data sourced from lifeapp.schools",
+                  },
+                  mapNavigation: {
+                      enabled: true,
+                      buttonOptions: {
+                          verticalAlign: "bottom",
+                      },
+                  },
+                  colorAxis: {
+                      min: 1,
+                      minColor: '#E6F2FF',
+                      maxColor: '#0077BE',
+                      type: 'logarithmic' // This helps differentiate states with vastly different counts
+                  },
+                  series: [
+                      {
+                          data: chartData.map((item) => [item.code, item.value]),
+                          name: "School Count",
+                          states: {
+                              hover: {
+                                  color: "#BADA55",
+                              },
+                          },
+                          dataLabels: {
+                              enabled: true,
+                              format: '{point.name}',
+                              style: {
+                                  fontSize: '8px'
+                              }
+                          },
+                      },
+                  ],
+              };
+              
+              // Sort data for bar chart
+            // const sortedBarData = [...apiData].sort((a, b) => b.count - a.count);
+            // const defaultColors = HighchartsCore.default.getOptions().colors || [];
+            // // Set up the bar chart options using Highcharts
+            // const barOptions = {
+            //     chart: {
+            //         type: 'bar',
+            //         height: 500
+            //     },
+            //     title: {
+            //         text: 'Schools Distribution by State'
+            //     },
+            //     subtitle: {
+            //         text: 'Data sourced from lifeapp.schools'
+            //     },
+            //     xAxis: {
+            //         categories: sortedBarData.map(item => item.state),
+            //         title: {
+            //             text: 'State'
+            //         }
+            //     },
+            //     yAxis: {
+            //         title: {
+            //             text: 'Number of Schools'
+            //         },
+            //         min: 0
+            //     },
+            //     legend: {
+            //         enabled: false
+            //     },
+            //     tooltip: {
+            //       formatter: function(this: Highcharts.TooltipFormatterContextObject): string {
+            //           return `<b>${this.x}</b>: ${this.y} schools`;
+            //       }
+            //   },
+            //     plotOptions: {
+            //         bar: {
+            //             dataLabels: {
+            //                 enabled: true
+            //             },
+            //             colorByPoint: true,
+            //             colors: sortedBarData.map((_, i) => 
+            //               defaultColors[i % defaultColors.length] )
+            //         }
+            //     },
+            //     series: [{
+            //         name: 'Schools',
+            //         data: sortedBarData.map(item => item.count)
+            //     }],
+            //     credits: {
+            //         enabled: false
+            //     }
+            // };
+              setChartOptions(options);
+              // setBarChartOptions(barOptions);
+              setLoading(false)
+          } catch (error) {
+              console.error("Error fetching data:", error);
+              setErrorMessage("An error occurred while loading the chart.");
+              setLoading(false)
+          }
+      };
 
-                // Map API state names to Highcharts' region keys
-                const stateMappings: Record<string, string> = {
-                    "Tamil Nadu": "tamil nadu",     // Tamil Nadu gets "in-tn"
-                    "Telangana": "telangana",       // Telangana gets "in-tg" (instead of "in-tn")
-                    "Maharashtra": "maharashtra",
-                    "Karnataka": "karnataka",
-                    "Andhra Pradesh": "andhra pradesh",
-                    "Gujarat": "gujarat",
-                    "Madhya Pradesh": "madhya pradesh",
-                    "Odisha": "odisha",
-                    "West Bengal": "west bengal",
-                    "Delhi": "nct of delhi",
-                    "Uttar Pradesh": "uttar pradesh",
-                    "Jharkhand": "jharkhand",
-                    "Assam": "assam",
-                    "Chhattisgarh": "chhattisgarh",
-                    "Punjab": "punjab",
-                    "Bihar": "bihar",
-                    "Haryana": "haryana",
-                    "Daman and Diu": "daman and diu",
-                    "Chandigarh": "chandigarh",
-                    // "Pondicherry": "in-py",
-                    "Puducherry": "puducherry",
-                    "Rajasthan": "rajasthan",
-                    "Goa": "goa",
-                    "Kerala": "kerala",
-                    "Uttarakhand": "uttarakhand",
-                    "Himachal Pradesh": "himachal pradesh",
-                    // "Ladakh": "in-la",
-                    "Lakshadweep": "lakshadweep",
-                    "Sikkim": "nikkim",
-                    "Nagaland": "nagaland",
-                    "Dadara and Nagar Haveli": "dadara and nagar havelli",
-                    "Jammu and Kashmir": "jammu and kashmir",
-                    "Manipur": "manipur",
-                    "Arunanchal Pradesh": "arunanchal pradesh",
-                    "Meghalaya": "meghalaya",
-                    "Mizoram": "mizoram",
-                    "Tripura": "tripura",
-                    "Andaman and Nicobar Islands": "andaman and nicobar",
-                };
-
-                // Transform API data into Highcharts format
-                const chartData: DemographChartdata[] = apiData
-                .map((item) => ({
-                    code: stateMappings[item.state] || '', // Use empty string if no mapping found
-                    value: Math.max(item.count, 1) // Ensure a minimum value of 1
-                }))
-                .filter((item) => item.code);
-
-                // console.log(chartData)
-                // Set up the chart options
-                const options = {
-                    chart: {
-                        map: topology,
-                    },
-                    title: {
-                        text: "Schools Distribution Across India",
-                    },
-                    subtitle: {
-                        text: "Data sourced from lifeapp.schools",
-                    },
-                    mapNavigation: {
-                        enabled: true,
-                        buttonOptions: {
-                            verticalAlign: "bottom",
-                        },
-                    },
-                    colorAxis: {
-                        min: 1,
-                        minColor: '#E6F2FF',
-                        maxColor: '#0077BE',
-                        type: 'logarithmic' // This helps differentiate states with vastly different counts
-                    },
-                    series: [
-                        {
-                            data: chartData.map((item) => [item.code, item.value]),
-                            name: "School Count",
-                            states: {
-                                hover: {
-                                    color: "#BADA55",
-                                },
-                            },
-                            dataLabels: {
-                                enabled: true,
-                                format: '{point.name}',
-                                style: {
-                                    fontSize: '8px'
-                                }
-                            },
-                        },
-                    ],
-                };
-
-                setChartOptions(options);
-            } catch (error) {
-                console.error("Error fetching data:", error);
-                setErrorMessage("An error occurred while loading the chart.");
-            }
-        };
-
-        fetchDataDemographics();
-    }, []);
+      fetchDataDemographics();
+  }, []);
   
   return (
     <div className={`page bg-gray-50 ${inter.className} font-sans`}>
@@ -328,16 +396,40 @@ export default function SchoolsDashboard() {
               </div>
               
               {/* Right Column - Map Chart */}
-              <div className="bg-white rounded-lg shadow-sm p-4 w-full h-[500px]">
-                <h2 className="text-lg font-semibold text-gray-800 mb-4">Geographic Distribution</h2>
+              <div className="bg-white rounded-lg shadow-sm p-4 w-full h-[600px]">
+                <h2 className="text-lg font-semibold text-gray-800 mb-1">Geographic Distribution</h2>
+                  <div className="mb-1">
+                    <button
+                      className={`px-4 py-2 mr-2 border rounded ${viewMode === 'map' ? 'bg-sky-900 text-white' : 'bg-gray-200 text-black'}`}
+                      onClick={() => setViewMode('map')}
+                    >
+                      Map View
+                    </button>
+                    <button
+                      className={`px-4 py-2 border rounded ${viewMode === 'graph' ? 'bg-sky-900 text-white' : 'bg-gray-200 text-black'}`}
+                      onClick={() => setViewMode('graph')}
+                    >
+                      Graph View
+                    </button>
+                  </div>
+                
                 {errorMessage && (
                   <div className="bg-red-50 p-4 rounded-md text-red-700 mb-4">
                     {errorMessage}
                   </div>
                 )}
 
-                {chartOptions && HighchartsLib ? (
-                  <div className="h-[400px] w-full">
+                {loading ? (
+                    <div className="flex justify-center items-center h-80 w-full bg-gray-50 rounded-md">
+                      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
+                    </div>
+                  ) : errorMessage ? (
+                    <div className="text-center text-red-500">
+                      <p>Error: {errorMessage}</p>
+                    </div>
+                  ) : viewMode === 'map' && chartOptions && HighchartsLib ? (
+                  
+                  <div className="h-[600px] w-full">
                     <HighchartsReact
                       highcharts={HighchartsLib}
                       options={chartOptions}
@@ -345,8 +437,64 @@ export default function SchoolsDashboard() {
                     />
                   </div>
                 ) : (
-                  <div className="flex justify-center items-center h-80 w-full bg-gray-50 rounded-md">
-                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
+                  <div style={{ height: '500px', width: '100%' }}>
+                    <ReactECharts
+                      option={{
+                        title: {
+                          text: 'Schools Distribution by State',
+                          left: 'center'
+                        },
+                        tooltip: {
+                          trigger: 'axis',
+                          axisPointer: {
+                            type: 'shadow'
+                          }
+                        },
+                        grid: {
+                          left: '3%',
+                          right: '4%',
+                          bottom: '10%',
+                          containLabel: true
+                        },
+                        xAxis: {
+                          type: 'category',
+                          data: barData.map(item => item.state),
+                          axisLabel: {
+                            rotate: 45,
+                            interval: 0
+                          }
+                        },
+                        yAxis: {
+                          type: 'value',
+                          name: 'Number of Schools'
+                        },
+                        // Data zoom enables efficient panning and zooming on the chart
+                        dataZoom: [
+                          {
+                            type: 'inside',
+                            start: 0,
+                            end: 100
+                          },
+                          {
+                            type: 'slider',
+                            start: 0,
+                            end: 100
+                          }
+                        ],
+                        series: [
+                          {
+                            name: 'Schools',
+                            type: 'bar',
+                            data: barData.map(item => item.count),
+                            itemStyle: {
+                              color: '#4f46e5'
+                            }
+                          }
+                        ]
+                      }}
+                      style={{ height: '100%', width: '100%' }}
+                    />
+
                   </div>
                 )}
               </div>

@@ -13,6 +13,7 @@ import { BarChart3, Download, Plus, Search, XCircle } from 'lucide-react';
   
 // const api_startpoint = 'https://lifeapp-api-vv1.vercel.app'
 const api_startpoint = 'http://152.42.239.141:5000'
+// const api_startpoint = 'http://127.0.0.1:5000'
 
 export default function MissionPage() {
     const [selectedFromDate, setSelectedFromDate] = useState(""); // New state for From Date
@@ -301,18 +302,18 @@ export default function MissionPage() {
                                                             
                                                             <tr key={index}>
                                                                 
-                                                                <td>{row.Mission_Id}</td>
+                                                                <td>{row.Mission_ID}</td>
                                                                 <td>{row.Student_Name}</td>
-                                                                <td>{row.school_id}</td>
+                                                                <td>{row.School_ID}</td>
                                                                 <td>{row.School_Name}</td>
                                                                 <td>{MissionTitle}</td>
-                                                                <td>{row.Approved_By}</td>
+                                                                <td>{row.Assigned_By}</td>
                                                                 <td>{row.Status}</td>
-                                                                <td>{row.Student_Id}</td>
+                                                                <td>{row.Student_ID}</td>
                                                                 <td>{row.Requested_At}</td>
                                                                 <td>{row.Total_Points}</td>
                                                                 <td>{row.Each_Mission_Timing}</td>
-                                                                <td>{row.mobile_no }</td>
+                                                                <td>{row.mobile_no}</td>
                                                                 <td>{row.dob}</td>
                                                                 <td>{row.grade}</td>
                                                                 <td>{row.city}</td>

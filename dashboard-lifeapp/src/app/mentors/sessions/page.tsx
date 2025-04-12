@@ -139,8 +139,19 @@ export default function MentorsSessions() {
             <Sidebar />
             <div className="page-wrapper" style={{ marginLeft: '250px' }}>
                 <div className="page-body">
-                    <div className="container-xl pt-4 pb-4 space-y-4">
+                    <div className="container-xl pt-4 pb-4 space-y-2">
                         <h2 className="text-xl font-semibold">Sessions</h2>
+                        {/* Count card to display total number of sessions (after filter) */}
+                        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-1">
+                          <div className="bg-white shadow rounded p-4 border border-gray-200">
+                            <div className="text-xs text-gray-500 uppercase mb-1">
+                              Total Sessions
+                            </div>
+                            <div className="text-2xl font-semibold text-sky-950">
+                              {filteredSessions.length}
+                            </div>
+                          </div>
+                        </div>
                         <div className="flex justify-end mb-1" style={{width:145}}>
                                 <select
                                     className="form-select w-48"
