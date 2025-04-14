@@ -4738,6 +4738,118 @@ def delete_enrollment(enrollment_id):
         return jsonify({"error": str(e)}), 500
     
 
+###################################################################################
+###################################################################################
+####################### SETTINGS/GAME ENROLLMENTS APIs ############################
+###################################################################################
+###################################################################################
+# ===============================================
+# 1. List Enrollment Requests with Filters
+# ===============================================
+@app.route('/api/game_enrollment_requests', methods=['POST'])
+def list_game_enrollment_requests():
+    data = request.get_json() or {}
+    # Filter by status: "approved", "not_approved", "all"
+    status = data.get('status', 'all').lower()
+    # Filter by type: "1", "2", "3", "4", "5", "6", or "all"
+    req_type = data.get('type', 'all')
+    
+    sql = "SELECT * FROM lifeapp.la_request_game_enrollments WHERE 1=1"
+    params = []
+    
+    if status != "all":
+        if status == "approved":
+            sql += " AND approved_at IS NOT NULL"
+        elif status == "not_approved":
+            sql += " AND approved_at IS NULL"
+    
+    if req_type != "all" and req_type:
+        sql += " AND type = %s"
+        params.append(req_type)
+    
+    sql += " ORDER BY created_at DESC"
+    
+    connection = get_db_connection()
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute(sql, tuple(params))
+            result = cursor.fetchall()
+        return jsonify(result), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        connection.close()
+
+# ===============================================
+# 2. Add a New Enrollment Request
+# ===============================================
+@app.route('/api/game_enrollment_requests/add', methods=['POST'])
+def add_game_enrollment_request():
+    data = request.get_json() or {}
+    user_id = data.get('user_id')
+    req_type = data.get('type')
+    la_game_enrollment_id = data.get('la_game_enrollment_id')
+    # approved_at can be provided (if approved) or None for pending request.
+    approved_at = data.get('approved_at', None)
+    
+    connection = get_db_connection()
+    try:
+        with connection.cursor() as cursor:
+            sql = """
+            INSERT INTO lifeapp.la_request_game_enrollments 
+            (user_id, type, la_game_enrollment_id, approved_at, created_at, updated_at)
+            VALUES (%s, %s, %s, %s, NOW(), NOW())
+            """
+            cursor.execute(sql, (user_id, req_type, la_game_enrollment_id, approved_at))
+            connection.commit()
+        return jsonify({'message': 'Request added successfully'}), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        connection.close()
+
+# ===============================================
+# 3. Edit an Existing Enrollment Request
+# ===============================================
+@app.route('/api/game_enrollment_requests/<int:request_id>', methods=['PUT'])
+def edit_game_enrollment_request(request_id):
+    data = request.get_json() or {}
+    user_id = data.get('user_id')
+    req_type = data.get('type')
+    la_game_enrollment_id = data.get('la_game_enrollment_id')
+    approved_at = data.get('approved_at')  # may be null if not approved
+    connection = get_db_connection()
+    try:
+        with connection.cursor() as cursor:
+            sql = """
+            UPDATE lifeapp.la_request_game_enrollments
+            SET user_id = %s, type = %s, la_game_enrollment_id = %s, approved_at = %s, updated_at = NOW()
+            WHERE id = %s
+            """
+            cursor.execute(sql, (user_id, req_type, la_game_enrollment_id, approved_at, request_id))
+            connection.commit()
+        return jsonify({'message': 'Request updated successfully'}), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        connection.close()
+
+# ===============================================
+# 4. Delete an Enrollment Request
+# ===============================================
+@app.route('/api/game_enrollment_requests/<int:request_id>', methods=['DELETE'])
+def delete_game_enrollment_request(request_id):
+    connection = get_db_connection()
+    try:
+        with connection.cursor() as cursor:
+            sql = "DELETE FROM lifeapp.la_request_game_enrollments WHERE id = %s"
+            cursor.execute(sql, (request_id,))
+            connection.commit()
+        return jsonify({'message': 'Request deleted successfully'}), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        connection.close()
 
 ###################################################################################
 ###################################################################################

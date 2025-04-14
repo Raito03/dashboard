@@ -325,6 +325,7 @@ export function Sidebar() {
                 <NavItem href="/settings/boards" label="Boards" isNested />
                 <NavItem href="/settings/topics" label="Topics" isNested />
                 <NavItem href="/settings/game_enrollments" label="Game Enrollments" isNested />
+                <NavItem href="/settings/game_enrollment_requests" label="Game Enrollment Requests" isNested />
             </div>
         )}
 
