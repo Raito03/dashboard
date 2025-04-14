@@ -1158,6 +1158,88 @@ export default function StudentDashboard() {
         (currentQuizPage + 1) * rowsPerPageQuiz
     );
 
+    // Modal state and filter states
+  const [modalOpenLevel, setModalOpenLevel] = useState(false)
+  const [selectedLevel, setSelectedLevel] = useState<string>('all')
+  const [selectedSubject, setSelectedSubject] = useState<string>('science')
+  
+  // Data, loading, and error states for API data
+  const [dataLevel, setDataLevel] = useState<any>({})
+  const [loadingLevel, setLoadingLevel] = useState(false)
+  const [errorLevel, setErrorLevel] = useState<string | null>(null)
+
+  // Function to fetch API data based on the selected level filter
+  const fetchData = async (level: string) => {
+    setLoadingLevel(true)
+    setErrorLevel(null)
+    try {
+        const res = await fetch(`${api_startpoint}/api/student_count_by_level_778`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'  // This header is required
+            },
+            body: JSON.stringify({ level: level })
+          });
+      if (!res.ok) {
+        throw new Error("Failed to fetch data.")
+      }
+      const result = await res.json()
+      setDataLevel(result)
+    } catch (err: unknown) {
+      if (err instanceof Error) {
+        setErrorLevel(err.message || "Error fetching data.")
+      } else {
+        setErrorLevel("Error fetching data.")
+      }
+    } finally {
+      setLoadingLevel(false)
+    }
+  }
+  
+
+  // Fetch data when modal opens or when the selected level changes
+  useEffect(() => {
+    if (modalOpenLevel) {
+      fetchData(selectedLevel)
+    }
+  }, [modalOpenLevel, selectedLevel])
+
+  // Prepare chart options for the bar chart.
+  // Note: Adjust to use the correct keys according to your API output.
+  const chartOptionsLevel = {
+    title: {
+      text: 'Student Count by Level',
+      left: 'center'
+    },
+    tooltip: {},
+    xAxis: {
+      type: 'category',
+      data: selectedLevel === 'all'
+        ? ['Level 1', 'Level 2', 'Level 3', 'Level 4']
+        : [`Level ${selectedLevel}`],
+    },
+    yAxis: {
+      type: 'value'
+    },
+    series: [
+      {
+        data: selectedLevel === 'all'
+          // Using the keys from your API output – replace "level1_count" etc. if needed.
+          ? [
+              dataLevel.level1_count ?? 0,
+              dataLevel.level2_count ?? 0,
+              dataLevel.level3_count ?? 0,
+              dataLevel.level4_count ?? 0
+            ]
+          : [dataLevel.count ?? 0],
+        type: 'bar',
+        itemStyle: {
+          color: '#0077BE'
+        }
+      }
+    ]
+  }
+
     return(
         <div className={`page bg-light ${inter.className} font-sans`}>
             <Sidebar />
@@ -1327,6 +1409,21 @@ export default function StudentDashboard() {
                                             <div>
                                                 <div className="subheader">View Quiz Completions</div>
                                                 <div className="text-muted">Click to see Quiz completion details by students</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div className="col-sm-4 col-lg-4" onClick={() => setModalOpenLevel(true)}>
+                                <div className="card cursor-pointer hover:shadow-lg transition-shadow">
+                                    <div className="card-body">
+                                        <div className="d-flex align-items-center">
+                                            <div className="bg-yellow-900 rounded-circle p-3 text-white me-3">
+                                                <IconTrophy size={24} />
+                                            </div>
+                                            <div>
+                                                <div className="subheader">View Student-level distribution</div>
+                                                <div className="text-muted">Click to see Student-level distribution</div>
                                             </div>
                                         </div>
                                     </div>
@@ -1817,7 +1914,64 @@ export default function StudentDashboard() {
                             </div>
                             </div>
                         )}
+                        
+                        {modalOpenLevel && (
+                            <div className="fixed inset-0 flex items-center justify-center z-50 bg-black bg-opacity-50">
+                            <div className="bg-white p-6 rounded-lg shadow-lg w-3/4 relative">
+                                <h2 className="text-lg font-bold mb-4">Student Count by Level</h2>
+                                
+                                {/* Level Filter Dropdown */}
+                                <div className="mb-4">
+                                <label className="mr-2 font-semibold">Select Level:</label>
+                                <select
+                                    value={selectedLevel}
+                                    onChange={(e) => setSelectedLevel(e.target.value)}
+                                    className="border p-1 rounded"
+                                >
+                                    <option value="all">All Levels</option>
+                                    <option value="1">Level 1</option>
+                                    <option value="2">Level 2</option>
+                                    <option value="3">Level 3</option>
+                                    <option value="4">Level 4</option>
+                                </select>
+                                </div>
+                                {/* Dummy Subject Filter Dropdown */}
+                                <div className="mb-4">
+                                <label className="mr-2 font-semibold">Select Subject:</label>
+                                <select
+                                    value={selectedSubject}
+                                    onChange={(e) => setSelectedSubject(e.target.value)}
+                                    className="border p-1 rounded"
+                                >
+                                    <option value="science">Science</option>
+                                    <option value="maths">Maths</option>
+                                </select>
+                                </div>
 
+                                {/* Loading, error, or chart */}
+                                {loadingLevel ? (
+                                <div className="text-center">
+                                    <div className="spinner-border text-purple" role="status" style={{ width: "8rem", height: "8rem" }}></div>
+                                </div>
+                                ) : errorLevel ? (
+                                <div className="text-red-500 text-center py-4">{errorLevel}</div>
+                                ) : (
+                                <ReactECharts
+                                    option={chartOptionsLevel}
+                                    style={{ height: '400px', width: '100%' }}
+                                />
+                                )}
+
+                                {/* Close Button */}
+                                <button
+                                onClick={() => setModalOpenLevel(false)}
+                                className="mt-4 p-2 bg-red-500 text-white rounded"
+                                >
+                                Close
+                                </button>
+                            </div>
+                            </div>
+                        )}
 
                         <div className="card shadow-sm border-0 mb-4">
                             <div className="card-body">
@@ -2015,10 +2169,10 @@ export default function StudentDashboard() {
                                 Add Student
                             </button>
 
-                            <button className="btn btn-purple d-inline-flex align-items-center text-white" style={{ backgroundColor: '#6f42c1' }}>
+                            {/* <button className="btn btn-purple d-inline-flex align-items-center text-white" style={{ backgroundColor: '#6f42c1' }}>
                                 <BarChart3 className="me-2" size={16} />
                                 View Graph
-                            </button>
+                            </button> */}
                         </div>
                         
 
@@ -2026,7 +2180,7 @@ export default function StudentDashboard() {
                         {/* Paginated Results Table */}
                         <div className="card shadow-sm border-0 mt-2">
                             <div className="card-body overflow-x-scroll">
-                                <h5 className="card-title mb-4">Results- {tableData.length} rows found</h5>
+                                <h5 className="card-title mb-4">Results- {tableData.length} students found</h5>
                                 {isTableLoading ? (
                                         <div className="text-center p-5">
                                             <div className="spinner-border text-purple" role="status" style={{ width: "3rem", height: "3rem" }}>

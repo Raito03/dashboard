@@ -238,16 +238,16 @@ export default function MissionPage() {
                                     Add Student
                                 </button>
 
-                                <button className="btn btn-purple d-inline-flex align-items-center text-white" style={{ backgroundColor: '#6f42c1' }}>
+                                {/* <button className="btn btn-purple d-inline-flex align-items-center text-white" style={{ backgroundColor: '#6f42c1' }}>
                                     <BarChart3 className="me-2" size={16} />
                                     View Graph
-                                </button>
+                                </button> */}
                             </div>
 
                             {/* Paginated Results Table */}
                             <div className="card shadow-sm border-0 mt-2">
                                 <div className="card-body overflow-x-scroll">
-                                    <h5 className="card-title mb-4">Results- {tableData.length} rows found</h5>
+                                    <h5 className="card-title mb-4">Results- {tableData.length} Students found</h5>
                                     {isTableLoading ? (
                                             <div className="text-center p-5">
                                                 <div className="spinner-border text-purple" role="status" style={{ width: "3rem", height: "3rem" }}>

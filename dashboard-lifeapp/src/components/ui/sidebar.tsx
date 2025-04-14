@@ -329,7 +329,7 @@ export function Sidebar() {
         )}
 
 
-        <NavItem href="#" label="Campaigns" isNested icon = {<IconCalculator className="h-3 w-3"/>} />
+        <NavItem href="/campaigns" label="Campaigns" isNested icon = {<IconCalculator className="h-3 w-3"/>} />
 
 
       </nav>

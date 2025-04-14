@@ -358,7 +358,7 @@ export default function StudentRelatedPragya() {
                                 Previous
                                 </button>
                                 <span className="text-sm">
-                                Page {currentPage} of {totalPages} ({filteredData.length} rows found)
+                                Page {currentPage} of {totalPages} ({filteredData.length} Pragya found)
                                 </span>
                                 <button
                                 onClick={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))}

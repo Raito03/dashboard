@@ -160,6 +160,7 @@ function SearchableDropdown({
 
 //const api_startpoint = 'https://lifeapp-api-vv1.vercel.app'
 const api_startpoint = 'http://152.42.239.141:5000'
+// const api_startpoint = 'http://127.0.0.1:5000'
 // ------------------- MAIN COMPONENT -------------------
 export default function SchoolData() {
   // ---------- State Variables ----------
@@ -501,7 +502,7 @@ export default function SchoolData() {
             {/* TABLE OF SCHOOLS WITH PAGINATION */}
               <div className="card shadow-sm border-0 mt-2 mb-4">
                 <div className="card-body overflow-x-scroll">
-                  <h5 className="card-title">All Schools- {tableData.length} rows found</h5>
+                  <h5 className="card-title">All Schools- {tableData.length} Schools found</h5>
                   {loading ? (
                     <div className="text-center p-5">
                         <div className="spinner-border text-purple" role="status" style={{ width: "3rem", height: "3rem" }}>

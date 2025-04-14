@@ -357,7 +357,7 @@ export default function StudentRelatedJigyasa() {
                                 Previous
                                 </button>
                                 <span className="text-sm">
-                                Page {currentPage} of {totalPages} ({filteredData.length} rows found)
+                                Page {currentPage} of {totalPages} ({filteredData.length} Jigyasa found)
                                 </span>
                                 <button
                                 onClick={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))}

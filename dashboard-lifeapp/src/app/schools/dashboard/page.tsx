@@ -7,6 +7,7 @@ import NumberFlow from '@number-flow/react';
 
 //const api_startpoint = 'https://lifeapp-api-vv1.vercel.app'
 const api_startpoint = 'http://152.42.239.141:5000'
+// const api_startpoint = 'http://127.0.0.1:5000'
 
 const inter = Inter({ subsets: ['latin'] });
 import dynamic from 'next/dynamic'
@@ -174,9 +175,9 @@ export default function SchoolsDashboard() {
 
 
   const [viewMode, setViewMode] = useState<'map' | 'graph'>('map')
-  const [barData, setBarData] = useState<any[]>([])
+  // const [barData, setBarData] = useState<any[]>([])
   const [chartOptions, setChartOptions] = useState<any>(null);
-  const [barChartOptions, setBarChartOptions] = useState<any>(null);
+  // const [barChartOptions, setBarChartOptions] = useState<any>(null);
   const [geoData, setGeoData] = useState<DemographData[]>([]);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [loading, setLoading] = useState<boolean>(true)
@@ -206,7 +207,7 @@ export default function SchoolsDashboard() {
               const apiData: { count: number; state: string }[] = await apiResponse.json();
 
               setGeoData(apiData); // Store API data for debugging or future use
-              setBarData(apiData)
+              // setBarData(apiData)
               // Map API state names to Highcharts' region keys
               const stateMappings: Record<string, string> = {
                   "Tamil Nadu": "tamil nadu",     // Tamil Nadu gets "in-tn"
@@ -372,6 +373,118 @@ export default function SchoolsDashboard() {
 
       fetchDataDemographics();
   }, []);
+
+
+  // Grouping state (daily, weekly, monthly, quarterly, yearly, lifetime)
+  const [grouping, setGrouping] = useState<string>('monthly');
+  // Store the raw API data. Each row has period, state, and count.
+  const [schoolData, setSchoolData] = useState<{ period: string; state: string; count: string }[]>([]);
+  const [loadingBar, setLoadingBar] = useState<boolean>(true);
+  const [errorMessageBar, setErrorMessageBar] = useState<string | null>(null);
+  // Chart options for ECharts
+  const [chartOptionsBar, setChartOptionsBar] = useState<any>(null);
+
+  // Fetch raw school data from API endpoint whenever grouping changes.
+  useEffect(() => {
+    const fetchSchoolData = async () => {
+      setLoadingBar(true);
+      try {
+        const response = await fetch(`${api_startpoint}/api/demograph-schools`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ grouping })
+        });
+        if (!response.ok) {
+          throw new Error(`API responded with status: ${response.status}`);
+        }
+        const data = await response.json();
+        console.log('Raw school data:', data);
+        setSchoolData(data);
+      } catch (error: any) {
+        console.error("Error fetching school data:", error);
+        setErrorMessageBar(error.message);
+      } finally {
+        setLoadingBar(false);
+      }
+    };
+
+    fetchSchoolData();
+  }, [grouping]);
+
+  // Process the raw data into chart data:
+  // 1. Collect a sorted list of unique periods.
+  // 2. Collect a sorted list of unique states.
+  // 3. For each unique state, build a series where each item corresponds to the count
+  //    for that state in that period (or 0 if no record is found).
+  useEffect(() => {
+    if (schoolData.length === 0) return;
+    // Use a Set for the periods and states.
+    const periodSet = new Set<string>();
+    const stateSet = new Set<string>();
+
+    schoolData.forEach((item) => {
+      periodSet.add(item.period);
+      stateSet.add(item.state);
+    });
+
+    const periods = Array.from(periodSet).sort();
+    const uniqueStates = Array.from(stateSet).sort();
+
+    // Build series: one series per state.
+    const series = uniqueStates.map(state => {
+      const dataForState = periods.map(period => {
+        // Find the matching record for the given period and state.
+        const record = schoolData.find(item => item.period === period && item.state === state);
+        return record ? Number(record.count) : 0;
+      });
+      return {
+        name: state,
+        type: 'bar',
+        stack: 'total', // use stack if you want a stacked bar chart; remove if you want grouped bars
+        data: dataForState,
+        // Use a fixed palette (or let ECharts pick automatically)
+        itemStyle: { color: '#'+((1<<24)*Math.random()|0).toString(16) }
+      };
+    });
+
+    // Build the ECharts options.
+    const options = {
+      title: {
+        text: 'Schools Distribution by State Over Time',
+        left: 'center'
+      },
+      tooltip: {
+        trigger: 'axis'
+      },
+      legend: {
+        type: 'scroll', // Allows legend to scroll if there are many states.
+        orient: 'horizontal',
+        bottom: 0,
+        data: uniqueStates
+      },
+      xAxis: {
+        type: 'category',
+        data: periods,
+        axisLabel: {
+          rotate: grouping === 'daily' ? 45 : 0,
+          interval: 0
+        }
+      },
+      yAxis: {
+        type: 'value',
+        name: 'Number of Schools'
+      },
+      dataZoom: [
+        { type: 'inside', start: 0, end: 100 },
+        { type: 'slider', start: 0, end: 100 }
+      ],
+      series: series
+    };
+
+    setChartOptionsBar(options);
+  }, [schoolData, grouping]);
+
+
   
   return (
     <div className={`page bg-gray-50 ${inter.className} font-sans`}>
@@ -396,23 +509,23 @@ export default function SchoolsDashboard() {
               </div>
               
               {/* Right Column - Map Chart */}
-              <div className="bg-white rounded-lg shadow-sm p-4 w-full h-[600px]">
+              <div className="bg-white rounded-lg shadow-sm p-4 w-full h-[700px]">
                 <h2 className="text-lg font-semibold text-gray-800 mb-1">Geographic Distribution</h2>
-                  <div className="mb-1">
-                    <button
-                      className={`px-4 py-2 mr-2 border rounded ${viewMode === 'map' ? 'bg-sky-900 text-white' : 'bg-gray-200 text-black'}`}
-                      onClick={() => setViewMode('map')}
-                    >
-                      Map View
-                    </button>
-                    <button
-                      className={`px-4 py-2 border rounded ${viewMode === 'graph' ? 'bg-sky-900 text-white' : 'bg-gray-200 text-black'}`}
-                      onClick={() => setViewMode('graph')}
-                    >
-                      Graph View
-                    </button>
-                  </div>
-                
+                <div className="mb-1">
+                  <button
+                    className={`px-4 py-2 mr-2 border rounded ${viewMode === 'map' ? 'bg-sky-900 text-white' : 'bg-gray-200 text-black'}`}
+                    onClick={() => setViewMode('map')}
+                  >
+                    Map View
+                  </button>
+                  <button
+                    className={`px-4 py-2 border rounded ${viewMode === 'graph' ? 'bg-sky-900 text-white' : 'bg-gray-200 text-black'}`}
+                    onClick={() => setViewMode('graph')}
+                  >
+                    Graph View
+                  </button>
+                </div>
+
                 {errorMessage && (
                   <div className="bg-red-50 p-4 rounded-md text-red-700 mb-4">
                     {errorMessage}
@@ -420,15 +533,10 @@ export default function SchoolsDashboard() {
                 )}
 
                 {loading ? (
-                    <div className="flex justify-center items-center h-80 w-full bg-gray-50 rounded-md">
-                      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
-                    </div>
-                  ) : errorMessage ? (
-                    <div className="text-center text-red-500">
-                      <p>Error: {errorMessage}</p>
-                    </div>
-                  ) : viewMode === 'map' && chartOptions && HighchartsLib ? (
-                  
+                  <div className="flex justify-center items-center h-80 w-full bg-gray-50 rounded-md">
+                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
+                  </div>
+                ) : viewMode === 'map' && chartOptions && HighchartsLib ? (
                   <div className="h-[600px] w-full">
                     <HighchartsReact
                       highcharts={HighchartsLib}
@@ -437,67 +545,41 @@ export default function SchoolsDashboard() {
                     />
                   </div>
                 ) : (
+                  // Graph view section
                   <div style={{ height: '500px', width: '100%' }}>
-                    <ReactECharts
-                      option={{
-                        title: {
-                          text: 'Schools Distribution by State',
-                          left: 'center'
-                        },
-                        tooltip: {
-                          trigger: 'axis',
-                          axisPointer: {
-                            type: 'shadow'
-                          }
-                        },
-                        grid: {
-                          left: '3%',
-                          right: '4%',
-                          bottom: '10%',
-                          containLabel: true
-                        },
-                        xAxis: {
-                          type: 'category',
-                          data: barData.map(item => item.state),
-                          axisLabel: {
-                            rotate: 45,
-                            interval: 0
-                          }
-                        },
-                        yAxis: {
-                          type: 'value',
-                          name: 'Number of Schools'
-                        },
-                        // Data zoom enables efficient panning and zooming on the chart
-                        dataZoom: [
-                          {
-                            type: 'inside',
-                            start: 0,
-                            end: 100
-                          },
-                          {
-                            type: 'slider',
-                            start: 0,
-                            end: 100
-                          }
-                        ],
-                        series: [
-                          {
-                            name: 'Schools',
-                            type: 'bar',
-                            data: barData.map(item => item.count),
-                            itemStyle: {
-                              color: '#4f46e5'
-                            }
-                          }
-                        ]
-                      }}
-                      style={{ height: '100%', width: '100%' }}
-                    />
-
+                    <div className="mb-4 flex items-center gap-2">
+                      <label className="font-semibold">Select Period:</label>
+                      <select 
+                        className="form-select w-auto inline-block"
+                        value={grouping}
+                        onChange={(e) => setGrouping(e.target.value)}
+                      >
+                        <option value="daily">Daily</option>
+                        <option value="weekly">Weekly</option>
+                        <option value="monthly">Monthly</option>
+                        <option value="quarterly">Quarterly</option>
+                        <option value="yearly">Yearly</option>
+                        <option value="lifetime">Lifetime</option>
+                      </select>
+                    </div>
+                    {loadingBar ? (
+                      <div className="flex justify-center items-center h-80">
+                        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
+                      </div>
+                    ) : errorMessageBar ? (
+                      <div className="text-center text-red-500">{errorMessageBar}</div>
+                    ) : (
+                      <div style={{ width: '100%', height: '500px' }}>
+                        <ReactECharts 
+                          option={chartOptionsBar}
+                          style={{ height: '100%', width: '100%' }}
+                        />
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
+
 
             
             </div>

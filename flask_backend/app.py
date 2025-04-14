@@ -3,9 +3,10 @@ from binascii import Error
 from flask import Flask, json, jsonify, request
 from flask_cors import CORS
 import pymysql.cursors
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Optional, Dict, Any, List, Union
 import logging
+from werkzeug.utils import secure_filename
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -443,14 +444,37 @@ def get_coupons_used_count():
 @app.route('/api/histogram_level_subject_challenges_complete', methods=['POST'])
 def get_histogram_data_level_subject_challenges_complete():
     """
-    Returns data for a histogram that shows, for each level (la_level_id),
-    counts of mission completes grouped by subject id (la_subject_id).
+    Returns data for a histogram that shows mission completes grouped by period,
+    subject, and level.
+    Accepts a JSON payload with a "grouping" key. Allowed values:
+      daily, weekly, monthly, quarterly, yearly, lifetime.
     """
     try:
+        data = request.get_json() or {}
+        grouping = data.get('grouping', 'monthly').lower()
+        allowed_groupings = ['daily', 'weekly', 'monthly', 'quarterly', 'yearly', 'lifetime']
+        if grouping not in allowed_groupings:
+            grouping = 'monthly'
+
+        # Construct the period expression based on the grouping
+        if grouping == 'daily':
+            period_expr = "DATE(lamc.created_at)"
+        elif grouping == 'weekly':
+            period_expr = "CONCAT(YEAR(lamc.created_at), '-W', WEEK(lamc.created_at, 1))"
+        elif grouping == 'monthly':
+            period_expr = "DATE_FORMAT(lamc.created_at, '%Y-%m')"
+        elif grouping == 'quarterly':
+            period_expr = "CONCAT(YEAR(lamc.created_at), '-Q', QUARTER(lamc.created_at))"
+        elif grouping == 'yearly':
+            period_expr = "YEAR(lamc.created_at)"
+        else:  # lifetime
+            period_expr = "'lifetime'"
+
         connection = get_db_connection()
         with connection.cursor() as cursor:
-            sql = """
+            sql = f"""
                 SELECT 
+                    {period_expr} AS period,
                     COUNT(*) AS count, 
                     las.title AS subject_title, 
                     lal.title AS level_title
@@ -458,9 +482,8 @@ def get_histogram_data_level_subject_challenges_complete():
                 INNER JOIN lifeapp.la_missions lam ON lam.id = lamc.la_mission_id
                 INNER JOIN lifeapp.la_subjects las ON lam.la_subject_id = las.id
                 INNER JOIN lifeapp.la_levels lal ON lam.la_level_id = lal.id
-                GROUP BY lam.la_subject_id, lam.la_level_id
-                ORDER BY lam.la_subject_id, lam.la_level_id;
-
+                GROUP BY period, lam.la_subject_id, lam.la_level_id
+                ORDER BY period, lam.la_subject_id, lam.la_level_id;
             """
             cursor.execute(sql)
             results = cursor.fetchall()
@@ -496,6 +519,55 @@ def get_histogram_topic_level_subject_quizgames():
         return jsonify({'error': str(e)}), 500
     finally:
         connection.close()
+
+@app.route('/api/histogram_topic_level_subject_quizgames_2', methods=['POST'])
+def get_histogram_topic_level_subject_quizgames_2():
+    connection = None
+    try:
+        data = request.get_json() or {}
+        grouping = data.get('grouping', 'monthly').lower()
+        allowed_groupings = ['daily', 'weekly', 'monthly', 'quarterly', 'yearly', 'lifetime']
+        if grouping not in allowed_groupings:
+            grouping = 'monthly'
+        
+        # Build the period expression using completed_at
+        if grouping == 'daily':
+            period_expr = "DATE(laqg.completed_at)"
+        elif grouping == 'weekly':
+            period_expr = "CONCAT(YEAR(laqg.completed_at), '-W', WEEK(laqg.completed_at, 1))"
+        elif grouping == 'monthly':
+            period_expr = "DATE_FORMAT(laqg.completed_at, '%Y-%m')"
+        elif grouping == 'quarterly':
+            period_expr = "CONCAT(YEAR(laqg.completed_at), '-Q', QUARTER(laqg.completed_at))"
+        elif grouping == 'yearly':
+            period_expr = "YEAR(laqg.completed_at)"
+        else:
+            period_expr = "'lifetime'"
+        
+        connection = get_db_connection()
+        with connection.cursor() as cursor:
+            sql = f"""
+                SELECT 
+                    {period_expr} AS period,
+                    COUNT(*) AS count,
+                    las.title AS subject_title,
+                    lal.title AS level_title
+                FROM lifeapp.la_quiz_games laqg
+                INNER JOIN lifeapp.la_subjects las ON laqg.la_subject_id = las.id
+                INNER JOIN lifeapp.la_topics lat ON lat.id = laqg.la_topic_id
+                INNER JOIN lifeapp.la_levels lal ON lat.la_level_id = lal.id
+                WHERE las.status = 1 AND laqg.completed_at IS NOT NULL
+                GROUP BY period, laqg.la_subject_id, lat.la_level_id
+                ORDER BY period, las.title, lal.title;
+            """
+            cursor.execute(sql)
+            result = cursor.fetchall()
+        return jsonify(result), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        connection.close()
+
 
 
 @app.route('/api/total-student-count', methods=['GET'])
@@ -1087,34 +1159,46 @@ def fetch_teacher_dashboard():
     filters = request.get_json() or {}
     state = filters.get('state')
     city = filters.get('city')
-    school_code = filters.get('school_code')  # Make sure this matches frontend key
+    school_code = filters.get('school_code')  # School code filter
     is_life_lab = filters.get('is_life_lab')
     school = filters.get('school')
-    from_date = filters.get('from_date')  # New filter: starting date
-    to_date = filters.get('to_date')      # New filter: ending date
-    # Start with base SQL
+    from_date = filters.get('from_date')  # Starting date filter
+    to_date = filters.get('to_date')      # Ending date filter
+    # New filters for teacher subject and grade:
+    teacher_subject = filters.get('teacher_subject')
+    teacher_grade = filters.get('teacher_grade')
+    
+    # Start with base SQL. We join to la_teacher_grades (ltg), la_grades (lgr), and la_sections (lsct)
     sql = """
-        with cte as(
-            select count(*) as mission_assign_count, teacher_id from lifeapp.la_mission_assigns group by teacher_id
+        WITH cte AS (
+            SELECT count(*) as mission_assign_count, teacher_id 
+            FROM lifeapp.la_mission_assigns 
+            GROUP BY teacher_id
         )
         SELECT 
             u.id, u.name, u.email,
             u.mobile_no, u.state, 
-            u.city, ls.name as school_name, u.school_id, cte.mission_assign_count,
+            u.city, ls.name as school_name, u.school_id, 
+            cte.mission_assign_count,
             CASE 
-                WHEN ls.is_life_lab = 1 
-                    THEN 'Yes' 
+                WHEN ls.is_life_lab = 1 THEN 'Yes' 
                 ELSE 'No' 
             END AS is_life_lab,
-            u.created_at, u.updated_at 
+            u.created_at, u.updated_at,
+            las.title,
+            lgr.name as grade_name, 
+            lsct.name as section_name
         FROM lifeapp.users u
         INNER JOIN lifeapp.schools ls ON ls.id = u.school_id
-        left join cte on cte.teacher_id = u.id
+        LEFT JOIN cte ON cte.teacher_id = u.id
+        LEFT JOIN lifeapp.la_teacher_grades ltg ON ltg.user_id = u.id
+        LEFT JOIN lifeapp.la_subjects las on las.id = ltg.la_subject_id
+        LEFT JOIN lifeapp.la_grades lgr ON ltg.la_grade_id = lgr.id
+        LEFT JOIN lifeapp.la_sections lsct ON ltg.la_section_id = lsct.id
         WHERE u.type = 5
     """
     params = []
     
-    # Add conditions based on filters
     if state and state.strip():
         sql += " AND u.state = %s"
         params.append(state)
@@ -1132,30 +1216,235 @@ def fetch_teacher_dashboard():
     if school:
         sql += " AND ls.name = %s"
         params.append(school)
-    # Add date range filters
+    if teacher_subject:
+        # Filter by teacher subject using la_teacher_grades table join.
+        sql += " AND ltg.la_subject_id = %s"
+        params.append(teacher_subject)
+    if teacher_grade:
+        # Filter by teacher grade using la_teacher_grades and la_grades join.
+        sql += " AND ltg.la_grade_id = %s"
+        params.append(int(teacher_grade))
     if from_date:
         sql += " AND u.created_at >= %s"
         params.append(from_date)
     if to_date:
         sql += " AND u.created_at <= %s"
         params.append(to_date)
-    # Print the SQL for debugging (remove in production)
-    # print("SQL Query:", sql)
-    # print("Parameters:", params)
     
     try:
         connection = get_db_connection()
         with connection.cursor() as cursor:
             cursor.execute(sql, tuple(params))
             result = cursor.fetchall()
-            
-            # Add debug output
-            # print("Query returned", len(result), "rows")
-            
-            # Always return a JSON array, even if empty
-            return jsonify(result if result else [])
+        return jsonify(result if result else [])
     except Exception as e:
         print("Error in teacher_dashboard_search:", str(e))
+        return jsonify({'error': str(e)}), 500
+    finally:
+        connection.close()
+
+@app.route('/api/add_teacher', methods=['POST'])
+def add_teacher():
+    """
+    Expects a JSON payload with teacher details.
+    Example payload:
+    {
+        "name": "John Doe",
+        "email": "john@example.com",
+        "mobile_no": "9876543210",
+        "state": "SomeState",
+        "city": "SomeCity",
+        "school_id": "1234",
+        "teacher_subject": "1",       # subject id (as string or number)
+        "teacher_grade": "3",         # grade number (as string, will be converted)
+        "teacher_section": "A"        # section identifier
+    }
+    Inserts a new teacher record (with u.type = 5) in lifeapp.users using
+    the current datetime for created_at and updated_at, and if teacher_subject, teacher_grade,
+    and teacher_section are provided, inserts an entry into la_teacher_grades.
+    """
+    data = request.get_json() or {}
+    try:
+        name = data.get("name")
+        email = data.get("email")
+        mobile_no = data.get("mobile_no")
+        state = data.get("state")
+        city = data.get("city")
+        school_id = data.get("school_id")
+        
+        # New fields for teacher_grade details:
+        teacher_subject = data.get("teacher_subject")
+        teacher_grade = data.get("teacher_grade")
+        teacher_section = data.get("teacher_section")
+        
+        # Basic validation
+        if not name or not mobile_no or not school_id:
+            return jsonify({"error": "Name, mobile_no, and school_id are required"}), 400
+
+        # Use datetime.now() with the desired format
+        datetime_str = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        
+        connection = get_db_connection()
+        with connection:
+            with connection.cursor() as cursor:
+                # Insert teacher record into lifeapp.users (u.type = 5 for teachers)
+                sql = """
+                INSERT INTO lifeapp.users
+                (name, email, mobile_no, state, city, school_id, type, created_at, updated_at)
+                VALUES (%s, %s, %s, %s, %s, %s, 5, %s, %s)
+                """
+                params = (name, email, mobile_no, state, city, school_id, datetime_str, datetime_str)
+                cursor.execute(sql, params)
+                teacher_id = cursor.lastrowid
+
+                # If teacher_subject, teacher_grade and teacher_section are provided, insert into la_teacher_grades.
+                if teacher_subject and teacher_grade and teacher_section:
+                    sql2 = """
+                    INSERT INTO lifeapp.la_teacher_grades
+                    (user_id, la_subject_id, la_grade_id, la_section_id, created_at, updated_at)
+                    VALUES (%s, %s, %s, %s, %s, %s)
+                    """
+                    params2 = (
+                        teacher_id, 
+                        teacher_subject, 
+                        int(teacher_grade), 
+                        teacher_section, 
+                        datetime_str, 
+                        datetime_str
+                    )
+                    cursor.execute(sql2, params2)
+                connection.commit()
+        return jsonify({"message": "Teacher added successfully", "id": teacher_id})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    
+@app.route('/api/teacher_update', methods=['POST'])
+def update_teacher():
+    """
+    Expects a JSON payload:
+    {
+      "id": 43253,
+      "name": "Updated Name",
+      "email": "updated@example.com",
+      "mobile_no": "9876543210",
+      "state": "NewState",
+      "city": "NewCity",
+      "school_id": "1234",
+      "teacher_subject": "1",      # subject id
+      "teacher_grade": "3",        # grade (will be converted to int)
+      "teacher_section": "A"       # section identifier
+    }
+    
+    Updates the teacher (users.type = 5) record and then
+    updates or inserts into la_teacher_grades.
+    """
+    data = request.get_json() or {}
+    try:
+        teacher_id = data.get("id")
+        if not teacher_id:
+            return jsonify({"error": "Teacher id is required."}), 400
+
+        # Extract updated teacher fields
+        name = data.get("name")
+        email = data.get("email")
+        mobile_no = data.get("mobile_no")
+        state = data.get("state")
+        city = data.get("city")
+        school_id = data.get("school_id")
+        teacher_subject = data.get("teacher_subject")
+        teacher_grade = data.get("teacher_grade")
+        teacher_section = data.get("teacher_section")
+        
+        # Use current datetime for updates
+        datetime_str = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        
+        connection = get_db_connection()
+        with connection:
+            with connection.cursor() as cursor:
+                # Update the teacher record in users
+                sql = """
+                UPDATE lifeapp.users
+                SET name = %s, email = %s, mobile_no = %s, state = %s, city = %s, school_id = %s, updated_at = %s
+                WHERE id = %s AND type = 5
+                """
+                params = (name, email, mobile_no, state, city, school_id, datetime_str, teacher_id)
+                cursor.execute(sql, params)
+                
+                # Update the la_teacher_grades record if grade-related fields are provided.
+                if teacher_subject and teacher_grade and teacher_section:
+                    # Check if a record already exists for this teacher
+                    cursor.execute("SELECT id FROM lifeapp.la_teacher_grades WHERE user_id = %s", (teacher_id,))
+                    existing = cursor.fetchone()
+                    if existing:
+                        # Update the existing record
+                        sql2 = """
+                        UPDATE lifeapp.la_teacher_grades
+                        SET la_subject_id = %s, la_grade_id = %s, la_section_id = %s, updated_at = %s
+                        WHERE user_id = %s
+                        """
+                        params2 = (teacher_subject, int(teacher_grade), teacher_section, datetime_str, teacher_id)
+                        cursor.execute(sql2, params2)
+                    else:
+                        # Insert a new record if none exists
+                        sql2 = """
+                        INSERT INTO lifeapp.la_teacher_grades
+                        (user_id, la_subject_id, la_grade_id, la_section_id, created_at, updated_at)
+                        VALUES (%s, %s, %s, %s, %s, %s)
+                        """
+                        params2 = (teacher_id, teacher_subject, int(teacher_grade), teacher_section, datetime_str, datetime_str)
+                        cursor.execute(sql2, params2)
+                connection.commit()
+        return jsonify({"message": "Teacher updated successfully"})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    
+@app.route('/api/teacher_delete', methods=['POST'])
+def delete_teacher():
+    """
+    Expects a JSON payload:
+    {
+      "id": 43253
+    }
+    Deletes the teacher from lifeapp.users (type 5) and optionally its record from la_teacher_grades.
+    """
+    data = request.get_json() or {}
+    try:
+        teacher_id = data.get("id")
+        if not teacher_id:
+            return jsonify({"error": "Teacher id is required."}), 400
+        
+        connection = get_db_connection()
+        with connection:
+            with connection.cursor() as cursor:
+                # Delete from la_teacher_grades first if exists.
+                sql2 = "DELETE FROM lifeapp.la_teacher_grades WHERE user_id = %s"
+                cursor.execute(sql2, (teacher_id,))
+                
+                # Delete from users table
+                sql = "DELETE FROM lifeapp.users WHERE id = %s AND type = 5"
+                cursor.execute(sql, (teacher_id,))
+                connection.commit()
+        return jsonify({"message": "Teacher deleted successfully"})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/api/grades_list', methods=['POST'])
+def get_grades_list():
+    try:
+        connection = get_db_connection()
+        with connection.cursor() as cursor:
+            # Fetch active grades from the la_grades table
+            sql = """
+                SELECT id, name, status, created_at, updated_at
+                FROM lifeapp.la_grades
+                WHERE status = 1
+            """
+            cursor.execute(sql)
+            result = cursor.fetchall()
+        return jsonify(result)
+    except Exception as e:
+        print("Error in get_grades_list:", str(e))
         return jsonify({'error': str(e)}), 500
     finally:
         connection.close()
@@ -2100,6 +2389,207 @@ def get_teacher_demograph():
     finally:
         connection.close()
 
+@app.route('/api/demograph-students-2', methods=['POST'])
+def get_demograph_students_2():
+    """
+    Returns the count of students (type = 3) in each normalized state 
+    grouped by a time period derived from the created_at column.
+    Accepts a JSON payload with key "grouping" (daily, weekly, monthly, quarterly, yearly, lifetime)
+    """
+    try:
+        data = request.get_json() or {}
+        grouping = data.get('grouping', 'monthly').lower()
+        allowed_groupings = ['daily', 'weekly', 'monthly', 'quarterly', 'yearly', 'lifetime']
+        if grouping not in allowed_groupings:
+            grouping = 'monthly'
+        
+        # Build the period expression based on the grouping value using created_at
+        if grouping == 'daily':
+            period_expr = "DATE(created_at)"
+        elif grouping == 'weekly':
+            period_expr = "CONCAT(YEAR(created_at), '-W', WEEK(created_at, 1))"
+        elif grouping == 'monthly':
+            period_expr = "DATE_FORMAT(created_at, '%Y-%m')"
+        elif grouping == 'quarterly':
+            period_expr = "CONCAT(YEAR(created_at), '-Q', QUARTER(created_at))"
+        elif grouping == 'yearly':
+            period_expr = "YEAR(created_at)"
+        else:  # lifetime grouping: all rows in one group
+            period_expr = "'lifetime'"
+        
+        connection = get_db_connection()
+        with connection.cursor() as cursor:
+            # First, group by state and created_at (so each row represents one state on a given day, week, etc.)
+            # Then, in an outer query, group by the computed period and state.
+            sql = f"""
+                SELECT 
+                    {period_expr} AS period,
+                    normalized_state,
+                    SUM(student_count) AS total_count
+                FROM (
+                    SELECT 
+                        created_at,
+                        CASE 
+                            WHEN state IN ('Gujrat', 'Gujarat') THEN 'Gujarat'
+                            WHEN state IN ('Tamilnadu', 'Tamil Nadu') THEN 'Tamil Nadu'
+                            ELSE state 
+                        END AS normalized_state,
+                        COUNT(*) AS student_count
+                    FROM lifeapp.users
+                    WHERE `type` = 3 AND state != 2
+                    GROUP BY state, created_at
+                ) AS subquery
+                GROUP BY period, normalized_state
+                ORDER BY period, total_count DESC;
+            """
+            cursor.execute(sql)
+            result = cursor.fetchall()
+            
+            formatted_result = [
+                {"period": row['period'], "state": row['normalized_state'], "count": row['total_count']}
+                for row in result
+            ]
+        return jsonify(formatted_result), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    finally:
+        connection.close()
+
+@app.route('/api/demograph-teachers-2', methods=['POST'])
+def get_teacher_demograph_2():
+    """
+    Returns count of teachers (type = 5) in each normalized state grouped by time period,
+    based on the created_at column. Accepts a JSON payload with the key "grouping", which 
+    can be daily, weekly, monthly, quarterly, yearly, or lifetime.
+    """
+    try:
+        data = request.get_json() or {}
+        grouping = data.get('grouping', 'monthly').lower()
+        allowed_groupings = ['daily', 'weekly', 'monthly', 'quarterly', 'yearly', 'lifetime']
+        if grouping not in allowed_groupings:
+            grouping = 'monthly'
+        
+        # Build the period expression using created_at
+        if grouping == 'daily':
+            period_expr = "DATE(created_at)"
+        elif grouping == 'weekly':
+            period_expr = "CONCAT(YEAR(created_at), '-W', WEEK(created_at, 1))"
+        elif grouping == 'monthly':
+            period_expr = "DATE_FORMAT(created_at, '%Y-%m')"
+        elif grouping == 'quarterly':
+            period_expr = "CONCAT(YEAR(created_at), '-Q', QUARTER(created_at))"
+        elif grouping == 'yearly':
+            period_expr = "YEAR(created_at)"
+        else:  # lifetime
+            period_expr = "'lifetime'"
+        
+        connection = get_db_connection()
+        with connection.cursor() as cursor:
+            # First group by state and the individual created_at date, then in an outer query group by the computed period.
+            sql = f"""
+                SELECT 
+                    {period_expr} AS period,
+                    normalized_state,
+                    SUM(teacher_count) AS total_count
+                FROM (
+                    SELECT 
+                        created_at,
+                        CASE 
+                            WHEN state IN ('Gujrat', 'Gujarat') THEN 'Gujarat'
+                            WHEN state IN ('Tamilnadu', 'Tamil Nadu') THEN 'Tamil Nadu'
+                            ELSE state 
+                        END AS normalized_state,
+                        COUNT(*) AS teacher_count
+                    FROM lifeapp.users 
+                    WHERE `type` = 5 AND state != 2
+                    GROUP BY state, created_at
+                ) AS subquery
+                GROUP BY period, normalized_state
+                ORDER BY period, total_count DESC;
+            """
+            cursor.execute(sql)
+            result = cursor.fetchall()
+            
+            formatted_result = [
+                {"period": row['period'], "state": row['normalized_state'], "count": row['total_count']}
+                for row in result
+            ]
+            
+        return jsonify(formatted_result), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    finally:
+        connection.close()
+
+
+@app.route('/api/student_count_by_level_778', methods=['POST'])
+def student_count_by_level_778():
+    """
+    POST body (JSON) can include an optional "level" filter.
+    If level is not provided or is 'all', then return counts for all levels:
+      level1: type=3 and grade >= 1
+      level2: type=3 and grade >= 6
+      level3: type=3 and grade >= 7
+      level4: type=3 and grade >= 8
+
+    If level is specified (as "1", "2", "3" or "4"), then return:
+      for level 1: count of students with type=3 and grade>=1,
+      for level 2: count of students with type=3 and grade>=6,
+      for level 3: count of students with type=3 and grade>=7,
+      for level 4: count of students with type=3 and grade>=8.
+    """
+    level = None
+    # if request.method == 'POST':
+    data = request.get_json() or {}
+    level = data.get('level', 'all')  # default to all
+
+    try:
+        connection = get_db_connection()
+        with connection:
+            with connection.cursor() as cursor:
+                if level in [None, '', 'all']:
+                    # Return counts for all levels
+                    query = """
+                    SELECT 
+                        SUM(CASE WHEN type = 3 AND grade >= 1 THEN 1 ELSE 0 END) AS level1_count,
+                        SUM(CASE WHEN type = 3 AND grade >= 6 THEN 1 ELSE 0 END) AS level2_count,
+                        SUM(CASE WHEN type = 3 AND grade >= 7 THEN 1 ELSE 0 END) AS level3_count,
+                        SUM(CASE WHEN type = 3 AND grade >= 8 THEN 1 ELSE 0 END) AS level4_count
+                    FROM lifeapp.users;
+                    """
+                    cursor.execute(query)
+                    result = cursor.fetchone()
+                    return jsonify(result)
+                else:
+                    # For a specified level, choose condition accordingly.
+                    if level == "1":
+                        cond = "grade >= 1"
+                    elif level == "2":
+                        cond = "grade >= 6"
+                    elif level == "3":
+                        cond = "grade >= 7"
+                    elif level == "4":
+                        cond = "grade >= 8"
+                    else:
+                        return jsonify({"error": "Invalid level parameter"}), 400
+
+                    query = f"""
+                    SELECT COUNT(*) AS count 
+                    FROM lifeapp.users
+                    WHERE type = 3 AND {cond};
+                    """
+                    cursor.execute(query)
+                    result = cursor.fetchone()
+                    return jsonify({
+                        'level1_count': result[0],
+                        'level2_count': result[1],
+                        'level3_count': result[2],
+                        'level4_count': result[3]
+                    })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    
+
 #### permission denied in digital ocean,
 @app.route('/api/correct-tamil-nadu-users', methods=['POST'])
 def correction_tamil_nadu_users():
@@ -2898,6 +3388,64 @@ def get_count_school_rate_dashboard():
     finally:
         connection.close()
 
+@app.route('/api/demograph-schools', methods=['POST'])
+def get_schools_demograph():
+    data = request.get_json() or {}
+    grouping = data.get('grouping', 'monthly').lower()
+    allowed_groupings = ['daily', 'weekly', 'monthly', 'quarterly', 'yearly', 'lifetime']
+    if grouping not in allowed_groupings:
+        grouping = 'monthly'
+    
+    # Build the period expression based on the grouping value using created_at.
+    if grouping == 'daily':
+        period_expr = "DATE(created_at)"
+    elif grouping == 'weekly':
+        period_expr = "CONCAT(YEAR(created_at), '-W', WEEK(created_at, 1))"
+    elif grouping == 'monthly':
+        period_expr = "DATE_FORMAT(created_at, '%Y-%m')"
+    elif grouping == 'quarterly':
+        period_expr = "CONCAT(YEAR(created_at), '-Q', QUARTER(created_at))"
+    elif grouping == 'yearly':
+        period_expr = "YEAR(created_at)"
+    else:  # lifetime grouping: group all records together
+        period_expr = "'lifetime'"
+    
+    connection = get_db_connection()
+    try:
+        with connection.cursor() as cursor:
+            # First, group by state and created_at, then group that in an outer query.
+            sql = f"""
+                SELECT 
+                    {period_expr} AS period,
+                    normalized_state,
+                    SUM(school_count) AS total_count
+                FROM (
+                    SELECT 
+                        created_at,
+                        CASE 
+                            WHEN state IN ('Gujrat', 'Gujarat') THEN 'Gujarat'
+                            WHEN state IN ('Tamilnadu', 'Tamil Nadu') THEN 'Tamil Nadu'
+                            ELSE state 
+                        END AS normalized_state,
+                        COUNT(*) AS school_count
+                    FROM lifeapp.schools
+                    WHERE state != 'null' AND state != '2'
+                    GROUP BY state, created_at
+                ) AS subquery
+                GROUP BY period, normalized_state
+                ORDER BY period, total_count DESC;
+            """
+            cursor.execute(sql)
+            result = cursor.fetchall()
+            formatted_result = [
+                {"period": row['period'], "state": row['normalized_state'], "count": row['total_count']}
+                for row in result
+            ]
+        return jsonify(formatted_result), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    finally:
+        connection.close()
 
 ###################################################################################
 ###################################################################################
@@ -3133,7 +3681,39 @@ def get_session_participants():
     finally:
         connection.close()
 
+@app.route('/api/session_participants_total', methods = ['POST'])
+def get_session_participants_total():
+    connection = get_db_connection()
+    try:
+        with connection.cursor() as cursor:
+            sql = """
+                select count(*) as count from lifeapp.la_session_participants;
+            """
+            cursor.execute(sql)
+            count = cursor.fetchall()
+        return jsonify(count), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        connection.close()
 
+@app.route('/api/mentor_participated_in_sessions_total', methods = ['POST'])
+def get_mentor_participated_in_sessions_total():
+    connection = get_db_connection()
+    try:
+        with connection.cursor() as cursor:
+            sql = """
+                select count(*) as count from lifeapp.la_session_participants lasp 
+                inner join lifeapp.users u on u.id = lasp.user_id where u.type = 4 or u.type = 5;
+            """
+            cursor.execute(sql)
+            count = cursor.fetchall()
+        return jsonify(count), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        connection.close()
+    
 
 
 ###################################################################################
@@ -3797,6 +4377,21 @@ def update_quiz_question(question_id):
     finally:
         connection.close()
 
+@app.route('/api/quiz_completes', methods= ['POST'])
+def get_quiz_completes():
+    connection = get_db_connection()
+    try:
+        with connection.cursor() as cursor:
+            sql = """
+                select count(*) as count from lifeapp.la_quiz_games where completed_at is not null;
+            """
+            cursor.execute(sql)
+            count = cursor.fetchall()
+        return jsonify(count)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        connection.close()
 
 @app.route('/api/topics', methods=['POST'])
 def get_topics():
@@ -4143,5 +4738,365 @@ def delete_enrollment(enrollment_id):
         return jsonify({"error": str(e)}), 500
     
 
+
+###################################################################################
+###################################################################################
+####################### TEACHER/COMPETENCIES APIs #################################
+###################################################################################
+###################################################################################
+@app.route('/admin/competencies', methods=['GET'])
+def get_competencies():
+    """
+    Fetch competencies along with subject and level information.
+    Optional query parameters:
+      - la_subject_id (filter by subject)
+      - status (filter by competency status; e.g. 1 for ACTIVE, 0 for DEACTIVE)
+      - page (for pagination, default: 1)
+    """
+    try:
+        # Get filters from query string (or use defaults)
+        la_subject_id = request.args.get('la_subject_id')
+        status = request.args.get('status')  # expected as a string, e.g. "1" or "0"
+        page = int(request.args.get('page', 1))
+        per_page = 25
+        offset = (page - 1) * per_page
+
+        connection = get_db_connection()
+        with connection.cursor() as cursor:
+            # Build the SQL with JOINs:
+            sql = """
+            SELECT 
+              comp.id,
+              comp.title AS competency_title,
+              comp.document,
+              comp.status,
+              comp.created_at,
+              s.title AS subject_title,
+              l.title AS level_title
+            FROM lifeapp.la_competencies comp
+            INNER JOIN lifeapp.la_subjects s ON comp.la_subject_id = s.id
+            INNER JOIN lifeapp.la_levels l ON comp.la_level_id = l.id
+            WHERE 1 = 1 
+            """
+            params = []
+            if la_subject_id:
+                sql += " AND comp.la_subject_id = %s"
+                params.append(la_subject_id)
+            if status is not None and status != "":
+                sql += " AND comp.status = %s"
+                params.append(int(status))
+            sql += " ORDER BY comp.id DESC LIMIT %s OFFSET %s"
+            params.extend([per_page, offset])
+            cursor.execute(sql, params)
+            competencies = cursor.fetchall()
+
+        # Also fetch the subjects list (for filter dropdowns)
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT id, title FROM lifeapp.la_subjects WHERE status = 1 ORDER BY id;")
+            subjects = cursor.fetchall()
+
+        connection.close()
+
+        # Return both competencies and subjects
+        return jsonify({"competencies": competencies, "subjects": subjects})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/admin/competencies', methods=['POST'])
+def create_competency():
+    """
+    Expects a multipart/form-data POST request (for file upload) and other fields in form data.
+    Required fields: name (for competency title), la_subject_id, la_level_id, status
+    Document is expected as a file input named 'document'
+    """
+    data = request.form.to_dict()
+    document_file = request.files.get('document')
+    if not document_file:
+        return jsonify({'message': 'Document file is required'}), 400
+
+    # Replace this with your actual media upload function:
+    media_id = upload_media(document_file)
+    data['document'] = media_id
+
+    connection = get_db_connection()
+    try:
+        cursor = connection.cursor()
+        sql = """
+            INSERT INTO lifeapp.la_competencies 
+            (title, la_subject_id, la_level_id, status, document, created_at, updated_at)
+            VALUES (%s, %s, %s, %s, %s, NOW(), NOW())
+        """
+        # Here 'title' is the competency title.
+        cursor.execute(sql, (
+            data.get('name'),
+            data.get('la_subject_id'),
+            data.get('la_level_id'),
+            data.get('status', 'ACTIVE'),
+            data['document']
+        ))
+        connection.commit()
+        return jsonify({'message': 'Competency created successfully'}), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        cursor.close()
+        connection.close()
+
+# Update an existing competency (Edit)
+@app.route('/admin/competencies/<int:competency_id>', methods=['PUT'])
+def update_competency(competency_id):
+    try:
+        data = request.get_json() or {}
+        connection = get_db_connection()
+        with connection.cursor() as cursor:
+            sql = """
+                UPDATE lifeapp.la_competencies 
+                SET title = %s, la_subject_id = %s, la_level_id = %s, 
+                    status = %s, document = %s, updated_at = NOW()
+                WHERE id = %s
+            """
+            cursor.execute(sql, (
+                data.get('name'),
+                data.get('la_subject_id'),
+                data.get('la_level_id'),
+                data.get('status'),
+                data.get('document'),
+                competency_id
+            ))
+            connection.commit()
+        return jsonify({'message': 'Competency updated successfully'}), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        connection.close()
+
+# Delete a competency
+@app.route('/admin/competencies/<int:competency_id>', methods=['DELETE'])
+def delete_competency(competency_id):
+    try:
+        connection = get_db_connection()
+        with connection.cursor() as cursor:
+            sql = "DELETE FROM lifeapp.la_competencies WHERE id = %s"
+            cursor.execute(sql, (competency_id,))
+            connection.commit()
+        return jsonify({'message': 'Competency deleted successfully'}), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        connection.close()
+
+
+###################################################################################
+###################################################################################
+####################### CAMPAIGNS APIs ############################################
+###################################################################################
+###################################################################################
+
+@app.route('/admin/push-notification-campaigns', methods=['GET'])
+def list_push_notification_campaigns():
+    try:
+        # Optional: support pagination
+        page = int(request.args.get('page', 1))
+        per_page = int(request.args.get('per_page', 50))
+        offset = (page - 1) * per_page
+
+        connection = get_db_connection()
+        with connection.cursor() as cursor:
+            # Join push_notification_campaigns (alias p) with schools (alias s) to display the school name.
+            sql = """
+                SELECT 
+                  p.id,
+                  p.created_by,
+                  p.name,
+                  p.title,
+                  p.body,
+                  p.media_id,
+                  p.school_id,
+                  s.name AS school_name,
+                  p.city,
+                  p.state,
+                  p.scheduled_date,
+                  p.scheduled_at,
+                  p.completed_at,
+                  p.users,
+                  p.success_users,
+                  p.failed_users,
+                  p.created_at,
+                  p.updated_at
+                FROM lifeapp.push_notification_campaigns p
+                INNER JOIN lifeapp.schools s ON p.school_id = s.id
+                ORDER BY p.id DESC
+                LIMIT %s OFFSET %s
+            """
+            cursor.execute(sql, (per_page, offset))
+            campaigns = cursor.fetchall()
+        connection.close()
+        return jsonify({"campaigns": campaigns}), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+# -------------------------
+# Endpoint: Add Campaign
+# -------------------------
+@app.route('/admin/push-notification-campaigns', methods=['POST'])
+def add_push_notification_campaign():
+    try:
+        # Get campaign data from form and file from request
+        data = request.form.to_dict()
+        file = request.files.get('media')
+
+        # Required fields: name, title, and body
+        if not data.get('name') or not data.get('title') or not data.get('body'):
+            return jsonify({'error': 'Name, title, and body are required.'}), 400
+
+        # Process schedule if provided (for instance, a scheduled date/time in ISO format)
+        scheduled_date = data.get('scheduled_date')  # Should be a full datetime string or empty
+
+        # Process media file (if provided)
+        media_id = None
+        if file:
+            filename = secure_filename(file.filename)
+            upload_folder = app.config['UPLOAD_FOLDER']
+            if not os.path.exists(upload_folder):
+                os.makedirs(upload_folder)
+            path = os.path.join(upload_folder, filename)
+            file.save(path)
+            # Here you could insert into your media table and retrieve the inserted ID.
+            connection = get_db_connection()
+            with connection.cursor() as cursor:
+                cursor.execute("INSERT INTO media (name, path) VALUES (%s, %s)", (filename, path))
+                media_id = cursor.lastrowid
+                connection.commit()
+            connection.close()
+
+        # Insert the campaign row.
+        created_at = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        connection = get_db_connection()
+        with connection.cursor() as cursor:
+            sql = """
+                INSERT INTO lifeapp.push_notification_campaigns 
+                (name, title, body, media_id, school_id, city, state, scheduled_date, created_by, created_at, updated_at)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            """
+            # Expect that your form includes school_id, city, and state as well.
+            cursor.execute(sql, (
+                data.get('name'),
+                data.get('title'),
+                data.get('body'),
+                media_id,
+                data.get('school_id'),
+                data.get('city'),
+                data.get('state'),
+                scheduled_date,
+                data.get('created_by') or 1,  # Replace with current user ID logic if needed.
+                created_at,
+                created_at
+            ))
+            campaign_id = cursor.lastrowid
+            connection.commit()
+        connection.close()
+        return jsonify({"message": "Campaign added successfully", "campaign_id": campaign_id}), 201
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+# -------------------------
+# Endpoint: Update Campaign
+# -------------------------
+@app.route('/admin/push-notification-campaigns/<int:campaign_id>', methods=['PUT'])
+def update_push_notification_campaign(campaign_id):
+    try:
+        data = request.form.to_dict()
+        file = request.files.get('media')
+        scheduled_date = data.get('scheduled_date')
+        media_id = None
+        if file:
+            filename = secure_filename(file.filename)
+            upload_folder = app.config['UPLOAD_FOLDER']
+            if not os.path.exists(upload_folder):
+                os.makedirs(upload_folder)
+            path = os.path.join(upload_folder, filename)
+            file.save(path)
+            connection = get_db_connection()
+            with connection.cursor() as cursor:
+                cursor.execute("INSERT INTO media (name, path) VALUES (%s, %s)", (filename, path))
+                media_id = cursor.lastrowid
+                connection.commit()
+            connection.close()
+        
+        updated_at = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        connection = get_db_connection()
+        with connection.cursor() as cursor:
+            # If a new media file is provided, update document; else, leave unchanged.
+            if media_id:
+                sql = """
+                    UPDATE lifeapp.push_notification_campaigns
+                    SET name=%s,
+                        title=%s,
+                        body=%s,
+                        media_id=%s,
+                        school_id=%s,
+                        city=%s,
+                        state=%s,
+                        scheduled_date=%s,
+                        updated_at=%s
+                    WHERE id = %s
+                """
+                cursor.execute(sql, (
+                    data.get('name'),
+                    data.get('title'),
+                    data.get('body'),
+                    media_id,
+                    data.get('school_id'),
+                    data.get('city'),
+                    data.get('state'),
+                    scheduled_date,
+                    updated_at,
+                    campaign_id
+                ))
+            else:
+                sql = """
+                    UPDATE lifeapp.push_notification_campaigns
+                    SET name=%s,
+                        title=%s,
+                        body=%s,
+                        school_id=%s,
+                        city=%s,
+                        state=%s,
+                        scheduled_date=%s,
+                        updated_at=%s
+                    WHERE id = %s
+                """
+                cursor.execute(sql, (
+                    data.get('name'),
+                    data.get('title'),
+                    data.get('body'),
+                    data.get('school_id'),
+                    data.get('city'),
+                    data.get('state'),
+                    scheduled_date,
+                    updated_at,
+                    campaign_id
+                ))
+            connection.commit()
+        connection.close()
+        return jsonify({"message": "Campaign updated successfully", "campaign_id": campaign_id}), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+# -------------------------
+# Endpoint: Delete Campaign
+# -------------------------
+@app.route('/admin/push-notification-campaigns/<int:campaign_id>', methods=['DELETE'])
+def delete_push_notification_campaign(campaign_id):
+    try:
+        connection = get_db_connection()
+        with connection.cursor() as cursor:
+            cursor.execute("DELETE FROM lifeapp.push_notification_campaigns WHERE id = %s", (campaign_id,))
+            connection.commit()
+        connection.close()
+        return jsonify({"message": "Campaign deleted successfully", "campaign_id": campaign_id}), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 if __name__ == '__main__':
     app.run(debug=True)

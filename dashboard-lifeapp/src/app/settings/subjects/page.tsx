@@ -439,81 +439,94 @@ export default function SettingsSubject() {
                 <div className='page-body'>
                     <div className='container-xl pt-4 pb-4'>
                         {/* Tabler Card with Carousel */}
-                        <div className="card col-md-3 col-sm-6 col-12">
-                            <div className="card-header py-2">
-                                <h3 className="card-title m-0" style={{ fontSize: '0.9rem' }}>Subjects</h3>
+                        <div className="card">
+                            <div className="card-header py-3 d-flex justify-between items-center">
+                                <h3 className="card-title m-0 text-lg font-semibold">Subjects</h3>
+                                <button className="btn btn-primary" onClick={() => setShowModal(true)}>
+                                <svg xmlns="http://www.w3.org/2000/svg" className="icon icon-tabler icon-tabler-plus mr-1" width="20" height="20" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor" fill="none" strokeLinecap="round" strokeLinejoin="round">
+                                    <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+                                    <path d="M12 5l0 14" />
+                                    <path d="M5 12l14 0" />
+                                </svg>
+                                Add Subject
+                                </button>
                             </div>
-                            <div className="card-body p-2">
-                                {/* Carousel Container */}
-                                <div className="overflow-hidden rounded " ref={emblaRef}>
-                                <div className="flex">
-                                    {loading ? (
-                                        <div className="flex justify-center items-center h-40 w-60 text-center">
-                                            <div className="animate-spin rounded-full h-10 w-10 border-t-4 border-blue-800"></div>
-                                        </div>
-                                    ) : (
-                                        totalSubjects.map((slide) => (  // Removed extra `{}` around map
-                                            <div key={slide.id} className="relative flex-[0_0_100%] min-w-0">
-                                                <div className="card card-sm mx-2 shadow-none border">
-                                                    {/* Edit & Delete Icons */}
-                                                    <div className="absolute top-2 right-2 flex gap-2">
-                                                        <button className="text-gray-600 hover:text-blue-600" onClick={() => handleEditClick(slide)}>
-                                                            <svg xmlns="http://www.w3.org/2000/svg" className="icon icon-tabler icon-tabler-edit" width="20" height="20" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor" fill="none" strokeLinecap="round" strokeLinejoin="round">
-                                                                <path stroke="none" d="M0 0h24v24H0z" fill="none"></path>
-                                                                <path d="M16 3l4 4l-11 11h-4v-4z"></path>
-                                                                <path d="M12 19h4"></path>
-                                                            </svg>
-                                                        </button>
-                                                        <button className="text-gray-600 hover:text-red-600" onClick={() => handleDeleteClick(slide)}>
-                                                            <svg xmlns="http://www.w3.org/2000/svg" className="icon icon-tabler icon-tabler-trash" width="20" height="20" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor" fill="none" strokeLinecap="round" strokeLinejoin="round">
-                                                                <path stroke="none" d="M0 0h24v24H0z" fill="none"></path>
-                                                                <path d="M4 7l16 0"></path>
-                                                                <path d="M10 11l0 6"></path>
-                                                                <path d="M14 11l0 6"></path>
-                                                                <path d="M5 7l1 12a2 2 0 0 0 2 2l8 0a2 2 0 0 0 2 -2l1 -12"></path>
-                                                                <path d="M9 7l0 -3l6 0l0 3"></path>
-                                                            </svg>
-                                                        </button>
-                                                    </div>
-                                                    <div className="img-responsive img-responsive-16x9 card-img-top">
-                                                        <img
-                                                            src={`https://picsum.photos/id/${slide.imageId}/400/225`}
-                                                            alt={slide.title}
-                                                            className="object-cover w-full h-full"
-                                                        />
-                                                    </div>
-                                                    <div className="card-body p-3">
-                                                        <h3 className="card-title mb-1">{slide.title}</h3>
-                                                        <p className="text-muted text-sm">{slide.heading}</p>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        ))
-                                    )}
-                                </div>
 
-                                    {/* Tabler-styled Pagination Dots */}
-                                    <div className="d-flex justify-content-center gap-1 mt-3">
-                                        {totalSubjects.map((_, index) => (
-                                            <button
-                                                key={index}
-                                                className={`btn btn-icon btn-sm ${selectedIndex === index ? 'btn-primary' : 'btn-outline-secondary'}`}
-                                                onClick={() => emblaApi?.scrollTo(index)}
-                                                aria-label={`Go to slide ${index + 1}`}
-                                                style={{ width: '24px', height: '24px', padding: '0', borderRadius:'50px' }}
-                                            >
-                                                <span className="w-2 h-2 rounded-full"></span>
-                                            </button>
-                                        ))}
-                                    </div>
+                            <div className="card-body overflow-x-auto">
+                                {loading ? (
+                                <div className="text-center py-4">
+                                    <div className="animate-spin rounded-full h-10 w-10 border-t-4 border-blue-800 mx-auto"></div>
                                 </div>
-                                
-                                
+                                ) : (
+                                <table className="table table-hover w-full">
+                                    <thead className="bg-gray-100 text-sm">
+                                    <tr>
+                                        <th>ID</th>
+                                        <th>Image</th>
+                                        <th>Title</th>
+                                        <th>Heading</th>
+                                        <th>Status</th>
+                                        <th className="text-center">Actions</th>
+                                    </tr>
+                                    </thead>
+                                    <tbody>
+                                    {totalSubjects.map(subject => (
+                                        <tr key={subject.id} className="text-sm">
+                                        <td>{subject.id}</td>
+                                        <td>
+                                            <img
+                                            src={`https://picsum.photos/id/${subject.imageId}/80/50`}
+                                            alt={subject.title}
+                                            className="w-20 h-auto rounded"
+                                            />
+                                        </td>
+                                        <td>{subject.title}</td>
+                                        <td>{subject.heading}</td>
+                                        <td>
+                                            <span className={`badge ${subject.status === 1 ? 'bg-success text-white' : 'bg-danger text-white'}`}>
+                                            {subject.status === 1 ? 'Active' : 'Inactive'}
+                                            </span>
+                                        </td>
+                                        <td className="text-center">
+                                            <div className="flex justify-center gap-2">
+                                            <button
+                                                className="text-gray-600 hover:text-blue-600"
+                                                onClick={() => handleEditClick(subject)}
+                                                title="Edit"
+                                            >
+                                                <svg xmlns="http://www.w3.org/2000/svg" className="icon icon-tabler icon-tabler-edit" width="20" height="20" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor" fill="none" strokeLinecap="round" strokeLinejoin="round">
+                                                <path stroke="none" d="M0 0h24v24H0z" fill="none"></path>
+                                                <path d="M16 3l4 4l-11 11h-4v-4z"></path>
+                                                <path d="M12 19h4"></path>
+                                                </svg>
+                                            </button>
+                                            <button
+                                                className="text-gray-600 hover:text-red-600"
+                                                onClick={() => handleDeleteClick(subject)}
+                                                title="Delete"
+                                            >
+                                                <svg xmlns="http://www.w3.org/2000/svg" className="icon icon-tabler icon-tabler-trash" width="20" height="20" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor" fill="none" strokeLinecap="round" strokeLinejoin="round">
+                                                <path stroke="none" d="M0 0h24v24H0z" fill="none"></path>
+                                                <path d="M4 7l16 0"></path>
+                                                <path d="M10 11l0 6"></path>
+                                                <path d="M14 11l0 6"></path>
+                                                <path d="M5 7l1 12a2 2 0 0 0 2 2l8 0a2 2 0 0 0 2 -2l1 -12"></path>
+                                                <path d="M9 7l0 -3l6 0l0 3"></path>
+                                                </svg>
+                                            </button>
+                                            </div>
+                                        </td>
+                                        </tr>
+                                    ))}
+                                    </tbody>
+                                </table>
+                                )}
                             </div>
                         </div>
 
+
                         {/* Add New Subject Button */}
-                        <div className="text-center h-50 w-25 mt-3">
+                        {/* <div className="text-center h-50 w-25 mt-3">
                             <button className="btn btn-primary" onClick={() => setShowModal(true)} >
                                 <svg xmlns="http://www.w3.org/2000/svg" className="icon icon-tabler icon-tabler-plus" width="24" height="24" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor" fill="none" strokeLinecap="round" strokeLinejoin="round">
                                     <path stroke="none" d="M0 0h24v24H0z" fill="none"></path>
@@ -522,7 +535,7 @@ export default function SettingsSubject() {
                                 </svg>
                                 Add New Subject
                             </button>
-                        </div>
+                        </div> */}
                     </div>
                 </div>
             </div>

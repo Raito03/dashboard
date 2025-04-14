@@ -170,7 +170,7 @@ export default function SettingsGameEnrollments() {
                         <div className="d-flex justify-content-between align-items-center mb-3">
                         <div className="d-flex flex-col">
                             <h2 className="mb-0">Enrollments</h2>
-                            <small className="text-muted">{enrollments.length} rows found</small>
+                            <small className="text-muted">{enrollments.length} Game Enrollments found</small>
                         </div>
                         <div>
                             <button className="btn btn-primary" onClick={() => setShowAddModal(true)}>

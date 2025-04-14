@@ -51,6 +51,9 @@ interface SignupData {
 import ReactECharts from 'echarts-for-react';
 
 const groupings = ['daily', 'weekly', 'monthly', 'quarterly', 'yearly', 'lifetime'];
+const quizGroupings = ['daily', 'weekly', 'monthly', 'quarterly', 'yearly', 'lifetime'];
+const studentGroupings = ['daily', 'weekly', 'monthly', 'quarterly', 'yearly', 'lifetime'];
+const teacherGroupings = ['daily', 'weekly', 'monthly', 'quarterly', 'yearly', 'lifetime'];
 
 // import Sidebar from './sidebar';
 import { title } from 'process';
@@ -104,6 +107,8 @@ interface DemographData {
   count: string;
   state: string;
 }
+
+const missionGroupings = ['daily', 'weekly', 'monthly', 'quarterly', 'yearly', 'lifetime'];
 
 export default function UserAnalyticsDashboard() {
   const [EchartData, setEChartData] = useState<EchartSignup[]>([]);
@@ -655,93 +660,93 @@ export default function UserAnalyticsDashboard() {
     ]
   };
 
-  const [histogramLevelSubjectMissionData, setHistogramLevelSubjectMissionData] = useState<any[]>([]);
-  // Fetch histogram data from the backend
-  useEffect(() => {
-    async function fetchHistogramLevelSubjectMissionData() {
-      try {
-        const res = await fetch(`${api_startpoint}/api/histogram_level_subject_challenges_complete`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' }
-        });
-        const data = await res.json();
+  // const [histogramLevelSubjectMissionData, setHistogramLevelSubjectMissionData] = useState<any[]>([]);
+  // // Fetch histogram data from the backend
+  // useEffect(() => {
+  //   async function fetchHistogramLevelSubjectMissionData() {
+  //     try {
+  //       const res = await fetch(`${api_startpoint}/api/histogram_level_subject_challenges_complete`, {
+  //         method: 'POST',
+  //         headers: { 'Content-Type': 'application/json' }
+  //       });
+  //       const data = await res.json();
 
-        const getText = (val: any) => {
-          try {
-            const parsed = JSON.parse(val);
-            return parsed.en || val; // fallback to raw if no 'en'
-          } catch {
-            return val; // not JSON, return as is
-          }
-        };
-        // Group the data by level_title
-        // Create an object where each key is a level title and its value is an object containing subject counts.
-        const grouped: { [level: string]: any } = {};
-        data.forEach((entry: { count: number; subject_title: string; level_title: string; }) => {
-          const level = getText(entry.level_title);
-          const subject = getText(entry.subject_title);
+  //       const getText = (val: any) => {
+  //         try {
+  //           const parsed = JSON.parse(val);
+  //           return parsed.en || val; // fallback to raw if no 'en'
+  //         } catch {
+  //           return val; // not JSON, return as is
+  //         }
+  //       };
+  //       // Group the data by level_title
+  //       // Create an object where each key is a level title and its value is an object containing subject counts.
+  //       const grouped: { [level: string]: any } = {};
+  //       data.forEach((entry: { count: number; subject_title: string; level_title: string; }) => {
+  //         const level = getText(entry.level_title);
+  //         const subject = getText(entry.subject_title);
         
-          if (!grouped[level]) {
-            grouped[level] = { level };
-          }
+  //         if (!grouped[level]) {
+  //           grouped[level] = { level };
+  //         }
         
-          grouped[level][subject] = entry.count;
-        });
-        // Convert the object into an array
-        setHistogramLevelSubjectMissionData(Object.values(grouped));
-      } catch (error) {
-        console.error("Error fetching histogram data:", error);
-      }
-    }
-    fetchHistogramLevelSubjectMissionData();
-  }, []);
+  //         grouped[level][subject] = entry.count;
+  //       });
+  //       // Convert the object into an array
+  //       setHistogramLevelSubjectMissionData(Object.values(grouped));
+  //     } catch (error) {
+  //       console.error("Error fetching histogram data:", error);
+  //     }
+  //   }
+  //   fetchHistogramLevelSubjectMissionData();
+  // }, []);
 
   // Determine unique subject keys (the keys in each grouped object other than "level")
-  const subjectKeys: string[] = Array.from(
-    new Set(
-      histogramLevelSubjectMissionData.flatMap(item =>
-        Object.keys(item).filter((key) => key !== "level")
-      )
-    )
-  );
+  // const subjectKeys: string[] = Array.from(
+  //   new Set(
+  //     histogramLevelSubjectMissionData.flatMap(item =>
+  //       Object.keys(item).filter((key) => key !== "level")
+  //     )
+  //   )
+  // );
   const LegendComponent = rechartsLegend;
 
-  const [quizHistogramData, setQuizHistogramData] = useState<QuizHistogramEntry[]>([]);
-  const [formattedData, setFormattedData] = useState<any[]>([]);
-  const [subjectKeysQuiz, setSubjectKeysQuiz] = useState<string[]>([]);
-  useEffect(() => {
-    async function fetchHistogramDataQuizTopicLevel() {
-      try {
-        const res = await fetch(`${api_startpoint}/api/histogram_topic_level_subject_quizgames`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' }
-        });
-        const raw = await res.json();
+  // const [quizHistogramData, setQuizHistogramData] = useState<QuizHistogramEntry[]>([]);
+  // const [formattedData, setFormattedData] = useState<any[]>([]);
+  // const [subjectKeysQuiz, setSubjectKeysQuiz] = useState<string[]>([]);
+  // useEffect(() => {
+  //   async function fetchHistogramDataQuizTopicLevel() {
+  //     try {
+  //       const res = await fetch(`${api_startpoint}/api/histogram_topic_level_subject_quizgames`, {
+  //         method: 'POST',
+  //         headers: { 'Content-Type': 'application/json' }
+  //       });
+  //       const raw = await res.json();
 
-        const grouped: { [level: string]: any } = {};
-        const subjectsSet = new Set<string>();
+  //       const grouped: { [level: string]: any } = {};
+  //       const subjectsSet = new Set<string>();
   
-        raw.forEach((entry: any) => {
-          const subject = JSON.parse(entry.subject_title).en;
-          const level = JSON.parse(entry.level_title).en;
+  //       raw.forEach((entry: any) => {
+  //         const subject = JSON.parse(entry.subject_title).en;
+  //         const level = JSON.parse(entry.level_title).en;
   
-          subjectsSet.add(subject);
+  //         subjectsSet.add(subject);
   
-          if (!grouped[level]) {
-            grouped[level] = { level };
-          }
+  //         if (!grouped[level]) {
+  //           grouped[level] = { level };
+  //         }
   
-          grouped[level][subject] = entry.count;
-        });
+  //         grouped[level][subject] = entry.count;
+  //       });
   
-        setFormattedData(Object.values(grouped));
-        setSubjectKeysQuiz(Array.from(subjectsSet));
-      } catch (err) {
-        console.error("Error fetching histogram:", err);
-      }
-    }
-    fetchHistogramDataQuizTopicLevel();
-  }, []);
+  //       setFormattedData(Object.values(grouped));
+  //       setSubjectKeysQuiz(Array.from(subjectsSet));
+  //     } catch (err) {
+  //       console.error("Error fetching histogram:", err);
+  //     }
+  //   }
+  //   fetchHistogramDataQuizTopicLevel();
+  // }, []);
 
 
   const [studentsByGrade, setStudentsByGrade] = useState<StudentsByGrade[]>([]);
@@ -1213,6 +1218,646 @@ export default function UserAnalyticsDashboard() {
   useEffect(() => {
       fetchSessions();
   }, []);
+
+
+  // Define the ECharts option for the gender pie chart with dummy data.
+  const genderPieOption = {
+    title: {
+      // text: 'Gender Distribution',
+      left: 'center',
+      top: 20,
+      textStyle: { color: '#333', fontSize: 16 }
+    },
+    tooltip: {
+      trigger: 'item',
+      formatter: '{a} <br/>{b}: {d}%'
+    },
+    legend: {
+      orient: 'vertical',
+      left: 'left',
+      data: ['Prefer not to disclose', 'Male', 'Female'],
+      textStyle: { color: '#333' }
+    },
+    series: [
+      {
+        name: 'Gender',
+        type: 'pie',
+        radius: '55%',
+        center: ['50%', '55%'],
+        data: [
+          { value: 3, name: 'Prefer not to disclose' },
+          { value: 50, name: 'Male' },
+          { value: 47, name: 'Female' }
+        ],
+        emphasis: {
+          itemStyle: {
+            shadowBlur: 10,
+            shadowOffsetX: 0,
+            shadowColor: 'rgba(0, 0, 0, 0.5)'
+          }
+        }
+      }
+    ]
+  };
+
+
+  const [totalPointsEarned, setTotalPointsEarned] = useState<number>(0)
+  useEffect(() => {
+      async function fetchTotalPointsEarned() {
+      try {
+          const res = await fetch(`${api_startpoint}/api/total-points-earned`, {
+              method: 'POST'
+          })
+          const data = await res.json()
+          if (data && data.length > 0) {
+              setTotalPointsEarned(data[0].total_points)
+          }
+      } catch (error) {
+          console.error('Error fetching user count:', error)
+      }
+      }
+      fetchTotalPointsEarned()
+  }, [])
+
+  const [totalPointsRedeemed, setTotalPointsRedeemed] = useState<number>(0)
+  useEffect(() => {
+      async function fetchTotalPointsRedeemed() {
+          try {
+              const res = await fetch(`${api_startpoint}/api/total-points-redeemed`, {
+                  method: 'POST'
+              })
+              const data = await res.json()
+              if (data && data.length > 0) {
+                  setTotalPointsRedeemed(data[0].total_coins_redeemed)
+              }
+          } catch (error) {
+              console.error('Error fetching user count:', error)
+          }
+          }
+          fetchTotalPointsRedeemed()
+  }, [])
+
+
+  const [missionGrouping, setMissionGrouping] = useState<string>('daily');
+  const [missionData, setMissionData] = useState<any[]>([]);
+  const [missionLoading, setMissionLoading] = useState<boolean>(true);
+  // Fetch mission completed data whenever the grouping changes
+  useEffect(() => {
+    const fetchMissionData = async () => {
+      setMissionLoading(true);
+      try {
+        const response = await fetch(`${api_startpoint}/api/histogram_level_subject_challenges_complete`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ grouping: missionGrouping })
+        });
+        const data = await response.json();
+        // Log raw data for debugging
+        // console.log('Mission data:', data);
+        setMissionData(data);
+      } catch (error) {
+        console.error('Error fetching mission data:', error);
+      } finally {
+        setMissionLoading(false);
+      }
+    };
+
+    fetchMissionData();
+  }, [missionGrouping, api_startpoint]);
+  // Robust parser for JSON text fields.
+  const getParsedField = (raw: any): string => {
+    if (typeof raw === 'object' && raw !== null) {
+      return raw.en || '';
+    }
+    if (typeof raw === 'string') {
+      // Check if the string looks like JSON (starts with {)
+      if (raw.trim().startsWith('{')) {
+        try {
+          const parsed = JSON.parse(raw);
+          return parsed.en || raw;
+        } catch {
+          return raw;
+        }
+      }
+      return raw;
+    }
+    return '';
+  };
+
+
+  const groupedByPeriod: Record<string, Record<string, number>> = {};
+  missionData.forEach(item => {
+    const period = item.period;
+    // Use robust parsing for level_title.
+    const level = getParsedField(item.level_title);
+    if (!groupedByPeriod[period]) {
+      groupedByPeriod[period] = {};
+    }
+    if (!groupedByPeriod[period][level]) {
+      groupedByPeriod[period][level] = 0;
+    }
+    groupedByPeriod[period][level] += Number(item.count);
+  });
+
+
+  // Sorted periods for x-axis
+  const periods = Object.keys(groupedByPeriod).sort();
+  // Unique levels across data
+  const uniqueLevels = Array.from(
+    new Set(missionData.map(item => getParsedField(item.level_title)))
+  );
+
+  // Build series data: for each unique level, for each period, use the count (or 0 if missing)
+  const series = uniqueLevels.map((level, idx) => ({
+    name: level,
+    type: 'bar',
+    stack: 'total',
+    data: periods.map(period => groupedByPeriod[period][level] || 0),
+    itemStyle: { color: ['#5470C6', '#91CC75', '#FAC858', '#EE6666', '#73C0DE', '#3BA272'][idx % 6] }
+  }));
+
+
+  // Configure the ECharts option for the mission completed chart.
+  // Configure the chart options.
+  const missionChartOption = {
+    title: {
+      text: 'Mission Completed Over Time',
+      left: 'center'
+    },
+    tooltip: {
+      trigger: 'axis'
+    },
+    legend: {
+      data: uniqueLevels,
+      top: 'bottom'
+    },
+    xAxis: {
+      type: 'category',
+      data: periods,
+      boundaryGap: true,
+      axisLabel: {
+        rotate: missionGrouping === 'daily' ? 45 : 0
+      }
+    },
+    yAxis: {
+      type: 'value'
+    },
+    dataZoom: [
+      { type: 'inside', start: 0, end: 100 },
+      { type: 'slider', start: 0, end: 100 }
+    ],
+    series: series
+  };
+
+  const [quizGrouping, setQuizGrouping] = useState<string>('daily');
+  const [quizData, setQuizData] = useState<any[]>([]);
+  const [quizLoading, setQuizLoading] = useState<boolean>(true);
+
+  // Helper function to parse JSON fields (level_title)
+  const getParsedFieldQuiz = (raw: any): string => {
+    if (typeof raw === 'object' && raw !== null) {
+      return raw.en || '';
+    }
+    if (typeof raw === 'string' && raw.trim().startsWith('{')) {
+      try {
+        const parsed = JSON.parse(raw);
+        return parsed.en || raw;
+      } catch {
+        return raw;
+      }
+    }
+    return raw;
+  };
+
+  // Fetch quiz complete data whenever quizGrouping changes
+  useEffect(() => {
+    const fetchQuizData = async () => {
+      setQuizLoading(true);
+      try {
+        const response = await fetch(`${api_startpoint}/api/histogram_topic_level_subject_quizgames_2`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ grouping: quizGrouping })
+        });
+        const data = await response.json();
+        // console.log("Quiz data:", data);
+        setQuizData(data);
+      } catch (error) {
+        console.error('Error fetching quiz data:', error);
+      } finally {
+        setQuizLoading(false);
+      }
+    };
+    fetchQuizData();
+  }, [quizGrouping]);
+
+  // Group quizData by period and level.
+  const groupedByPeriodQuiz: Record<string, Record<string, number>> = {};
+  quizData.forEach(item => {
+    const period = item.period;
+    const level = getParsedFieldQuiz(item.level_title);
+    if (!groupedByPeriodQuiz[period]) {
+      groupedByPeriodQuiz[period] = {};
+    }
+    if (!groupedByPeriodQuiz[period][level]) {
+      groupedByPeriodQuiz[period][level] = 0;
+    }
+    groupedByPeriodQuiz[period][level] += Number(item.count);
+  });
+
+  // Sorted periods for x-axis
+  const periodsQuiz = Object.keys(groupedByPeriodQuiz).sort();
+  // Unique levels for legend and series
+  const uniqueLevelsQuiz= Array.from(new Set(quizData.map(item => getParsedField(item.level_title))));
+
+  // Build series data: one series per level (stacked bar)
+  const seriesQuiz = uniqueLevelsQuiz.map((level, idx) => ({
+    name: level,
+    type: 'bar',
+    stack: 'total',
+    data: periodsQuiz.map(period => groupedByPeriodQuiz[period][level] || 0),
+    itemStyle: { color: ['#5470C6', '#91CC75', '#FAC858', '#EE6666', '#73C0DE', '#3BA272'][idx % 6] }
+  }));
+
+  // Configure the quiz completes chart option
+  const quizChartOption = {
+    title: {
+      text: 'Quiz Completed Over Time',
+      left: 'center'
+    },
+    tooltip: {
+      trigger: 'axis'
+    },
+    legend: {
+      data: uniqueLevelsQuiz,
+      top: 'bottom'
+    },
+    xAxis: {
+      type: 'category',
+      data: periodsQuiz,
+      boundaryGap: true,
+      axisLabel: {
+        rotate: quizGrouping === 'daily' ? 45 : 0
+      }
+    },
+    yAxis: {
+      type: 'value'
+    },
+    dataZoom: [
+      { type: 'inside', start: 0, end: 100 },
+      { type: 'slider', start: 0, end: 100 }
+    ],
+    series: seriesQuiz
+  };
+
+
+  const [studentGrouping, setStudentGrouping] = useState<string>('monthly');
+  const [studentData, setStudentData] = useState<any[]>([]);
+  const [studentLoading, setStudentLoading] = useState<boolean>(true);
+
+  // Fetch demograph student data using the grouping parameter
+  useEffect(() => {
+    const fetchStudentData = async () => {
+      setStudentLoading(true);
+      try {
+        const response = await fetch(`${api_startpoint}/api/demograph-students-2`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ grouping: studentGrouping })
+        });
+        const data = await response.json();
+        // console.log('Student demograph data:', data);  // Debug log
+        setStudentData(data);
+      } catch (error) {
+        console.error('Error fetching student data:', error);
+      } finally {
+        setStudentLoading(false);
+      }
+    };
+
+    fetchStudentData();
+  }, [studentGrouping]);
+
+  // Transform the data into a format for a stacked bar chart.
+  // We expect each row: { period, state, count }
+  // We group data by period, then for each period, record counts per state.
+  const groupedByPeriodStudent: Record<string, Record<string, number>> = {};
+  studentData.forEach(item => {
+    const period = item.period;
+    const state = item.state;
+    if (!groupedByPeriodStudent[period]) {
+      groupedByPeriodStudent[period] = {};
+    }
+    if (!groupedByPeriodStudent[period][state]) {
+      groupedByPeriodStudent[period][state] = 0;
+    }
+    groupedByPeriodStudent[period][state] += Number(item.count);
+  });
+
+  const periodsStudent = Object.keys(groupedByPeriodStudent).sort();
+
+  // Get the unique states present for legend and series creation.
+  const uniqueStatesStudent = Array.from(new Set(studentData.map(item => item.state)));
+
+  // Build series data: one series per state
+  const seriesStudent = uniqueStatesStudent.map((state, idx) => ({
+    name: state,
+    type: 'bar',
+    stack: 'total',
+    data: periodsStudent.map(period => groupedByPeriodStudent[period][state] || 0),
+    itemStyle: { color: ['#5470C6', '#91CC75', '#FAC858', '#EE6666', '#73C0DE', '#3BA272'][idx % 6] }
+  }));
+
+  // Build chart options
+  const chartOptionStudent = {
+    title: {
+      text: 'Student Demographics Distribution Over Time',
+      left: 'center'
+    },
+    tooltip: {
+      trigger: 'axis'
+    },
+    legend: {
+      type: 'scroll',         // <-- makes the legend scrollable
+    orient: 'horizontal',   // or 'vertical' if you prefer
+      data: uniqueStatesStudent,
+      top: 'bottom',
+      pageIconColor: '#999',
+      pageIconInactiveColor: '#ccc',
+      pageIconSize: 12,
+      pageTextStyle: {
+        color: '#333'
+      }
+    },
+    xAxis: {
+      type: 'category',
+      data: periodsStudent,
+      axisLabel: {
+        rotate: studentGrouping === 'daily' ? 45 : 0
+      }
+    },
+    yAxis: {
+      type: 'value'
+    },
+    dataZoom: [
+      { type: 'inside', start: 0, end: 100 },
+      { type: 'slider', start: 0, end: 100 }
+    ],
+    series: seriesStudent
+  };
+
+  const [teacherGrouping, setTeacherGrouping] = useState<string>('monthly');
+  const [teacherData, setTeacherData] = useState<any[]>([]);
+  const [teacherLoading, setTeacherLoading] = useState<boolean>(true);
+  useEffect(() => {
+    const fetchTeacherData = async () => {
+      setTeacherLoading(true);
+      try {
+        const response = await fetch(`${api_startpoint}/api/demograph-teachers-2`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ grouping: teacherGrouping })
+        });
+        const data = await response.json();
+        // console.log('Teacher demograph data:', data); // Debug log
+        setTeacherData(data);
+      } catch (error) {
+        console.error('Error fetching teacher data:', error);
+      } finally {
+        setTeacherLoading(false);
+      }
+    };
+
+    fetchTeacherData();
+  }, [teacherGrouping]);
+
+  const groupedByPeriodTeacher: Record<string, Record<string, number>> = {};
+  teacherData.forEach(item => {
+    const period = item.period;
+    const state = item.state;
+    if (!groupedByPeriodTeacher[period]) {
+      groupedByPeriodTeacher[period] = {};
+    }
+    if (!groupedByPeriodTeacher[period][state]) {
+      groupedByPeriodTeacher[period][state] = 0;
+    }
+    groupedByPeriodTeacher[period][state] += Number(item.count);
+  });
+
+  // Get all periods sorted for the x-axis
+  const periodsTeacher = Object.keys(groupedByPeriodTeacher).sort();
+  // Extract unique states for legend and series creation
+  const uniqueStatesTeacher = Array.from(new Set(teacherData.map(item => item.state)));
+
+  // Build series for each state (for a stacked bar chart)
+  const seriesTeacher = uniqueStatesTeacher.map((state, idx) => ({
+    name: state,
+    type: 'bar',
+    stack: 'total',
+    data: periodsTeacher.map(period => groupedByPeriodTeacher[period][state] || 0),
+    // Colors are defined in a fixed palette; adjust as needed.
+    itemStyle: { color: ['#5470C6', '#91CC75', '#FAC858', '#EE6666', '#73C0DE', '#3BA272'][idx % 6] }
+  }));
+
+  // Build the chart option with a scrollable legend
+  const chartOptionTeacher = {
+    title: {
+      text: 'Teacher Demographics Distribution Over Time',
+      left: 'center'
+    },
+    tooltip: {
+      trigger: 'axis'
+    },
+    legend: {
+      type: 'scroll', // make legend scrollable if there are many items
+      orient: 'horizontal',
+      top: 'bottom',
+      data: uniqueStatesTeacher,
+      pageIconColor: '#999',
+      pageIconInactiveColor: '#ccc',
+      pageIconSize: 12,
+      pageTextStyle: { color: '#333' }
+    },
+    xAxis: {
+      type: 'category',
+      data: periodsTeacher,
+      axisLabel: {
+        rotate: teacherGrouping === 'daily' ? 45 : 0
+      }
+    },
+    yAxis: {
+      type: 'value'
+    },
+    dataZoom: [
+      { type: 'inside', start: 0, end: 100 },
+      { type: 'slider', start: 0, end: 100 }
+    ],
+    series: seriesTeacher
+  };
+
+  const [schoolCount, setSchoolCount] = useState<number>(0);
+    useEffect( () => {
+        async function fetchSchoolCount() {
+            try {
+                const res = await fetch(`${api_startpoint}/api/school_count`, {
+                    method: 'POST'
+                })
+                const data = await res.json()
+                if (data && data.length > 0) {
+                    setSchoolCount(data[0].count)
+                }
+            } catch (error) {
+                console.error('Error fetching user count:', error)
+            }
+        }
+        fetchSchoolCount()
+  }, [])
+  const [quizCompletes, setQuizCompletes] = useState<number>(0);
+    useEffect( () => {
+        async function fetchQuizCompletes() {
+            try {
+                const res = await fetch(`${api_startpoint}/api/quiz_completes`, {
+                    method: 'POST',
+                })
+                const data = await res.json()
+                if (data && data.length > 0) {
+                  setQuizCompletes(data[0].count)
+                }
+            } catch (error) {
+                console.error('Error fetching user count:', error)
+            }
+        }
+        fetchQuizCompletes()
+  }, [])
+
+  const [tmcAssignedByTeacher, setTmcAssignedByTeacher] = useState<number>(0)
+    useEffect(() => {
+        async function fetchTmcAssignedByTeacher() {
+            try {
+                const res = await fetch(`${api_startpoint}/api/total-missions-completed-assigned-by-teacher`, {
+                    method: 'POST'
+                })
+                const data = await res.json()
+                if (data && data.length > 0) {
+                    setTmcAssignedByTeacher(data[0].count)
+                }
+            } catch (error) {
+                console.error('Error fetching user count:', error)
+            }
+            }
+            fetchTmcAssignedByTeacher()
+  }, [])
+
+  const [sessionParticipantTotal, setSessionParticipantTotal] = useState<number>(0)
+    useEffect(() => {
+        async function fetchSessionParticipantTotal() {
+            try {
+                const res = await fetch(`${api_startpoint}/api/session_participants_total`, {
+                    method: 'POST'
+                })
+                const data = await res.json()
+                if (data && data.length > 0) {
+                  setSessionParticipantTotal(data[0].count)
+                }
+            } catch (error) {
+                console.error('Error fetching user count:', error)
+            }
+            }
+            fetchSessionParticipantTotal()
+  }, [])
+
+  const [mentorsParticipatedSessionsTotal, setMentorsParticipatedSessionsTotal] = useState<number>(0)
+    useEffect(() => {
+        async function fetchMentorsParticipatedSessionsTotal() {
+            try {
+                const res = await fetch(`${api_startpoint}/api/mentor_participated_in_sessions_total`, {
+                    method: 'POST'
+                })
+                const data = await res.json()
+                if (data && data.length > 0) {
+                  setMentorsParticipatedSessionsTotal(data[0].count)
+                }
+            } catch (error) {
+                console.error('Error fetching user count:', error)
+            }
+            }
+            fetchMentorsParticipatedSessionsTotal()
+  }, [])
+
+  const [modalOpenLevel, setModalOpenLevel] = useState(false)
+  // const [selectedLevel, setSelectedLevel] = useState<string>('all')
+  const [selectedSubject, setSelectedSubject] = useState<string>('science')
+  const [dataLevel, setDataLevel] = useState<any>({})
+  const [loadingLevel, setLoadingLevel] = useState(false)
+  const [errorLevel, setErrorLevel] = useState<string | null>(null)
+  // Function to fetch API data based on the selected level filter
+  const fetchDataLevel = async () => {
+    setLoadingLevel(true)
+    setErrorLevel(null)
+  
+    try {
+      const res = await fetch(`${api_startpoint}/api/student_count_by_level_778`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ level: 'all' }) // 🔥 always fetch all
+      });
+  
+      if (!res.ok) throw new Error("Failed to fetch data.")
+  
+      const result = await res.json()
+      // console.log("📊 Chart dataLevel:", JSON.stringify(result, null, 2))
+      setDataLevel(result)
+    } catch (err: any) {
+      setErrorLevel(err.message || "Error fetching data.")
+    } finally {
+      setLoadingLevel(false)
+    }
+  }
+  
+
+  // Fetch data when modal opens or when the selected level changes
+  // Update the useEffect to fetch data unconditionally
+  useEffect(() => {
+    fetchDataLevel();
+  }, []); // Empty dependency array = runs on mount
+  
+  // useEffect(() => {
+  //   if (modalOpenLevel) {
+  //     fetchData("all"); // always fetch "all" on modal open
+  //     setSelectedLevel("all"); // keep UI in sync
+  //   }
+  // }, [modalOpenLevel]);
+  
+  const chartOptionsLevel = {
+    title: {
+      text: 'Student Count by Level',
+      left: 'center'
+    },
+    tooltip: {},
+    xAxis: {
+      type: 'category',
+      data: ['Level 1', 'Level 2', 'Level 3', 'Level 4']
+    },
+    yAxis: {
+      type: 'value'
+    },
+    series: [
+      {
+        data: [
+          dataLevel.level1_count ?? 0,
+          dataLevel.level2_count ?? 0,
+          dataLevel.level3_count ?? 0,
+          dataLevel.level4_count ?? 0
+        ],
+        type: 'bar',
+        itemStyle: {
+          color: '#0077BE'
+        }
+      }
+    ]
+  }
+  // console.log("📊 Chart dataLevel:", dataLevel);
+
   return (
     <div className={`page bg-light ${inter.className} font-sans`}>
       {/* Fixed Sidebar */}
@@ -1266,7 +1911,15 @@ export default function UserAnalyticsDashboard() {
                 { title: 'Inactive Users', value: 0, icon: <IconUserPlus />, color: 'bg-orange' },
                 // { title: 'New Signups', value: newSignups, icon: <IconUserPlus />, color: 'bg-orange' },
                 { title: 'Highest Users Online', value: 0, icon: <IconUserPlus />, color: 'bg-orange', suffix: '' },
+                { title: 'Total Downloads', value: 45826, icon: <IconPercentage />, color: 'bg-sky-900',},
+                { title: 'Total Coins Earned', value: totalPointsEarned, icon: <IconPercentage />, color: 'bg-sky-900',},
+                { title: 'Total Coins Redeemed', value: totalPointsRedeemed, icon: <IconPercentage />, color: 'bg-sky-900',},
+                { title: 'Total No. of Schools', value: schoolCount, icon: <IconPercentage />, color: 'bg-sky-900',},
+                { title: 'Teacher Assign Mission Completes', value: tmcAssignedByTeacher, icon: <IconPercentage />, color: 'bg-sky-900',},
+                { title: 'Total No. of Quiz Completes', value: quizCompletes, icon: <IconPercentage />, color: 'bg-sky-900',},
                 { title: 'Total Sessions Created by Mentors', value: sessions.length, icon: <IconPercentage />, color: 'bg-blue',},
+                { title: 'Total Participants Joined Mentor Sessions', value: sessionParticipantTotal, icon: <IconPercentage />, color: 'bg-sky-900',},
+                { title: 'Total Mentors Participated for Mentor Connect Sessions', value: mentorsParticipatedSessionsTotal, icon: <IconPercentage />, color: 'bg-sky-900',},
               ].map((metric, index) => (
                 <div className="col-sm-6 col-lg-3" key={index}>
                   <div className="card">
@@ -1371,25 +2024,31 @@ export default function UserAnalyticsDashboard() {
                         <h3 className="card-title mb-0 fw-semibold">Mission Completed</h3>
                     </div>
                     {/* <h2 className="text-2xl font-bold mb-4">Mission Completes Histogram</h2> */}
-                    {histogramLevelSubjectMissionData.length === 0 ? (
+                    {/* Grouping filter dropdown */}
+                    <div style={{ marginBottom: '20px' }}>
+                      <label htmlFor="mission-grouping-select" style={{ marginRight: '10px' }}>
+                        Select Time Grouping:
+                      </label>
+                      <select
+                        id="mission-grouping-select"
+                        value={missionGrouping}
+                        onChange={(e) => setMissionGrouping(e.target.value)}
+                      >
+                        {missionGroupings.map(g => (
+                          <option key={g} value={g}>
+                            {g.charAt(0).toUpperCase() + g.slice(1)}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {/* Mission Completed Chart */}
+                    {missionLoading ? (
                       <div className="text-center">
-                      
-                      <div className="spinner-border text-purple" role="status" style={{ width: "4rem", height: "4rem" }}></div>
+                        <div className="spinner-border text-purple" role="status" style={{ width: '8rem', height: '8rem' }}></div>
                       </div>
                     ) : (
-                      <ResponsiveContainer width="100%" height={400}>
-                        <BarChart data={histogramLevelSubjectMissionData}>
-                          <CartesianGrid strokeDasharray="3 3" />
-                          <XAxis dataKey="level" label={{ value: 'Level', position: 'insideBottom', offset: -5 }} />
-                          <YAxis label={{ value: 'Count', angle: -90, position: 'insideLeft' }} />
-                          <Tooltip />
-                          <LegendComponent /> 
-                          {/* Dynamically create a bar for each subject key */}
-                          {subjectKeys.map((subject, index) => (
-                            <Bar key={subject} dataKey={subject} fill={["#8884d8", "#82ca9d", "#ffc658", "#ff7300", "#0088FE"][index % 5]} />
-                          ))}
-                        </BarChart>
-                      </ResponsiveContainer>
+                      <ReactECharts option={missionChartOption} style={{ height: '400px', width: '100%' }} />
                     )}
                   </div>
                 </div>
@@ -1399,35 +2058,31 @@ export default function UserAnalyticsDashboard() {
                       <div className="card-header bg-transparent py-3">
                           <h3 className="card-title mb-0 fw-semibold">Quiz Completed</h3>
                       </div>
-                      {formattedData.length === 0 ? (
+                      {/* Dropdown to change grouping */}
+                      <div style={{ marginBottom: '20px' }}>
+                        <label htmlFor="quiz-grouping-select" style={{ marginRight: '10px' }}>
+                          Select Time Grouping:
+                        </label>
+                        <select
+                          id="quiz-grouping-select"
+                          value={quizGrouping}
+                          onChange={(e) => setQuizGrouping(e.target.value)}
+                        >
+                          {quizGroupings.map(g => (
+                            <option key={g} value={g}>
+                              {g.charAt(0).toUpperCase() + g.slice(1)}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      {quizLoading ? (
                         <div className="text-center">
-                      
-                        <div className="spinner-border text-purple" role="status" style={{ width: "4rem", height: "4rem" }}></div>
+                          <div className="spinner-border text-purple" role="status" style={{ width: '8rem', height: '8rem' }}></div>
                         </div>
                       ) : (
-                        <ResponsiveContainer width="100%" height={400}>
-                          <BarChart
-                            data={formattedData}
-                            margin={{ top: 20, right: 30, left: 20, bottom: 20 }}
-                          >
-                            <CartesianGrid strokeDasharray="3 3" />
-                            <XAxis dataKey="level" />
-                            <YAxis label={{value: 'count', angle: -90, position: 'insideLeft' }} />
-                            <Tooltip />
-                            <LegendComponent />
-                            {subjectKeysQuiz.map((key, index) => (
-                              <Bar
-                                key={key}
-                                dataKey={key}
-                                fill={`hsl(${(index * 70) % 360}, 70%, 60%)`}
-                                name={key}
-                              />
-                            ))}
-                          </BarChart>
-                        </ResponsiveContainer>
-
-                      
-                    )}
+                        <ReactECharts option={quizChartOption} style={{ height: '400px', width: '100%' }} />
+                      )}
                   </div>
                 </div>
 
@@ -1494,10 +2149,33 @@ export default function UserAnalyticsDashboard() {
                       <h5 className="card-title mb-0 fw-semibold">Student Demographics Distribution</h5>
                     </div>
                     <div className="card-body">
-                      <ReactECharts
-                        option={chartOptions}
-                        style={{ height: '400px', width: '100%' }}
-                      />
+                      {/* Dropdown to select time grouping */}
+                      <div style={{ marginBottom: '20px' }}>
+                        <label htmlFor="student-grouping-select" style={{ marginRight: '10px' }}>
+                          Select Time Grouping:
+                        </label>
+                        <select
+                          id="student-grouping-select"
+                          value={studentGrouping}
+                          onChange={(e) => setStudentGrouping(e.target.value)}
+                        >
+                          {studentGroupings.map(g => (
+                            <option key={g} value={g}>
+                              {g.charAt(0).toUpperCase() + g.slice(1)}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      
+                      {studentLoading ? (
+                        <div className="text-center">
+                          <div className="spinner-border text-purple" role="status" 
+                              style={{ width: '8rem', height: '8rem' }}></div>
+                        </div>
+                      ) : (
+                        <ReactECharts option={chartOptionStudent} style={{ height: '400px', width: '100%' }} />
+                      )}
+                    
                     </div>
                   </div>
                 </div>
@@ -1509,14 +2187,88 @@ export default function UserAnalyticsDashboard() {
                       <h5 className="card-title mb-0 fw-semibold">Teacher Demographics Distribution</h5>
                     </div>
                     <div className="card-body">
-                      <ReactECharts
-                        option={teacherDemographicOptions}
-                        style={{ height: '400px', width: '100%' }}
-                      />
+                      {/* Dropdown for selecting time grouping */}
+                      <div style={{ marginBottom: '20px' }}>
+                        <label htmlFor="teacher-grouping-select" style={{ marginRight: '10px' }}>
+                          Select Time Grouping:
+                        </label>
+                        <select
+                          id="teacher-grouping-select"
+                          value={teacherGrouping}
+                          onChange={(e) => setTeacherGrouping(e.target.value)}
+                        >
+                          {teacherGroupings.map(g => (
+                            <option key={g} value={g}>
+                              {g.charAt(0).toUpperCase() + g.slice(1)}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      
+                      {teacherLoading ? (
+                        <div className="text-center">
+                          <div className="spinner-border text-purple" role="status" 
+                              style={{ width: '8rem', height: '8rem' }}></div>
+                        </div>
+                      ) : (
+                        <ReactECharts option={chartOptionTeacher} style={{ height: '400px', width: '100%' }} />
+                      )}
                     </div>
                   </div>
                 </div>
                 
+                <div className="col-12 col-xl-6">
+                  <div className="card shadow-sm border-0 h-100">
+                    <div className="card-header bg-transparent py-3">
+                      <h3 className="card-title mb-0 fw-semibold">Teacher Assignments</h3>
+                    </div>
+                    <div className="card-body pt-0">
+                       {/* <div className="mb-4">
+                                <label className="mr-2 font-semibold">Select Level:</label>
+                                <select
+                                    value={selectedLevel}
+                                    onChange={(e) => setSelectedLevel(e.target.value)}
+                                    className="border p-1 rounded"
+                                >
+                                    <option value="all">All Levels</option>
+                                    <option value="1">Level 1</option>
+                                    <option value="2">Level 2</option>
+                                    <option value="3">Level 3</option>
+                                    <option value="4">Level 4</option>
+                                </select>
+                                </div> */}
+                        <div className="mb-4">
+                                <label className="mr-2 font-semibold">Select Subject:</label>
+                                <select
+                                    value={selectedSubject}
+                                    onChange={(e) => {
+                                      setSelectedSubject(e.target.value);
+                                      // setSelectedLevel("all")
+                                    }}
+                                    className="border p-1 rounded"
+                                >
+                                    <option value="science">Science</option>
+                                    <option value="maths">Maths</option>
+                                </select>
+                        </div>
+
+                                {/* Loading, error, or chart */}
+                                {loadingLevel ? (
+                                <div className="text-center">
+                                    <div className="spinner-border text-purple" role="status" style={{ width: "8rem", height: "8rem" }}></div>
+                                </div>
+                                ) : errorLevel ? (
+                                <div className="text-red-500 text-center py-4">{errorLevel}</div>
+                                ) : (
+                                <ReactECharts
+                                    option={chartOptionsLevel}
+                                    style={{ height: '400px', width: '100%' }}
+                                />
+                                )}
+
+                    </div>
+                  </div>
+                </div>
 
                 {/* Teacher Assignments */}
                 <div className="col-12 col-xl-6">
@@ -1560,7 +2312,21 @@ export default function UserAnalyticsDashboard() {
                   </div>
                   
                 </div>
-
+                
+                {/* Gender (dummy) Types */}
+                <div className="col-12 col-xl-4">
+                  <div className="card shadow-sm border-0 h-100">
+                    <div className="card-header bg-transparent py-1">
+                      <h3 className="card-title mb-0 fw-semibold">Gender Distribution</h3>
+                    </div>
+                    <div className="card-body pt-1">
+                      <ReactECharts 
+                        option={genderPieOption} 
+                        style={{ height: '400px', width: '100%' }} 
+                      />
+                    </div>
+                  </div>
+                </div>
                 {/* School Distribution */}
                 <div className="col-12 col-xl-8">
                   <div className="card shadow-sm border-0 h-100">
@@ -1577,6 +2343,9 @@ export default function UserAnalyticsDashboard() {
                     </div>
                   </div>
                 </div>
+                
+
+                
               </div>
             )}
           </div>

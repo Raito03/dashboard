@@ -289,7 +289,7 @@ export default function LessonPlans() {
                         {/* Lesson Plans Table */}
                         <div className="card shadow-sm border-0 mt-2 mb-4">
                             <div className="card-body overflow-x-scroll">
-                                <h5 className="card-title ml-2 mb-0">Results- {tableData.length} rows found</h5>
+                                <h5 className="card-title ml-2 mb-0">Results- {tableData.length} lesson plans found</h5>
                                 {isTableLoading ? (
                                     <div className="text-center p-5">
                                         <div className="spinner-border text-purple" role="status" style={{ width: "3rem", height: "3rem" }}>

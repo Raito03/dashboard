@@ -134,7 +134,7 @@ export default function SettingsBoards () {
                         <div className="d-flex justify-content-between align-items-center mb-3">
                             <div>
                                 <h2 className="mb-0">Boards</h2>
-                                <small className="text-muted">{boards.length} rows found</small>
+                                <small className="text-muted">{boards.length} Boards found</small>
                             </div>
                             <div className="d-flex gap-2">
                                 <button className="btn btn-primary" onClick={() => setShowAddModal(true)}>

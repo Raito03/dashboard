@@ -48,6 +48,21 @@ interface TeachersByGrade {
     count: number;
 }
 
+type TeacherRow = {
+    id: number
+    name: string
+    email?: string
+    mobile_no: string
+    state?: string
+    city?: string
+    school?: string
+    school_id?: string
+    teacher_subject?: string
+    teacher_grade?: string
+    teacher_section?: string
+}
+
+  
 interface SearchableDropdownProps {
     options: string[];
     placeholder: string;
@@ -347,42 +362,31 @@ export default function TeachersDashboard() {
     const [selectedSchools, setSelectedSchools] = useState("");
     useEffect(() => {
         async function fetchSchools() {
-            // Check cache first
-            const cachedSchools = sessionStorage.getItem("schoolsList");
-            if (cachedSchools) {
-                setSchools(JSON.parse(cachedSchools));
-                return;
+          try {
+            const res = await fetch(`${api_startpoint}/api/teacher_schools`, {
+              method: 'POST'
+            });
+            const data = await res.json();
+            if (Array.isArray(data)) {
+              const schoolList = data
+                .map((item) => item.school && typeof item.school === 'string' ? item.school.trim() : "")
+                .filter((school) => school !== "");
+              setSchools(schoolList);
+              sessionStorage.setItem("schoolsList", JSON.stringify(schoolList));
+            } else {
+              console.error("Unexpected API response format:", data);
+              setSchools([]);
             }
-
-            setIsSchoolsLoading(true);
-            try {
-                const res = await fetch(`${api_startpoint}/api/teacher_schools`, {
-                    method: 'POST'
-                });
-                const data: { school: string }[] = await res.json();
-
-                if (Array.isArray(data)) {
-                    const schoolList = data
-                        .map((item) => (item.school ? item.school.trim() : ""))
-                        .filter((school) => school !== ""); // Filter out empty states
-
-                        setSchools(schoolList);
-                    // Cache the results
-                    sessionStorage.setItem("schoolsList", JSON.stringify(schoolList));
-                } else {
-                    console.error("Unexpected API response format:", data);
-                    setSchools([]);
-                }
-            } catch (error) {
-                console.error("Error fetching school list:", error);
-                setSchools([]);
-            } finally {
-                setIsSchoolsLoading(false);
-            }
+          } catch (error) {
+            console.error("Error fetching school list:", error);
+            setSchools([]);
+          } finally {
+            setIsSchoolsLoading(false);
+          }
         }
-
         fetchSchools();
     }, []);
+      
 
     const [selectedSchoolCode, setSelectedSchoolCode] = useState<string>("");
     const [selectedLifeLab, setSelectedLifeLab] = useState<string>("");
@@ -392,6 +396,53 @@ export default function TeachersDashboard() {
     const [isTableLoading, setIsTableLoading] = useState(false);
     const [selectedFromDate, setSelectedFromDate] = useState(""); // New state for From Date
     const [selectedToDate, setSelectedToDate] = useState("");     // New state for To Date
+
+    // Define state variables for subject filter, grade filter, and subjects list
+    const [selectedTeacherSubject, setSelectedTeacherSubject] = useState("");
+    const [selectedGradeFilter, setSelectedGradeFilter] = useState("");
+    const [subjectsList, setSubjectsList] = useState<{ id: string; title: string }[]>([]);
+
+// Fetch the subject list from the API endpoint (e.g., /api/subjects_list)
+    // Fetch subjects list from the API endpoint
+useEffect(() => {
+    async function fetchSubjects() {
+      try {
+        const res = await fetch(`${api_startpoint}/api/subjects_list`, {
+          method: "POST",
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({status : "1"})
+        });
+        const data = await res.json();
+        if (Array.isArray(data)) {
+          // Filter active subjects if needed, then map to an object with id and title.
+          // Here, we assume only subjects with status 1 are active.
+          const subjects = data
+            .filter((item) => item.status === 1)
+            .map((item) => {
+              let subjectTitle = "";
+              try {
+                const titleObj = JSON.parse(item.title);
+                subjectTitle = titleObj.en;
+              } catch (error) {
+                subjectTitle = item.title;
+              }
+              return {
+                id: item.id.toString(), // Convert the id to a string
+                title: subjectTitle,
+              };
+            });
+          setSubjectsList(subjects);
+        } else {
+          setSubjectsList([]);
+        }
+      } catch (error) {
+        console.error("Error fetching subjects:", error);
+        setSubjectsList([]);
+      }
+    }
+    fetchSubjects();
+  }, []);
+
     const handleSearch = async () => {
         const filters = {
             state: selectedState,
@@ -399,6 +450,8 @@ export default function TeachersDashboard() {
             school_code: selectedSchoolCode,
             is_life_lab: selectedLifeLab,
             school: selectedSchools,
+            teacher_subject: selectedTeacherSubject, // Now sends subject ID      // New subject filter
+            teacher_grade: selectedGradeFilter ? parseInt(selectedGradeFilter) : "",    // New grade filter
             from_date: selectedFromDate, // Include the From Date filter
             to_date: selectedToDate,      // Include the To Date filter
         };
@@ -458,6 +511,8 @@ export default function TeachersDashboard() {
         setSelectedSchools("");
         setSelectedFromDate(""); // Clear the From Date
         setSelectedToDate("");   // Clear the To Date
+        setSelectedTeacherSubject("");
+        setSelectedGradeFilter("");
         setTableData([]);
     };
 
@@ -674,7 +729,7 @@ export default function TeachersDashboard() {
 
     const [showEditModal, setShowEditModal] = useState(false);
     const [showDeleteModal, setShowDeleteModal] = useState(false);
-    const [selectedRow, setSelectedRow] = useState<any>(null); // or a more specific type if you have one
+    const [selectedRow, setSelectedRow] = useState<TeacherRow | null>(null)  // or a more specific type if you have one
     
     // ...
     // ########################### INCOMPLETE EDIT AND DELETE ACTIONS ##################################
@@ -693,47 +748,45 @@ export default function TeachersDashboard() {
     // Handler for confirming delete
     const confirmDelete = async () => {
         if (!selectedRow) return;
-        
         try {
-        // Example: call your DELETE API endpoint
-        // await fetch(`${api_startpoint}/api/teacher_delete`, {
-        //   method: "POST",
-        //   headers: { "Content-Type": "application/json" },
-        //   body: JSON.stringify({ user_id: selectedRow.id }),
-        // });
-
-        // Then refresh table data or remove row from state
-        // ...
+            const res = await fetch(`${api_startpoint}/api/teacher_delete`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ id: selectedRow.id })
+            });
+            const result = await res.json();
+            if (!res.ok) {
+            throw new Error(result.error || "Failed to delete teacher");
+            }
+            setShowDeleteModal(false);
+            setSelectedRow(null);
+            // Optionally, refresh table data here.
         } catch (error) {
-        console.error("Delete error:", error);
-        } finally {
-        setShowDeleteModal(false);
-        setSelectedRow(null);
+            console.error("Delete error:", error);
         }
     };
 
     // Handler for saving edited data
-    const saveEdits = async () => {
-        if (!selectedRow) return;
-
+    const saveEdits = async (e: React.FormEvent) => {
+        e.preventDefault();
         try {
-        // Example: call your UPDATE API endpoint
-        // await fetch(`${api_startpoint}/api/teacher_update`, {
-        //   method: "POST",
-        //   headers: { "Content-Type": "application/json" },
-        //   body: JSON.stringify(selectedRow),
-        // });
-
-        // Then refresh table data or update row in state
-        // ...
+          const res = await fetch(`${api_startpoint}/api/teacher_update`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(selectedRow)
+          });
+          const result = await res.json();
+          if (!res.ok) {
+            throw new Error(result.error || "Failed to update teacher");
+          }
+          setShowEditModal(false);
+          // Optionally, refresh the table data here.
         } catch (error) {
-        console.error("Update error:", error);
-        } finally {
-        setShowEditModal(false);
-        setSelectedRow(null);
+          console.error("Update error:", error);
         }
     };
-
+    
+    
     // New state for the detailed teacher distribution data
     const [detailedData, setDetailedData] = useState<any[]>([]);
 
@@ -754,217 +807,6 @@ export default function TeachersDashboard() {
     }, []);
 
     const [graphChartOptions, setGraphChartOptions] = useState<any>(null);
-
-    // useEffect(() => {
-        
-    //     const drilldownModule: any = require('highcharts/modules/drilldown');
-    //     if (drilldownModule && typeof drilldownModule === "function") {
-    //         drilldownModule(Highcharts);
-    //     }
-    //     if (!detailedData || detailedData.length === 0) return;
-
-    //     // Create a mapping: grade -> subject -> { total, sections: { section: count } }
-    //     const groupData: Record<string, Record<string, { total: number; sections: Record<string, number> }>> = {};
-
-    //     detailedData.forEach(row => {
-    //         const grade = row.grade;
-    //         const subject = row.subject;
-    //         const section = row.section;
-    //         const count = Number(row.count);
-
-    //         if (!groupData[grade]) {
-    //         groupData[grade] = {};
-    //         }
-    //         if (!groupData[grade][subject]) {
-    //         groupData[grade][subject] = { total: 0, sections: {} };
-    //         }
-    //         groupData[grade][subject].total += count;
-    //         groupData[grade][subject].sections[section] = (groupData[grade][subject].sections[section] || 0) + count;
-    //     });
-
-    //     // Get all unique grades (as strings) in sorted order
-    //     const gradeCategories = Object.keys(groupData)
-    //         .map(Number)
-    //         .sort((a, b) => a - b)
-    //         .map(String);
-
-    //     // Create a set of all subjects across grades
-    //     const subjectsSet = new Set<string>();
-    //     Object.values(groupData).forEach(subjectObj => {
-    //         Object.keys(subjectObj).forEach(subject => subjectsSet.add(subject));
-    //     });
-    //     const subjects = Array.from(subjectsSet);
-
-    //     // Build the main series: one series per subject
-    //     const seriesData = subjects.map(subject => {
-    //         // For each grade category, determine count for this subject (or 0 if not present)
-    //         const dataPoints = gradeCategories.map(grade => {
-    //         const gradeData = groupData[grade];
-    //         if (gradeData && gradeData[subject]) {
-    //             return {
-    //             y: gradeData[subject].total,
-    //             drilldown: `${grade}-${subject}`  // unique id for drilldown
-    //             };
-    //         }
-    //         return { y: 0 };
-    //         });
-    //         return { name: subject, data: dataPoints };
-    //     });
-
-    //     // Build drilldown series: one for each grade and subject combination
-    //     const drilldownSeries: any[] = [];
-    //     gradeCategories.forEach(grade => {
-    //         const gradeData = groupData[grade];
-    //         if (gradeData) {
-    //         Object.keys(gradeData).forEach(subject => {
-    //             const sections = gradeData[subject].sections;
-    //             // Create drilldown data array: each section and its count
-    //             const drilldownData = Object.entries(sections).map(([section, count]) => [section, count]);
-    //             drilldownSeries.push({
-    //             id: `${grade}-${subject}`,
-    //             name: `Grade ${grade} - ${subject}`,
-    //             data: drilldownData
-    //             });
-    //         });
-    //         }
-    //     });
-
-    //     // Set the Highcharts chart options
-    //     setGraphChartOptions({
-    //         chart: { type: 'column' },
-    //         title: { text: 'Teachers Distribution by Grade and Subject' },
-    //         xAxis: {
-    //         categories: gradeCategories,
-    //         title: { text: 'Grade' }
-    //         },
-    //         yAxis: {
-    //         min: 0,
-    //         title: { text: 'Teacher Count' }
-    //         },
-    //         legend: {
-    //         align: 'center',
-    //         verticalAlign: 'bottom',
-    //         },
-    //         tooltip: {
-    //         shared: true,
-    //         useHTML: true,
-    //         headerFormat: '<small>Grade {point.key}</small><br/>'
-    //         },
-    //         plotOptions: {
-    //         series: {
-    //             borderWidth: 0,
-    //             dataLabels: { enabled: true, format: '{point.y}' }
-    //         }
-    //         },
-    //         series: seriesData,
-    //         drilldown: {
-    //             series: drilldownSeries,
-    //             activeAxisLabelStyle: {
-    //                 textDecoration: 'underline',
-    //                 color: '#0077BE'
-    //             }
-    //         }
-    //     });
-    // }, [detailedData]);
-    // useEffect(() => {
-    //     const fetchDataAndInitChart = async () => {
-    //       // Initialize Highcharts with drilldown module
-    //       const HighchartsBase = await import('highcharts');
-    //       const DrilldownModule = await import('highcharts/modules/drilldown');
-    //       DrilldownModule.default(HighchartsBase.default);
-      
-    //       // Process API data
-    //       const groupData: Record<string, Record<string, Record<string, number>>> = {};
-      
-    //       detailedData.forEach(row => {
-    //         const grade = row.la_grade_id;
-    //         const subject = row.name?.en || 'Unknown Subject';
-    //         const section = row.title?.en || 'No Section';
-    //         const count = Number(row.count);
-      
-    //         if (!groupData[grade]) groupData[grade] = {};
-    //         if (!groupData[grade][subject]) groupData[grade][subject] = {};
-    //         groupData[grade][subject][section] = (groupData[grade][subject][section] || 0) + count;
-    //       });
-      
-    //       // Prepare chart data
-    //       const grades = Object.keys(groupData).sort((a, b) => parseInt(a) - parseInt(b));
-    //       // Define types for chart data
-    //         interface SeriesDataPoint {
-    //             name: string;
-    //             y: number;
-    //             drilldown: string;
-    //         }
-
-    //         interface DrilldownSeries {
-    //             id: string;
-    //             name: string;
-    //             data: Array<{
-    //             name: string;
-    //             y: number;
-    //             drilldown?: string;
-    //             }>;
-    //         }
-
-    //         // Initialize typed arrays
-    //         const seriesData: SeriesDataPoint[] = [];
-    //         const drilldownSeries: DrilldownSeries[] = [];
-      
-    //       // Create main series and drilldowns
-    //       grades.forEach(grade => {
-    //         const gradeSubjects = groupData[grade];
-    //         Object.keys(gradeSubjects).forEach(subject => {
-    //           const sections = gradeSubjects[subject];
-    //           const total = Object.values(sections).reduce((sum, val) => sum + val, 0);
-              
-    //           // Main series data point
-    //           seriesData.push({
-    //             name: `Grade ${grade} - ${subject}`,
-    //             y: total,
-    //             drilldown: `${grade}-${subject}`
-    //           });
-      
-    //           // Drilldown series
-    //           drilldownSeries.push({
-    //             id: `${grade}-${subject}`,
-    //             name: `Grade ${grade} - ${subject}`,
-    //             data: Object.entries(sections).map(([section, count]) => ({
-    //               name: section,
-    //               y: count,
-    //               drilldown: `${grade}-${subject}-${section}`
-    //             }))
-    //           });
-    //         });
-    //       });
-      
-    //       // Set chart options
-    //       setGraphChartOptions({
-    //         chart: { type: 'column' },
-    //         title: { text: 'Teacher Distribution by Grade, Subject, and Section' },
-    //         xAxis: { type: 'category' },
-    //         yAxis: { title: { text: 'Teacher Count' } },
-    //         plotOptions: {
-    //           column: {
-    //             stacking: 'normal',
-    //             dataLabels: { enabled: true }
-    //           }
-    //         },
-    //         series: [{
-    //           name: 'Teachers',
-    //           data: seriesData
-    //         }],
-    //         drilldown: {
-    //           series: drilldownSeries,
-    //           activeAxisLabelStyle: {
-    //             textDecoration: 'underline',
-    //             color: '#0077BE'
-    //           }
-    //         }
-    //       });
-    //     };
-      
-    //     if (detailedData.length > 0) fetchDataAndInitChart();
-    // }, [detailedData]);
 
     interface DrilldownChartData {
         grade: number | string;
@@ -1162,6 +1004,100 @@ export default function TeachersDashboard() {
     }
       
     const [showGraphSectionModal, setShowGraphSectionModal] = useState(false);
+    // Function to export tableData as CSV
+    const exportToCSV = () => {
+        if (tableData.length === 0) {
+        alert("No data to export. Please perform a search first.");
+        return;
+        }
+        // Get headers from the first row's keys
+        const headers = Object.keys(tableData[0]);
+        let csvContent = headers.join(",") + "\n";
+    
+        tableData.forEach((row) => {
+        const rowData = headers.map((header) => {
+            let cell = row[header];
+            if (cell === null || cell === undefined) cell = "";
+            cell = cell.toString().replace(/"/g, '""'); // Escape quotes
+            return `"${cell}"`;
+        });
+        csvContent += rowData.join(",") + "\n";
+        });
+        
+        const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.setAttribute("href", url);
+        link.setAttribute("download", `teacher_data_${new Date().toISOString().slice(0,10)}.csv`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    };
+    
+
+    // For teacher subject/grade/section in the Add Teacher modal:
+    // ----- Add Teacher Modal State & Handlers -----
+    const [showAddTeacherModal, setShowAddTeacherModal] = useState(false);
+    const [teacherForm, setTeacherForm] = useState({
+        name: "",
+        email: "",
+        mobile_no: "",
+        // Instead of plain inputs, we reuse searchable dropdowns' values for state, city, school.
+        state: "",
+        city: "",
+        school: "",  // for school name, as fetched from schools array
+        school_id: "",
+        teacher_subject: "",
+        teacher_grade: "",
+        teacher_section: ""
+    });
+    const [addTeacherError, setAddTeacherError] = useState<string | null>(null);
+    const [addingTeacher, setAddingTeacher] = useState(false);
+
+    const handleTeacherFormChange = (field: string, value: string) => {
+        setTeacherForm(prev => ({ ...prev, [field]: value }));
+    };
+
+  const handleAddTeacher = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAddingTeacher(true);
+    setAddTeacherError(null);
+    try {
+      const res = await fetch(`${api_startpoint}/api/add_teacher`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(teacherForm)
+      });
+      const result = await res.json();
+      if (!res.ok) {
+        throw new Error(result.error || "Failed to add teacher");
+      }
+      setShowAddTeacherModal(false);
+      setTeacherForm({
+        name: "",
+        email: "",
+        mobile_no: "",
+        state: "",
+        city: "",
+        school: "",
+        school_id: "",
+        teacher_subject: "",
+        teacher_grade: "",
+        teacher_section: ""
+      });
+      // Optionally, refresh table data here.
+    } catch (err: unknown) {
+      if (err instanceof Error) {
+        setAddTeacherError(err.message);
+      } else {
+        setAddTeacherError("Unknown error occurred");
+      }
+    } finally {
+      setAddingTeacher(false);
+    }
+  };
+      
+  
     return (
         <div className={`page bg-light ${inter.className} font-sans`}>
             <Sidebar />
@@ -1198,6 +1134,8 @@ export default function TeachersDashboard() {
                                 { title: 'Active Teachers', value: 0, icon: <IconUserFilled />, color: 'bg-teal' },
                                 { title: 'Inactive Teachers', value: 0, icon: <IconUserExclamation />, color: 'bg-orange' },
                                 { title: 'Highest Online User Count', value: 0, icon: <IconUserScan />, color: 'bg-blue', suffix: '' },
+                                { title: 'Total Number of Schools', value: schoolCount, icon: <IconUserScan />, color: 'bg-blue', suffix: '' },
+                                { title: 'Total number of resources downloaded', value: 165, icon: <IconUserScan />, color: 'bg-blue', suffix: '' },
                             ].map((metric, index) => (
                                 <div className="col-sm-6 col-lg-3" key={index}>
                                     <div className="card">
@@ -1242,13 +1180,13 @@ export default function TeachersDashboard() {
                                     </div>
                                 </div>
                             </div>
-                            <div className="col-sm-4 col-lg-3">
+                            {/* <div className="col-sm-4 col-lg-3">
                                 <div className="card">
                                     <div className="card-body">
                                         <div className="d-flex align-items-center">
                                             {/* <div className={`${metric.color} rounded-circle p-3 text-white`}>
                                             {React.cloneElement(metric.icon, { size: 24 })}
-                                            </div> */}
+                                            </div> 
                                             <div>
                                             <div className="subheader w-full">Total Number of Schools</div>
                                                 <div className="h1 mb-1">
@@ -1263,7 +1201,7 @@ export default function TeachersDashboard() {
                                         </div>
                                     </div>
                                 </div>
-                            </div>
+                            </div> */}
 
                             <div className="col-sm-4 col-lg-4" onClick={() => setShowGradeModal(true)}>
                                 <div className="card cursor-pointer hover:shadow-lg transition-shadow">
@@ -1280,8 +1218,6 @@ export default function TeachersDashboard() {
                                     </div>
                                 </div>
                             </div>
-                        </div>
-                        <div className="row g-4 mb-4">
                             <div className="col-sm-4 col-lg-4" onClick={() => setShowGraphSectionModal(true)}>
                                 <div className="card cursor-pointer hover:shadow-lg transition-shadow">
                                     <div className="card-body">
@@ -1298,6 +1234,9 @@ export default function TeachersDashboard() {
                                 </div>
                             </div>
                         </div>
+                        {/* <div className="row g-4 mb-4">
+                            
+                        </div> */}
 
                         {/* Demographics Map Modal */}
                         {showDemographicsModal && (
@@ -1490,6 +1429,38 @@ export default function TeachersDashboard() {
                                         />
                                     </div>
                                     <div className="col-12 col-md-6 col-lg-3">
+                                        <select
+                                            className="form-select"
+                                            value={selectedTeacherSubject}
+                                            onChange={(e) => setSelectedTeacherSubject(e.target.value)}
+                                        >
+                                            <option value="">Select Subject</option>
+                                            {subjectsList.map((subject) => (
+                                            <option key={subject.id} value={subject.id}>
+                                                {subject.title}
+                                            </option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                    <div className="col-12 col-md-6 col-lg-3">
+                                        <select
+                                            className="form-select"
+                                            value={selectedGradeFilter}
+                                            onChange={(e) => setSelectedGradeFilter(e.target.value)}
+                                        >
+                                            <option value="">Select Grade</option>
+                                            {Array.from({ length: 12 }, (_, idx) => {
+                                            const grade = idx + 1;
+                                            return (
+                                                <option key={grade} value={grade}>
+                                                {`Grade ${grade}`}
+                                                </option>
+                                            );
+                                            })}
+                                        </select>
+                                    </div>
+
+                                    <div className="col-12 col-md-6 col-lg-3">
                                         <input 
                                             type="text" 
                                             className="form-control" 
@@ -1538,11 +1509,29 @@ export default function TeachersDashboard() {
                                         Clear
                                     </button>
                                 </div>
+                                <div className="d-flex flex-wrap gap-2 mt-3">
+                                    <button className="btn btn-purple d-inline-flex align-items-center text-white" style={{ backgroundColor: '#6f42c1' }} onClick={exportToCSV}>
+                                        <Download className="me-2" size={16} />
+                                        Export
+                                    </button>
+
+                                    <button className="btn btn-success d-inline-flex align-items-center"
+                                        onClick={() => setShowAddTeacherModal(true)}
+                                        >
+                                        <Plus className="me-2" size={16} />
+                                        Add Teacher
+                                    </button>
+
+                                    {/* <button className="btn btn-purple d-inline-flex align-items-center text-white" style={{ backgroundColor: '#6f42c1' }}>
+                                        <BarChart3 className="me-2" size={16} />
+                                        View Graph
+                                    </button> */}
+                                </div>
                             </div>
                             {/* Paginated Results Table */}
                             <div className="card shadow-sm border-0 mt-2">
                                     <div className="card-body overflow-x-scroll">
-                                        <h5 className="card-title mb-4">Results- {tableData.length} rows found</h5>
+                                        <h5 className="card-title mb-4">Results- {tableData.length} Teachers found</h5>
                                         {isTableLoading ? (
                                                 <div className="text-center p-5">
                                                     <div className="spinner-border text-purple" role="status" style={{ width: "3rem", height: "3rem" }}>
@@ -1574,6 +1563,9 @@ export default function TeachersDashboard() {
                                                                 <th>Is Life Lab</th>
                                                                 <th>Created At</th>
                                                                 <th>Updated At</th>
+                                                                <th>Subject</th>
+                                                                <th>Grade</th>
+                                                                <th>Section</th>
                                                                 <th>Actions</th>
                                                             </tr>
                                                         </thead>
@@ -1592,6 +1584,9 @@ export default function TeachersDashboard() {
                                                                     <td>{row.is_life_lab}</td>
                                                                     <td>{row.created_at}</td>
                                                                     <td>{row.updated_at}</td>
+                                                                    <td>{JSON.parse(row.title).en}</td>
+                                                                    <td>{row.grade_name}</td>
+                                                                    <td>{row.section_name}</td>
                                                                     <td >
                                                                         <button
                                                                         className="btn btn-sm btn-primary me-2 "
@@ -1638,105 +1633,353 @@ export default function TeachersDashboard() {
                                     </div>
                                 </div> 
                         </div>
-                        {showEditModal && (
-                            <div
-                                className="modal fade show"
-                                style={{ display: "block", backgroundColor: "rgba(0,0,0,0.5)" }}
-                            >
-                                <div className="modal-dialog modal-md">
+                        
+                        {/* Add Teacher Modal */}
+                        {showAddTeacherModal && (
+                            <div className="modal fade show" style={{ display: 'block', backgroundColor: 'rgba(0,0,0,0.5)' }}>
+                            <div className="modal-dialog modal-md">
                                 <div className="modal-content">
-                                    <div className="modal-header">
-                                    <h5 className="modal-title">Edit Row</h5>
-                                    <button
-                                        type="button"
-                                        className="btn-close"
-                                        onClick={() => setShowEditModal(false)}
-                                    ></button>
-                                    </div>
+                                <div className="modal-header">
+                                    <h5 className="modal-title">Add Teacher</h5>
+                                    <button type="button" className="btn-close" onClick={() => setShowAddTeacherModal(false)}></button>
+                                </div>
+                                <form onSubmit={handleAddTeacher}>
                                     <div className="modal-body">
-                                    {/* Example form fields; adapt as needed */}
+                                    {addTeacherError && <div className="alert alert-danger">{addTeacherError}</div>}
                                     <div className="mb-3">
                                         <label className="form-label">Name</label>
-                                        <input
-                                        type="text"
-                                        className="form-control"
-                                        value={selectedRow?.name || ""}
-                                        onChange={(e) =>
-                                            setSelectedRow({ ...selectedRow, name: e.target.value })
-                                        }
-                                        />
+                                        <input type="text" className="form-control" 
+                                        value={teacherForm.name || teacherForm.name} 
+                                        onChange={(e) => handleTeacherFormChange("name", e.target.value)} 
+                                        required />
                                     </div>
                                     <div className="mb-3">
                                         <label className="form-label">Email</label>
+                                        <input type="email" className="form-control" 
+                                        value={teacherForm.email} 
+                                        onChange={(e) => handleTeacherFormChange("email", e.target.value)} />
+                                    </div>
+                                    <div className="mb-3">
+                                        <label className="form-label">Mobile No</label>
+                                        <input type="text" className="form-control" 
+                                        value={teacherForm.mobile_no} 
+                                        onChange={(e) => handleTeacherFormChange("mobile_no", e.target.value)} 
+                                        required />
+                                    </div>
+                                    {/* Reuse SearchableDropdown for State */}
+                                    <div className="mb-3">
+                                        <label className="form-label">State</label>
+                                        <SearchableDropdown
+                                        options={states}
+                                        placeholder="Select State"
+                                        value={teacherForm.state}
+                                        onChange={(val) => handleTeacherFormChange("state", val)}
+                                        isLoading={isStatesLoading}
+                                        maxDisplayItems={200}
+                                        />
+                                    </div>
+                                    {/* Reuse SearchableDropdown for City */}
+                                    <div className="mb-3">
+                                        <label className="form-label">City</label>
+                                        <SearchableDropdown
+                                        options={cities}
+                                        placeholder="Select City"
+                                        value={teacherForm.city}
+                                        onChange={(val) => handleTeacherFormChange("city", val)}
+                                        isLoading={isCitiesLoading}
+                                        maxDisplayItems={200}
+                                        />
+                                    </div>
+                                    {/* Reuse SearchableDropdown for School */}
+                                    <div className="mb-3">
+                                        <label className="form-label">School</label>
+                                        <SearchableDropdown
+                                        options={schools}
+                                        placeholder="Select School"
+                                        value={teacherForm.school}
+                                        onChange={(val) => {
+                                            handleTeacherFormChange("school", val);
+                                            // If needed, you could also update school_id accordingly.
+                                            handleTeacherFormChange("school_id", val);
+                                        }}
+                                        isLoading={isSchoolsLoading}
+                                        maxDisplayItems={200}
+                                        />
+                                    </div>
+                                    {/* New Fields: Teacher Subject, Grade, Section */}
+                                    <div className="mb-3">
+                                        <label className="form-label">Teacher Subject</label>
+                                        <select
+                                        className="form-select"
+                                        value={teacherForm.teacher_subject}
+                                        onChange={(e) => handleTeacherFormChange("teacher_subject", e.target.value)}
+                                        required
+                                        >
+                                        <option value="">Select Subject</option>
+                                        {subjectsList.map((subject) => (
+                                            <option key={subject.id} value={subject.id}>
+                                            {subject.title}
+                                            </option>
+                                        ))}
+                                        </select>
+                                    </div>
+                                    <div className="mb-3">
+                                        <label className="form-label">Teacher Grade</label>
+                                        <select
+                                        className="form-select"
+                                        value={teacherForm.teacher_grade}
+                                        onChange={(e) => handleTeacherFormChange("teacher_grade", e.target.value)}
+                                        required
+                                        >
+                                        <option value="">Select Grade</option>
+                                        {Array.from({ length: 12 }, (_, idx) => {
+                                            const grade = idx + 1;
+                                            return (
+                                            <option key={grade} value={grade}>
+                                                {`Grade ${grade}`}
+                                            </option>
+                                            );
+                                        })}
+                                        </select>
+                                    </div>
+                                    <div className="mb-3">
+                                        <label className="form-label">Teacher Section</label>
                                         <input
                                         type="text"
                                         className="form-control"
-                                        value={selectedRow?.email || ""}
-                                        onChange={(e) =>
-                                            setSelectedRow({ ...selectedRow, email: e.target.value })
-                                        }
+                                        placeholder="Enter Section (e.g., A)"
+                                        value={teacherForm.teacher_section}
+                                        onChange={(e) => handleTeacherFormChange("teacher_section", e.target.value)}
+                                        required
                                         />
                                     </div>
-                                    {/* Add more fields as needed */}
                                     </div>
                                     <div className="modal-footer">
-                                    <button
-                                        type="button"
-                                        className="btn btn-secondary"
-                                        onClick={() => setShowEditModal(false)}
-                                    >
+                                    <button type="button" className="btn btn-secondary" onClick={() => setShowAddTeacherModal(false)}>
                                         Cancel
                                     </button>
-                                    <button type="button" className="btn btn-primary" onClick={saveEdits}>
-                                        Save
+                                    <button type="submit" className="btn btn-primary" disabled={addingTeacher}>
+                                        {addingTeacher ? "Adding..." : "Add Teacher"}
                                     </button>
                                     </div>
-                                </div>
+                                </form>
                                 </div>
                             </div>
+                            </div>
                         )}
+
+                        {showEditModal && (
+                        <div className="modal fade show" style={{ display: "block", backgroundColor: "rgba(0,0,0,0.5)" }}>
+                            <div className="modal-dialog modal-md">
+                            <div className="modal-content">
+                                <div className="modal-header">
+                                <h5 className="modal-title">Edit Teacher</h5>
+                                <button type="button" className="btn-close" onClick={() => setShowEditModal(false)}></button>
+                                </div>
+                                <form onSubmit={saveEdits}>
+                                <div className="modal-body">
+                                    { /* You may display error messages if any */ }
+                                    {error && <div className="alert alert-danger">{error}</div>}
+                                    <div className="mb-3">
+                                    <label className="form-label">Name</label>
+                                    <input 
+                                        type="text" 
+                                        className="form-control" 
+                                        value={selectedRow?.name || ""} 
+                                        onChange={(e) =>
+                                            setSelectedRow((prev) =>
+                                              prev ? { ...prev, name: e.target.value } : prev
+                                            )
+                                          }
+                                          
+                                        required />
+                                    </div>
+                                    <div className="mb-3">
+                                    <label className="form-label">Email</label>
+                                    <input 
+                                        type="email" 
+                                        className="form-control" 
+                                        value={selectedRow?.email || ""} 
+                                        onChange={(e) =>
+                                            setSelectedRow((prev) =>
+                                              prev ? { ...prev, email: e.target.value } : prev
+                                            )
+                                          } />
+                                    </div>
+                                    <div className="mb-3">
+                                    <label className="form-label">Mobile No</label>
+                                    <input 
+                                        type="text" 
+                                        className="form-control" 
+                                        value={selectedRow?.mobile_no || ""} 
+                                        onChange={(e) =>
+                                            setSelectedRow((prev) =>
+                                              prev ? { ...prev, mobile_no: e.target.value } : prev
+                                            )
+                                          }
+                                        required />
+                                    </div>
+                                    { /* Reuse SearchableDropdown for State */ }
+                                    <div className="mb-3">
+                                    <label className="form-label">State</label>
+                                    <SearchableDropdown
+                                        options={states}
+                                        placeholder="Select State"
+                                        value={selectedRow?.state || ""}
+                                        onChange={(val) =>
+                                            setSelectedRow((prev: TeacherRow | null) =>
+                                              prev ? { ...prev, state: val } : prev
+                                            )
+                                        }
+                                          
+                                        isLoading={isStatesLoading}
+                                        maxDisplayItems={200}
+                                    />
+                                    </div>
+                                    { /* Reuse SearchableDropdown for City */ }
+                                    <div className="mb-3">
+                                    <label className="form-label">City</label>
+                                    <SearchableDropdown
+                                        options={cities}
+                                        placeholder="Select City"
+                                        value={selectedRow?.city || ""}
+                                        onChange={(val) =>
+                                            setSelectedRow((prev: TeacherRow | null) =>
+                                              prev ? { ...prev, city: val } : prev
+                                            )
+                                          }
+                                          
+                                        isLoading={isCitiesLoading}
+                                        maxDisplayItems={200}
+                                    />
+                                    </div>
+                                    { /* Reuse SearchableDropdown for School */ }
+                                    <div className="mb-3">
+                                    <label className="form-label">School</label>
+                                    <SearchableDropdown
+                                        options={schools}
+                                        placeholder="Select School"
+                                        value={selectedRow?.school || ""}
+                                        // onChange={(val) => {
+                                        // setSelectedRow(prev => ({ ...prev, school: val }));
+                                        // // Optionally update school_id if your data contains that
+                                        // setSelectedRow(prev => ({ ...prev, school_id: val }));
+                                        // }}
+                                        onChange={(val) =>{
+                                            setSelectedRow((prev: TeacherRow | null) =>
+                                              prev ? { ...prev, school: val } : prev
+                                            );
+                                            setSelectedRow((prev: TeacherRow | null) =>
+                                                prev ? { ...prev, school_id: val } : prev
+                                              );
+                                        }}
+                                          
+                                        isLoading={isSchoolsLoading}
+                                        maxDisplayItems={200}
+                                    />
+                                    </div>
+                                    { /* Extra Fields: Teacher Subject, Grade, Section */ }
+                                    <div className="mb-3">
+                                    <label className="form-label">Teacher Subject</label>
+                                    <select
+                                        className="form-select"
+                                        value={selectedRow?.teacher_subject || ""}
+                                        onChange={(e) =>
+                                            setSelectedRow((prev: TeacherRow | null) =>
+                                              prev ? { ...prev, teacher_subject: e.target.value } : prev
+                                            )
+                                          }
+                                        required
+                                    >
+                                        <option value="">Select Subject</option>
+                                        {subjectsList.map((subject) => (
+                                        <option key={subject.id} value={subject.id}>
+                                            {subject.title}
+                                        </option>
+                                        ))}
+                                    </select>
+                                    </div>
+                                    <div className="mb-3">
+                                    <label className="form-label">Teacher Grade</label>
+                                    <select
+                                        className="form-select"
+                                        value={selectedRow?.teacher_grade || ""}
+                                        onChange={(e) =>
+                                            setSelectedRow((prev: TeacherRow | null) =>
+                                              prev ? { ...prev, teacher_grade: e.target.value } : prev
+                                            )
+                                          }
+                                        required
+                                    >
+                                        <option value="">Select Grade</option>
+                                        {Array.from({ length: 12 }, (_, idx) => {
+                                        const grade = idx + 1;
+                                        return (
+                                            <option key={grade} value={grade}>
+                                            {`Grade ${grade}`}
+                                            </option>
+                                        );
+                                        })}
+                                    </select>
+                                    </div>
+                                    <div className="mb-3">
+                                    <label className="form-label">Teacher Section</label>
+                                    <input
+                                        type="text"
+                                        className="form-control"
+                                        placeholder="Enter Section (e.g., A)"
+                                        value={selectedRow?.teacher_section || ""}
+                                        onChange={(e) =>
+                                            setSelectedRow((prev: TeacherRow | null) =>
+                                              prev ? { ...prev, teacher_section: e.target.value } : prev
+                                            )
+                                        }
+                                        required
+                                    />
+                                    </div>
+                                </div>
+                                <div className="modal-footer">
+                                    <button type="button" className="btn btn-secondary" onClick={() => setShowEditModal(false)}>
+                                    Cancel
+                                    </button>
+                                    <button type="submit" className="btn btn-primary">
+                                    Save
+                                    </button>
+                                </div>
+                                </form>
+                            </div>
+                            </div>
+                        </div>
+                        )}
+
                         
                         {showDeleteModal && (
-                            <div
-                                className="modal fade show"
-                                style={{ display: "block", backgroundColor: "rgba(0,0,0,0.5)" }}
-                            >
-                                <div className="modal-dialog modal-md">
-                                <div className="modal-content">
-                                    <div className="modal-header">
-                                    <h5 className="modal-title">Delete Row</h5>
-                                    <button
-                                        type="button"
-                                        className="btn-close"
-                                        onClick={() => setShowDeleteModal(false)}
-                                    ></button>
-                                    </div>
-                                    <div className="modal-body">
-                                    <p>Are you sure you want to delete this record?</p>
-                                    <p>
-                                        <strong>{selectedRow?.name}</strong>
-                                    </p>
-                                    </div>
-                                    <div className="modal-footer">
-                                    <button
-                                        type="button"
-                                        className="btn btn-secondary"
-                                        onClick={() => setShowDeleteModal(false)}
-                                    >
-                                        Cancel
-                                    </button>
-                                    <button
-                                        type="button"
-                                        className="btn btn-danger"
-                                        onClick={confirmDelete}
-                                    >
-                                        Delete
-                                    </button>
-                                    </div>
+                        <div className="modal fade show" style={{ display: "block", backgroundColor: "rgba(0,0,0,0.5)" }}>
+                            <div className="modal-dialog modal-md">
+                            <div className="modal-content">
+                                <div className="modal-header">
+                                <h5 className="modal-title">Delete Teacher</h5>
+                                <button type="button" className="btn-close" onClick={() => setShowDeleteModal(false)}></button>
                                 </div>
+                                <div className="modal-body">
+                                <p>Are you sure you want to delete this record?</p>
+                                <p>
+                                    <strong>{selectedRow?.name}</strong>
+                                </p>
+                                </div>
+                                <div className="modal-footer">
+                                <button type="button" className="btn btn-secondary" onClick={() => setShowDeleteModal(false)}>
+                                    Cancel
+                                </button>
+                                <button type="button" className="btn btn-danger" onClick={confirmDelete}>
+                                    Delete
+                                </button>
                                 </div>
                             </div>
+                            </div>
+                        </div>
                         )}
+
 
                     </div>
                 </div>
