@@ -959,30 +959,117 @@ def delete_student():
         conn.close()
 
 
-@app.route('/api/coupon_redeem_search', methods=['GET'])
+@app.route('/api/coupon_titles', methods=['GET'])
+def get_coupon_titles():
+    try:
+        connection = get_db_connection()
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT DISTINCT title FROM lifeapp.coupons ORDER BY title")
+            result = cursor.fetchall()
+            titles = [item['title'] for item in result]
+        return jsonify(titles)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        connection.close()
+
+@app.route('/api/coupon_redeem_search', methods=['POST'])
 def fetch_coupon_redeem_list():
-    search = request.args.get('search')  # Get search term from query parameters
+    data = request.get_json() or {}
+    search = data.get('search', '')
+    state = data.get('state', '')
+    city = data.get('city', '')
+    school = data.get('school', '')
+    grade = data.get('grade', '')
+    coupon_title = data.get('coupon_title', '')
+    mobile = data.get('mobile', '')
+    start_date = data.get('start_date', '')
+    end_date = data.get('end_date', '')
+    
+    # Base SQL query - note the aliasing for coupon title if needed.
     sql = """
-            SELECT 
-                u.name AS 'Student Name', 
-                ls.name AS 'School Name', 
-                u.mobile_no AS 'Mobile Number', 
-                u.state, 
-                u.city, 
-                u.grade,
-                lc.title as 'Coupon Title', 
-                cr.coins AS 'Coins Redeemed', 
-                cr.user_id, 
-                cr.created_at AS 'Coupon Redeemed Date' 
-            FROM lifeapp.coupon_redeems cr 
-            INNER JOIN lifeapp.users u ON u.id = cr.user_id 
-            INNER JOIN lifeapp.schools ls ON ls.id = u.school_id
-            inner join lifeapp.coupons lc on lc.id = cr.coupon_id
-            """
+        SELECT 
+            u.name AS 'Student Name', 
+            ls.name AS 'School Name', 
+            u.mobile_no AS 'Mobile Number', 
+            u.state, 
+            u.city, 
+            u.grade,
+            lc.title as 'Coupon Title', 
+            cr.coins AS 'Coins Redeemed', 
+            cr.user_id, 
+            cr.created_at AS 'Coupon Redeemed Date' 
+        FROM lifeapp.coupon_redeems cr 
+        INNER JOIN lifeapp.users u ON u.id = cr.user_id 
+        INNER JOIN lifeapp.schools ls ON ls.id = u.school_id
+        INNER JOIN lifeapp.coupons lc ON lc.id = cr.coupon_id
+    """
+    filters = []
     params = []
+
+    # General search filter (if provided)
+    # if search:
+    #     filters.append("(u.name LIKE %s OR ls.name LIKE %s OR u.state LIKE %s OR u.city LIKE %s)")
+    #     params.extend([f"%{search}%", f"%{search}%", f"%{search}%", f"%{search}%"])
+
     if search:
-        sql += " WHERE u.name LIKE %s OR ls.name LIKE %s OR u.state LIKE %s OR u.city LIKE %s"
-        params.extend([f"%{search}%", f"%{search}%", f"%{search}%", f"%{search}%"])
+        search_terms = search.strip().split()
+        if search_terms:
+            name_conditions = []
+            for term in search_terms:
+                name_conditions.append("u.name LIKE %s")
+                params.append(f"%{term}%")
+            filters.append(f"({' AND '.join(name_conditions)})")
+    # Additional filters – add only if parameter exists so that NULL or empty values do not interfere.
+    if state:
+        filters.append("u.state = %s")
+        params.append(state)
+    if city:
+        filters.append("u.city = %s")
+        params.append(city)
+    if school:
+        filters.append("ls.name = %s")
+        params.append(school)
+
+    if grade:
+        filters.append("u.grade = %s")
+        params.append(grade)
+        
+    # Add to existing filters
+    if coupon_title:
+        filters.append("lc.title = %s")
+        params.append(coupon_title)   
+
+    # Sanitize mobile number - remove all non-numeric characters
+    sanitized_mobile = ''.join(filter(str.isdigit, mobile))
+
+    if sanitized_mobile:
+        # Use exact match if full length (adjust 10 to your mobile number length)
+        if len(sanitized_mobile) == 10:
+            filters.append("u.mobile_no = %s")
+            params.append(sanitized_mobile)
+        else:
+            filters.append("u.mobile_no LIKE %s")
+            params.append(f"%{sanitized_mobile}%")
+        
+    # Date validation
+    if start_date and end_date and start_date > end_date:
+        return jsonify({'error': 'Start date cannot be after end date'}), 400
+
+    # Add date filter
+    if start_date and end_date:
+        filters.append("cr.created_at BETWEEN %s AND %s")
+        params.extend([start_date, end_date])
+    elif start_date:
+        filters.append("cr.created_at >= %s")
+        params.append(start_date)
+    elif end_date:
+        filters.append("cr.created_at <= %s")
+        params.append(end_date)
+
+    # If any filters are applied, append a WHERE clause.
+    if filters:
+        sql += " WHERE " + " AND ".join(filters)
         
     try:
         connection = get_db_connection()
@@ -994,6 +1081,7 @@ def fetch_coupon_redeem_list():
         return jsonify({'error': str(e)}), 500
     finally:
         connection.close()
+
 
 
 @app.route('/api/student_mission_search', methods=['POST'])
@@ -4850,6 +4938,117 @@ def delete_game_enrollment_request(request_id):
         return jsonify({'error': str(e)}), 500
     finally:
         connection.close()
+
+
+
+###################################################################################
+###################################################################################
+####################### SETTINGS/COUPONS APIs #################################
+###################################################################################
+###################################################################################
+
+# GET coupons with filters
+@app.route('/api/coupons', methods=['GET'])
+def get_coupons():
+    conn = get_db_connection()
+    try:
+        with conn.cursor() as cursor:
+            start_date = request.args.get('start_date')
+            end_date = request.args.get('end_date')
+            
+            base_query = '''SELECT * FROM lifeapp.coupons'''
+            conditions = []
+            params = []
+            
+            # Check and apply the start_date filter if provided
+            if start_date:
+                conditions.append('created_at >= %s')
+                params.append(start_date)
+            
+            # Check and apply the end_date filter if provided
+            if end_date:
+                conditions.append('created_at <= %s')
+                params.append(end_date)
+            
+            # Append the conditions if there are any filters
+            if conditions:
+                base_query += ' WHERE ' + ' AND '.join(conditions)
+            
+            cursor.execute(base_query, params)
+            coupons = cursor.fetchall()
+            return jsonify({'count': len(coupons), 'data': coupons})
+    finally:
+        conn.close()
+
+
+# POST add coupon
+@app.route('/api/coupons', methods=['POST'])
+def add_coupon():
+    data = request.json
+    conn = get_db_connection()
+    try:
+        with conn.cursor() as cursor:
+            sql = '''INSERT INTO lifeapp.coupons 
+                     (title, category_id, coin, link, details, `index`, coupon_media_id)
+                     VALUES (%s, %s, %s, %s, %s, %s, %s)'''
+            cursor.execute(sql, (
+                data['title'],
+                data['category_id'],
+                data['coin'],
+                data['link'],
+                data['details'],
+                data['index'],
+                data['coupon_media_id']
+            ))
+            conn.commit()
+            return jsonify({'success': True}), 201
+    except Exception as e:
+        return jsonify({'error': str(e)}), 400
+    finally:
+        conn.close()
+
+# PUT update coupon
+@app.route('/api/coupons/<int:id>', methods=['PUT'])
+def update_coupon(id):
+    data = request.json
+    conn = get_db_connection()
+    try:
+        with conn.cursor() as cursor:
+            sql = '''UPDATE lifeapp.coupons SET
+                     title=%s, category_id=%s, coin=%s, link=%s,
+                     details=%s, `index`=%s, coupon_media_id=%s
+                     WHERE id=%s'''
+            cursor.execute(sql, (
+                data['title'],
+                data['category_id'],
+                data['coin'],
+                data['link'],
+                data['details'],
+                data['index'],
+                data['coupon_media_id'],
+                id
+            ))
+            conn.commit()
+            return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 400
+    finally:
+        conn.close()
+
+# DELETE coupon
+@app.route('/api/coupons/<int:id>', methods=['DELETE'])
+def delete_coupon(id):
+    conn = get_db_connection()
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute('DELETE FROM lifeapp.coupons WHERE id = %s', (id,))
+            conn.commit()
+            return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 400
+    finally:
+        conn.close()
+
 
 ###################################################################################
 ###################################################################################
