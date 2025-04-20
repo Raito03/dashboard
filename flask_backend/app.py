@@ -178,6 +178,7 @@ def get_user_signups2():
     try:
         filters = request.get_json() or {}
         grouping = filters.get('grouping', 'monthly')
+        user_type = filters.get('user_type', 'All')  # Get user_type from request
         start_date = filters.get('start_date')
         end_date = filters.get('end_date')
 
@@ -197,6 +198,22 @@ def get_user_signups2():
             WHERE 1=1
         """
         params = []
+
+        # Add user_type filter
+        if user_type and user_type != 'All':
+            type_map = {
+                'Admin': 1,
+                'Student': 3,
+                'Mentor': 4,
+                'Teacher': 5,
+                'Unspecified': 'NOT IN (1,3,4,5)'
+            }
+            if user_type in type_map:
+                if user_type == 'Unspecified':
+                    base_query += " AND (type NOT IN (1,3,4,5) OR type IS NULL)"
+                else:
+                    base_query += " AND type = %s"
+                    params.append(type_map[user_type])
 
         # Add date range filters if provided
         if start_date:
@@ -243,6 +260,89 @@ def get_user_signups2():
     except Exception as e:
         logger.error(f"Error in get_user_signups: {str(e)}")
         return jsonify({"error": str(e)}), 500
+    
+@app.route('/api/signing-user-gender', methods=['POST'])
+def signing_user_gender():
+    # Get grouping and user_type from the request; default grouping is 'monthly'
+    req = request.get_json()
+    grouping = req.get('grouping', 'monthly')
+    user_type = req.get('user_type', 'All')  # Add the user_type parameter
+    
+    # Choose the SQL expression for grouping based on the given filter,
+    # doubling the percent signs to escape them for the query execution.
+    if grouping == 'daily':
+        period_expr = "DATE(created_at)"
+    elif grouping == 'weekly':
+        period_expr = "CONCAT(YEAR(created_at), '-', LPAD(WEEK(created_at, 3), 2, '0'))"
+    elif grouping == 'monthly':
+        period_expr = "DATE_FORMAT(created_at, '%%Y-%%m')"
+    elif grouping == 'quarterly':
+        period_expr = "CONCAT(YEAR(created_at), '-Q', QUARTER(created_at))"
+    elif grouping == 'yearly':
+        period_expr = "YEAR(created_at)"
+    elif grouping == 'lifetime':
+        period_expr = "'Lifetime'"
+    else:
+        period_expr = "DATE_FORMAT(created_at, '%%Y-%%m')"
+    
+    # Build the base query with a WHERE clause that always evaluates to true
+    where_clause = "WHERE 1=1"
+    params = []
+    
+    # Add the user type filter if it's not 'All'
+    if user_type and user_type != 'All':
+        type_map = {
+            'Admin': 1,
+            'Student': 3,
+            'Mentor': 4,
+            'Teacher': 5,
+            # For 'Unspecified', we capture those not matching known types or NULL.
+            'Unspecified': None
+        }
+        if user_type in type_map:
+            if user_type == 'Unspecified':
+                where_clause += " AND (type NOT IN (1,3,4,5) OR type IS NULL)"
+            else:
+                where_clause += " AND type = %s"
+                params.append(type_map[user_type])
+    
+    # Build the final SQL query with the user type filter in place.
+    sql = f"""
+        SELECT {period_expr} AS period,
+               CASE
+                 WHEN gender = 0 THEN 'Male'
+                 WHEN gender = 1 THEN 'Female'
+                 ELSE 'Unspecified'
+               END as gender_label,
+               COUNT(*) AS count
+        FROM lifeapp.users
+        {where_clause}
+        GROUP BY period, gender_label
+        ORDER BY period
+    """
+    
+    db = get_db_connection()
+    try:
+        with db.cursor() as cursor:
+            cursor.execute(sql, tuple(params))
+            results = cursor.fetchall()
+    finally:
+        db.close()
+    
+    # Transform the result into an array of objects where each record is:
+    # { period: ..., Male: <count>, Female: <count>, Unspecified: <count> }
+    data_by_period = {}
+    for row in results:
+        period = row['period']
+        gender = row['gender_label']
+        count = row['count']
+        if period not in data_by_period:
+            data_by_period[period] = {'period': period, 'Male': 0, 'Female': 0, 'Unspecified': 0}
+        data_by_period[period][gender] = count
+    
+    return jsonify({'data': list(data_by_period.values())})
+
+
     
 @app.route('/api/mission-status-graph', methods=['POST'])
 def get_mission_status_graph():
@@ -441,34 +541,228 @@ def get_coupons_used_count():
     finally:
         connection.close()
 
+@app.route('/api/mission-points-over-time', methods=['POST'])
+def mission_points_over_time():
+    """
+    Returns total mission points grouped by the requested time period.
+    Expects JSON payload: { "grouping": "daily" | "weekly" | "monthly" | "quarterly" | "yearly" | "lifetime" }
+    """
+    req = request.get_json() or {}
+    grouping = req.get('grouping', 'monthly')
+
+    # Determine SQL expressions based on grouping
+    if grouping == 'daily':
+        expr = "DATE(lamc.created_at)"
+    elif grouping == 'weekly':
+        expr = "CONCAT(YEAR(lamc.created_at), '-', LPAD(WEEK(lamc.created_at, 1), 2, '0'))"
+    elif grouping == 'monthly':
+        expr = "DATE_FORMAT(lamc.created_at, '%Y-%m')"
+    elif grouping == 'quarterly':
+        expr = "CONCAT(YEAR(lamc.created_at), '-Q', QUARTER(lamc.created_at))"
+    elif grouping == 'yearly':
+        # cast to CHAR so period is a string
+        expr = "CAST(YEAR(lamc.created_at) AS CHAR)"
+    else:  # lifetime
+        expr = "'Lifetime'"
+
+    # Build SQL with join and grouping
+    sql = [
+        f"SELECT {expr} AS period, SUM(lamc.points) AS points",
+        "FROM lifeapp.la_mission_completes lamc",
+        "INNER JOIN lifeapp.la_missions lam",
+        "  ON lamc.la_mission_id = lam.id",
+        "  AND lam.type = 1"
+    ]
+    # Only add GROUP BY if not lifetime
+    if grouping != 'lifetime':
+        sql.append(f"GROUP BY {expr}")
+        sql.append("ORDER BY period ASC")
+
+    query = ' '.join(sql)
+
+    conn = get_db_connection()
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute(query)
+            rows = cursor.fetchall()
+    finally:
+        conn.close()
+
+    return jsonify({ 'data': rows })
+
+
+@app.route('/api/jigyasa-points-over-time', methods=['POST'])
+def jigyasa_points_over_time():
+    """
+    Returns total mission points grouped by the requested time period.
+    Expects JSON payload: { "grouping": "daily" | "weekly" | "monthly" | "quarterly" | "yearly" | "lifetime" }
+    """
+    req = request.get_json() or {}
+    grouping = req.get('grouping', 'monthly')
+
+    # Determine SQL expressions based on grouping
+    if grouping == 'daily':
+        expr = "DATE(lamc.created_at)"
+    elif grouping == 'weekly':
+        expr = "CONCAT(YEAR(lamc.created_at), '-', LPAD(WEEK(lamc.created_at, 1), 2, '0'))"
+    elif grouping == 'monthly':
+        expr = "DATE_FORMAT(lamc.created_at, '%Y-%m')"
+    elif grouping == 'quarterly':
+        expr = "CONCAT(YEAR(lamc.created_at), '-Q', QUARTER(lamc.created_at))"
+    elif grouping == 'yearly':
+        # cast to CHAR so period is a string
+        expr = "CAST(YEAR(lamc.created_at) AS CHAR)"
+    else:  # lifetime
+        expr = "'Lifetime'"
+
+    # Build SQL with join and grouping
+    sql = [
+        f"SELECT {expr} AS period, SUM(lamc.points) AS points",
+        "FROM lifeapp.la_mission_completes lamc",
+        "INNER JOIN lifeapp.la_missions lam",
+        "  ON lamc.la_mission_id = lam.id",
+        "  AND lam.type = 5"
+    ]
+    # Only add GROUP BY if not lifetime
+    if grouping != 'lifetime':
+        sql.append(f"GROUP BY {expr}")
+        sql.append("ORDER BY period ASC")
+
+    query = ' '.join(sql)
+
+    conn = get_db_connection()
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute(query)
+            rows = cursor.fetchall()
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    finally:
+        conn.close()
+
+    return jsonify({ 'data': rows })
+
+@app.route('/api/pragya-points-over-time', methods=['POST'])
+def pragya_points_over_time():
+    """
+    Returns total mission points grouped by the requested time period.
+    Expects JSON payload: { "grouping": "daily" | "weekly" | "monthly" | "quarterly" | "yearly" | "lifetime" }
+    """
+    req = request.get_json() or {}
+    grouping = req.get('grouping', 'monthly')
+
+    # Determine SQL expressions based on grouping
+    if grouping == 'daily':
+        expr = "DATE(lamc.created_at)"
+    elif grouping == 'weekly':
+        expr = "CONCAT(YEAR(lamc.created_at), '-', LPAD(WEEK(lamc.created_at, 1), 2, '0'))"
+    elif grouping == 'monthly':
+        expr = "DATE_FORMAT(lamc.created_at, '%Y-%m')"
+    elif grouping == 'quarterly':
+        expr = "CONCAT(YEAR(lamc.created_at), '-Q', QUARTER(lamc.created_at))"
+    elif grouping == 'yearly':
+        # cast to CHAR so period is a string
+        expr = "CAST(YEAR(lamc.created_at) AS CHAR)"
+    else:  # lifetime
+        expr = "'Lifetime'"
+
+    # Build SQL with join and grouping
+    sql = [
+        f"SELECT {expr} AS period, SUM(lamc.points) AS points",
+        "FROM lifeapp.la_mission_completes lamc",
+        "INNER JOIN lifeapp.la_missions lam",
+        "  ON lamc.la_mission_id = lam.id",
+        "  AND lam.type = 6"
+    ]
+    # Only add GROUP BY if not lifetime
+    if grouping != 'lifetime':
+        sql.append(f"GROUP BY {expr}")
+        sql.append("ORDER BY period ASC")
+
+    query = ' '.join(sql)
+
+    conn = get_db_connection()
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute(query)
+            rows = cursor.fetchall()
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    finally:
+        conn.close()
+
+    return jsonify({ 'data': rows })
+
+@app.route('/api/coupon-redeems-over-time', methods=['POST'])
+def coupon_redeems_over_time():
+    req = request.get_json() or {}
+    grouping = req.get('grouping', 'monthly')
+
+    if grouping == 'daily':
+        expr = "DATE(created_at)"
+    elif grouping == 'weekly':
+        expr = "CONCAT(YEAR(created_at), '-', LPAD(WEEK(created_at, 1), 2, '0'))"
+    elif grouping == 'monthly':
+        expr = "DATE_FORMAT(created_at, '%Y-%m')"
+    elif grouping == 'quarterly':
+        expr = "CONCAT(YEAR(created_at), '-Q', QUARTER(created_at))"
+    elif grouping == 'yearly':
+        expr = "CAST(YEAR(created_at) AS CHAR)"
+    else:
+        expr = "'Lifetime'"
+
+    sql_parts = [
+        f"SELECT {expr} AS period, SUM(coins) AS coins",
+        "FROM lifeapp.coupon_redeems"
+    ]
+    if grouping != 'lifetime':
+        sql_parts.append(f"GROUP BY {expr}")
+        sql_parts.append("ORDER BY period ASC")
+
+    query = ' '.join(sql_parts)
+    conn = get_db_connection()
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute(query)
+            rows = cursor.fetchall()
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    finally:
+        conn.close()
+
+    return jsonify({'data': rows})
+
 @app.route('/api/histogram_level_subject_challenges_complete', methods=['POST'])
 def get_histogram_data_level_subject_challenges_complete():
-    """
-    Returns data for a histogram that shows mission completes grouped by period,
-    subject, and level.
-    Accepts a JSON payload with a "grouping" key. Allowed values:
-      daily, weekly, monthly, quarterly, yearly, lifetime.
-    """
     try:
         data = request.get_json() or {}
         grouping = data.get('grouping', 'monthly').lower()
+        status_filter = data.get('status', 'all').lower()
+        subject_filter = data.get('subject')  # New subject filter
+        
+        # Validate grouping
         allowed_groupings = ['daily', 'weekly', 'monthly', 'quarterly', 'yearly', 'lifetime']
-        if grouping not in allowed_groupings:
-            grouping = 'monthly'
+        grouping = grouping if grouping in allowed_groupings else 'monthly'
 
-        # Construct the period expression based on the grouping
-        if grouping == 'daily':
-            period_expr = "DATE(lamc.created_at)"
-        elif grouping == 'weekly':
-            period_expr = "CONCAT(YEAR(lamc.created_at), '-W', WEEK(lamc.created_at, 1))"
-        elif grouping == 'monthly':
-            period_expr = "DATE_FORMAT(lamc.created_at, '%Y-%m')"
-        elif grouping == 'quarterly':
-            period_expr = "CONCAT(YEAR(lamc.created_at), '-Q', QUARTER(lamc.created_at))"
-        elif grouping == 'yearly':
-            period_expr = "YEAR(lamc.created_at)"
-        else:  # lifetime
-            period_expr = "'lifetime'"
+        # Status conditions
+        status_conditions = {
+            'submitted': "lamc.approved_at IS NULL AND lamc.rejected_at IS NULL",
+            'rejected': "lamc.approved_at IS NULL AND lamc.rejected_at IS NOT NULL",
+            'approved': "lamc.approved_at IS NOT NULL",
+            'all': "1=1"
+        }
+        status_condition = status_conditions.get(status_filter, "1=1")
+
+        # Period expression
+        period_expressions = {
+            'daily': "DATE(lamc.created_at)",
+            'weekly': "CONCAT(YEAR(lamc.created_at), '-W', WEEK(lamc.created_at, 1))",
+            'monthly': "DATE_FORMAT(lamc.created_at, '%Y-%m')",
+            'quarterly': "CONCAT(YEAR(lamc.created_at), '-Q', QUARTER(lamc.created_at))",
+            'yearly': "CAST(YEAR(lamc.created_at) AS CHAR)",
+            'lifetime': "'lifetime'"
+        }
+        period_expr = period_expressions[grouping]
 
         connection = get_db_connection()
         with connection.cursor() as cursor:
@@ -482,16 +776,148 @@ def get_histogram_data_level_subject_challenges_complete():
                 INNER JOIN lifeapp.la_missions lam ON lam.id = lamc.la_mission_id
                 INNER JOIN lifeapp.la_subjects las ON lam.la_subject_id = las.id
                 INNER JOIN lifeapp.la_levels lal ON lam.la_level_id = lal.id
+                WHERE lam.type = 1
+                AND {status_condition}
+                {"AND JSON_CONTAINS(las.title, %s, '$')" if subject_filter else ""}
                 GROUP BY period, lam.la_subject_id, lam.la_level_id
                 ORDER BY period, lam.la_subject_id, lam.la_level_id;
             """
-            cursor.execute(sql)
+            params = ()
+            if subject_filter:
+                # Create JSON string for subject filter
+                subject_json = json.dumps({"en": subject_filter})
+                params = (subject_json,)
+            
+            cursor.execute(sql, params)
             results = cursor.fetchall()
         return jsonify(results), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
     finally:
-        connection.close()
+        if connection:
+            connection.close()
+
+@app.route('/api/histogram_level_subject_jigyasa_complete', methods=['POST'])
+def get_histogram_data_level_subject_jigyasa_complete():
+    try:
+        data = request.get_json() or {}
+        grouping = data.get('grouping', 'monthly').lower()
+        status_filter = data.get('status', 'all').lower()
+        subject_filter = data.get('subject')  # New subject filter
+        
+        allowed_groupings = ['daily', 'weekly', 'monthly', 'quarterly', 'yearly', 'lifetime']
+        grouping = grouping if grouping in allowed_groupings else 'monthly'
+
+        status_conditions = {
+            'submitted': "lamc.approved_at IS NULL AND lamc.rejected_at IS NULL",
+            'rejected': "lamc.approved_at IS NULL AND lamc.rejected_at IS NOT NULL",
+            'approved': "lamc.approved_at IS NOT NULL",
+            'all': "1=1"
+        }
+        status_condition = status_conditions.get(status_filter, "1=1")
+
+        period_expressions = {
+            'daily': "DATE(lamc.created_at)",
+            'weekly': "CONCAT(YEAR(lamc.created_at), '-W', WEEK(lamc.created_at, 1))",
+            'monthly': "DATE_FORMAT(lamc.created_at, '%Y-%m')",
+            'quarterly': "CONCAT(YEAR(lamc.created_at), '-Q', QUARTER(lamc.created_at))",
+            'yearly': "CAST(YEAR(lamc.created_at) AS CHAR)",
+            'lifetime': "'lifetime'"
+        }
+        period_expr = period_expressions[grouping]
+
+        connection = get_db_connection()
+        with connection.cursor() as cursor:
+            sql = f"""
+                SELECT 
+                    {period_expr} AS period,
+                    COUNT(*) AS count, 
+                    las.title AS subject_title, 
+                    lal.title AS level_title
+                FROM lifeapp.la_mission_completes lamc 
+                INNER JOIN lifeapp.la_missions lam ON lam.id = lamc.la_mission_id
+                INNER JOIN lifeapp.la_subjects las ON lam.la_subject_id = las.id
+                INNER JOIN lifeapp.la_levels lal ON lam.la_level_id = lal.id
+                WHERE lam.type = 5
+                AND {status_condition}
+                {"AND JSON_CONTAINS(las.title, %s, '$')" if subject_filter else ""}
+                GROUP BY period, lam.la_subject_id, lam.la_level_id
+                ORDER BY period, lam.la_subject_id, lam.la_level_id;
+            """
+            params = ()
+            if subject_filter:
+                subject_json = json.dumps({"en": subject_filter})
+                params = (subject_json,)
+            
+            cursor.execute(sql, params)
+            results = cursor.fetchall()
+        return jsonify(results), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    finally:
+        if connection:
+            connection.close()
+
+@app.route('/api/histogram_level_subject_pragya_complete', methods=['POST'])
+def get_histogram_data_level_subject_pragya_complete():
+    try:
+        data = request.get_json() or {}
+        grouping = data.get('grouping', 'monthly').lower()
+        status_filter = data.get('status', 'all').lower()
+        subject_filter = data.get('subject')  # New subject filter
+        
+        allowed_groupings = ['daily', 'weekly', 'monthly', 'quarterly', 'yearly', 'lifetime']
+        grouping = grouping if grouping in allowed_groupings else 'monthly'
+
+        status_conditions = {
+            'submitted': "lamc.approved_at IS NULL AND lamc.rejected_at IS NULL",
+            'rejected': "lamc.approved_at IS NULL AND lamc.rejected_at IS NOT NULL",
+            'approved': "lamc.approved_at IS NOT NULL",
+            'all': "1=1"
+        }
+        status_condition = status_conditions.get(status_filter, "1=1")
+
+        period_expressions = {
+            'daily': "DATE(lamc.created_at)",
+            'weekly': "CONCAT(YEAR(lamc.created_at), '-W', WEEK(lamc.created_at, 1))",
+            'monthly': "DATE_FORMAT(lamc.created_at, '%Y-%m')",
+            'quarterly': "CONCAT(YEAR(lamc.created_at), '-Q', QUARTER(lamc.created_at))",
+            'yearly': "CAST(YEAR(lamc.created_at) AS CHAR)",
+            'lifetime': "'lifetime'"
+        }
+        period_expr = period_expressions[grouping]
+
+        connection = get_db_connection()
+        with connection.cursor() as cursor:
+            sql = f"""
+                SELECT 
+                    {period_expr} AS period,
+                    COUNT(*) AS count, 
+                    las.title AS subject_title, 
+                    lal.title AS level_title
+                FROM lifeapp.la_mission_completes lamc 
+                INNER JOIN lifeapp.la_missions lam ON lam.id = lamc.la_mission_id
+                INNER JOIN lifeapp.la_subjects las ON lam.la_subject_id = las.id
+                INNER JOIN lifeapp.la_levels lal ON lam.la_level_id = lal.id
+                WHERE lam.type = 6
+                AND {status_condition}
+                {"AND JSON_CONTAINS(las.title, %s, '$')" if subject_filter else ""}
+                GROUP BY period, lam.la_subject_id, lam.la_level_id
+                ORDER BY period, lam.la_subject_id, lam.la_level_id;
+            """
+            params = ()
+            if subject_filter:
+                subject_json = json.dumps({"en": subject_filter})
+                params = (subject_json,)
+            
+            cursor.execute(sql, params)
+            results = cursor.fetchall()
+        return jsonify(results), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    finally:
+        if connection:
+            connection.close()
 
 @app.route('/api/histogram_topic_level_subject_quizgames', methods=['POST'])
 def get_histogram_topic_level_subject_quizgames():
@@ -526,24 +952,22 @@ def get_histogram_topic_level_subject_quizgames_2():
     try:
         data = request.get_json() or {}
         grouping = data.get('grouping', 'monthly').lower()
+        subject_filter = data.get('subject')  # Get subject filter from request
+        
         allowed_groupings = ['daily', 'weekly', 'monthly', 'quarterly', 'yearly', 'lifetime']
-        if grouping not in allowed_groupings:
-            grouping = 'monthly'
-        
-        # Build the period expression using completed_at
-        if grouping == 'daily':
-            period_expr = "DATE(laqg.completed_at)"
-        elif grouping == 'weekly':
-            period_expr = "CONCAT(YEAR(laqg.completed_at), '-W', WEEK(laqg.completed_at, 1))"
-        elif grouping == 'monthly':
-            period_expr = "DATE_FORMAT(laqg.completed_at, '%Y-%m')"
-        elif grouping == 'quarterly':
-            period_expr = "CONCAT(YEAR(laqg.completed_at), '-Q', QUARTER(laqg.completed_at))"
-        elif grouping == 'yearly':
-            period_expr = "YEAR(laqg.completed_at)"
-        else:
-            period_expr = "'lifetime'"
-        
+        grouping = grouping if grouping in allowed_groupings else 'monthly'
+
+        # Build period expression
+        period_exprs = {
+            'daily': "DATE(laqg.completed_at)",
+            'weekly': "CONCAT(YEAR(laqg.completed_at), '-W', WEEK(laqg.completed_at, 1))",
+            'monthly': "DATE_FORMAT(laqg.completed_at, '%%Y-%%m')",
+            'quarterly': "CONCAT(YEAR(laqg.completed_at), '-Q', QUARTER(laqg.completed_at))",
+            'yearly': "CAST(YEAR(laqg.completed_at) AS CHAR)",
+            'lifetime': "'lifetime'"
+        }
+        period_expr = period_exprs[grouping]
+
         connection = get_db_connection()
         with connection.cursor() as cursor:
             sql = f"""
@@ -556,17 +980,26 @@ def get_histogram_topic_level_subject_quizgames_2():
                 INNER JOIN lifeapp.la_subjects las ON laqg.la_subject_id = las.id
                 INNER JOIN lifeapp.la_topics lat ON lat.id = laqg.la_topic_id
                 INNER JOIN lifeapp.la_levels lal ON lat.la_level_id = lal.id
-                WHERE las.status = 1 AND laqg.completed_at IS NOT NULL
+                WHERE las.status = 1 
+                    AND laqg.completed_at IS NOT NULL
+                    {"AND JSON_CONTAINS(las.title, %s, '$')" if subject_filter else ""}
                 GROUP BY period, laqg.la_subject_id, lat.la_level_id
                 ORDER BY period, las.title, lal.title;
             """
-            cursor.execute(sql)
+            params = ()
+            if subject_filter:
+                # Create JSON string for subject filter
+                subject_json = json.dumps({"en": subject_filter})
+                params = (subject_json,)
+            
+            cursor.execute(sql, params)
             result = cursor.fetchall()
         return jsonify(result), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500
     finally:
-        connection.close()
+        if connection:
+            connection.close()
 
 
 
@@ -2477,6 +2910,38 @@ def get_teacher_demograph():
     finally:
         connection.close()
 
+@app.route('/api/get-all-states', methods=['GET'])
+def get_all_states():
+    """
+    Returns a JSON payload with all distinct normalized_state values
+    for users of type 3 (students).
+    """
+    try:
+        conn = get_db_connection()
+        with conn.cursor() as cursor:
+            cursor.execute("""
+                SELECT DISTINCT normalized_state
+                FROM (
+                  SELECT
+                    CASE
+                      WHEN state IN ('Gujrat','Gujarat') THEN 'Gujarat'
+                      WHEN state IN ('Tamilnadu','Tamil Nadu') THEN 'Tamil Nadu'
+                      ELSE state
+                    END AS normalized_state
+                  FROM lifeapp.users
+                ) AS subquery
+                WHERE normalized_state IS NOT NULL AND normalized_state !=2
+                ORDER BY normalized_state;
+            """)
+            rows = cursor.fetchall()
+        # Extract into a simple list of strings
+        states = [row['normalized_state'] for row in rows]
+        return jsonify({'states': states}), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        conn.close()
+
 @app.route('/api/demograph-students-2', methods=['POST'])
 def get_demograph_students_2():
     """
@@ -2497,7 +2962,7 @@ def get_demograph_students_2():
         elif grouping == 'weekly':
             period_expr = "CONCAT(YEAR(created_at), '-W', WEEK(created_at, 1))"
         elif grouping == 'monthly':
-            period_expr = "DATE_FORMAT(created_at, '%Y-%m')"
+            period_expr = "DATE_FORMAT(created_at, '%%Y-%%m')"
         elif grouping == 'quarterly':
             period_expr = "CONCAT(YEAR(created_at), '-Q', QUARTER(created_at))"
         elif grouping == 'yearly':
@@ -2505,6 +2970,21 @@ def get_demograph_students_2():
         else:  # lifetime grouping: all rows in one group
             period_expr = "'lifetime'"
         
+        # pull out the single state filter (if any)
+        state = data.get('state', '').strip()
+        where_clause = "`type` = 3 AND state != 2"
+        params = []
+        if state:
+            # only include rows where the normalized_state = the supplied state
+            where_clause += """
+              AND CASE
+                    WHEN state IN ('Gujrat','Gujarat') THEN 'Gujarat'
+                    WHEN state IN ('Tamilnadu','Tamil Nadu') THEN 'Tamil Nadu'
+                    ELSE state
+                  END = %s
+            """
+            params.append(state)
+
         connection = get_db_connection()
         with connection.cursor() as cursor:
             # First, group by state and created_at (so each row represents one state on a given day, week, etc.)
@@ -2524,13 +3004,13 @@ def get_demograph_students_2():
                         END AS normalized_state,
                         COUNT(*) AS student_count
                     FROM lifeapp.users
-                    WHERE `type` = 3 AND state != 2
-                    GROUP BY state, created_at
+                    WHERE {where_clause}
+                    GROUP BY normalized_state, created_at
                 ) AS subquery
                 GROUP BY period, normalized_state
                 ORDER BY period, total_count DESC;
             """
-            cursor.execute(sql)
+            cursor.execute(sql, params)
             result = cursor.fetchall()
             
             formatted_result = [
@@ -2563,7 +3043,7 @@ def get_teacher_demograph_2():
         elif grouping == 'weekly':
             period_expr = "CONCAT(YEAR(created_at), '-W', WEEK(created_at, 1))"
         elif grouping == 'monthly':
-            period_expr = "DATE_FORMAT(created_at, '%Y-%m')"
+            period_expr = "DATE_FORMAT(created_at, '%%Y-%%m')"
         elif grouping == 'quarterly':
             period_expr = "CONCAT(YEAR(created_at), '-Q', QUARTER(created_at))"
         elif grouping == 'yearly':
@@ -2571,6 +3051,20 @@ def get_teacher_demograph_2():
         else:  # lifetime
             period_expr = "'lifetime'"
         
+        # 2) initialize WHERE + params, then add state filter if provided
+        state = data.get('state', '').strip()
+        where_clause = "`type` = 5 AND state != 2"
+        params = []
+        if state:
+            where_clause += """
+              AND CASE
+                    WHEN state IN ('Gujrat','Gujarat') THEN 'Gujarat'
+                    WHEN state IN ('Tamilnadu','Tamil Nadu') THEN 'Tamil Nadu'
+                    ELSE state
+                  END = %s
+            """
+            params.append(state)
+
         connection = get_db_connection()
         with connection.cursor() as cursor:
             # First group by state and the individual created_at date, then in an outer query group by the computed period.
@@ -2589,13 +3083,13 @@ def get_teacher_demograph_2():
                         END AS normalized_state,
                         COUNT(*) AS teacher_count
                     FROM lifeapp.users 
-                    WHERE `type` = 5 AND state != 2
-                    GROUP BY state, created_at
+                    WHERE {where_clause}
+                    GROUP BY normalized_state, created_at
                 ) AS subquery
                 GROUP BY period, normalized_state
                 ORDER BY period, total_count DESC;
             """
-            cursor.execute(sql)
+            cursor.execute(sql, params)
             result = cursor.fetchall()
             
             formatted_result = [
@@ -2677,6 +3171,67 @@ def student_count_by_level_778():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
     
+@app.route('/api/student-count-by-level-over-time', methods=['POST'])
+def student_count_by_level_over_time():
+    req = request.get_json() or {}
+    grouping = req.get('grouping', 'monthly')
+    selected_levels = req.get('levels', ['level1', 'level2', 'level3', 'level4'])
+    
+    # Level definitions based on grade ranges
+    level_conditions = {
+        'level1': "grade >= 1",  # Available to all students from class 1
+        'level2': "grade >= 6",  # Available from class 6
+        'level3': "grade >= 7",  # Available from class 7
+        'level4': "grade >= 8"   # Available from class 8
+    }
+
+    # Validate and filter levels
+    valid_levels = [lvl for lvl in selected_levels if lvl in level_conditions]
+    if not valid_levels:
+        valid_levels = ['level1', 'level2', 'level3', 'level4']
+
+    # Build SQL CASE statements
+    level_columns = []
+    for level in valid_levels:
+        col_name = f"{level}_count"
+        condition = level_conditions[level]
+        level_columns.append(
+            f"SUM(CASE WHEN {condition} THEN 1 ELSE 0 END) AS {col_name}"
+        )
+
+    # Period expression mapping (same as before)
+    period_expressions = {
+        'daily': "DATE(created_at)",
+        'weekly': "CONCAT(YEAR(created_at), '-', LPAD(WEEK(created_at, 3), 2, '0'))",
+        'monthly': "DATE_FORMAT(created_at, '%Y-%m')",
+        'quarterly': "CONCAT(YEAR(created_at), '-Q', QUARTER(created_at))",
+        'yearly': "YEAR(created_at)",
+        'lifetime': "'Lifetime'"
+    }
+    period_expr = period_expressions.get(grouping, "DATE_FORMAT(created_at, '%Y-%m')")
+
+    sql = f"""
+    SELECT 
+        {period_expr} AS period,
+        {', '.join(level_columns)}
+    FROM lifeapp.users
+    WHERE type = 3  # Students only
+    GROUP BY period
+    ORDER BY period;
+    """
+
+    try:
+        connection = get_db_connection()
+        with connection.cursor() as cursor:
+            cursor.execute(sql)
+            result = cursor.fetchall()
+        return jsonify(result), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    finally:
+        if connection:
+            connection.close()
+
 
 #### permission denied in digital ocean,
 @app.route('/api/correct-tamil-nadu-users', methods=['POST'])
@@ -2718,6 +3273,48 @@ def get_students_by_grade():
     finally:
         connection.close()
 
+@app.route('/api/students-by-grade-over-time', methods=['POST'])
+def get_students_by_grade_over_time():
+    req = request.get_json()
+    grouping = req.get('grouping', 'monthly')
+    
+    # Choose the appropriate time expression for grouping
+    if grouping == 'daily':
+        period_expr = "DATE(created_at)"
+    elif grouping == 'weekly':
+        period_expr = "CONCAT(YEAR(created_at), '-', LPAD(WEEK(created_at, 3), 2, '0'))"
+    elif grouping == 'monthly':
+        period_expr = "DATE_FORMAT(created_at, '%Y-%m')"
+    elif grouping == 'quarterly':
+        period_expr = "CONCAT(YEAR(created_at), '-Q', QUARTER(created_at))"
+    elif grouping == 'yearly':
+        period_expr = "YEAR(created_at)"
+    elif grouping == 'lifetime':
+        period_expr = "'Lifetime'"
+    else:
+        period_expr = "DATE_FORMAT(created_at, '%Y-%m')"
+
+    sql = f"""
+        SELECT {period_expr} AS period, 
+               IFNULL(grade, 'Unspecified') AS grade,
+               COUNT(*) AS count
+        FROM lifeapp.users 
+        WHERE `type` = 3 
+        GROUP BY period, grade
+        ORDER BY period, grade;
+    """
+    try:
+        connection = get_db_connection()
+        with connection.cursor() as cursor:
+            cursor.execute(sql)
+            result = cursor.fetchall()  
+        return jsonify(result), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    finally:
+        connection.close()
+
+
 @app.route('/api/teachers-by-grade', methods = ['POST'])
 def get_teachers_by_grade() :
     sql= """
@@ -2737,6 +3334,47 @@ def get_teachers_by_grade() :
         return jsonify({"error": str(e)}), 500
     finally:
         connection.close()
+
+@app.route('/api/teachers-by-grade-over-time', methods=['POST'])
+def get_teachers_by_grade_over_time():
+    req = request.get_json()
+    grouping = req.get('grouping', 'monthly')
+    
+    # Set the time period expression based on the grouping option.
+    if grouping == 'daily':
+        period_expr = "DATE(created_at)"
+    elif grouping == 'weekly':
+        period_expr = "CONCAT(YEAR(created_at), '-', LPAD(WEEK(created_at, 3), 2, '0'))"
+    elif grouping == 'monthly':
+        period_expr = "DATE_FORMAT(created_at, '%Y-%m')"
+    elif grouping == 'quarterly':
+        period_expr = "CONCAT(YEAR(created_at), '-Q', QUARTER(created_at))"
+    elif grouping == 'yearly':
+        period_expr = "YEAR(created_at)"
+    elif grouping == 'lifetime':
+        period_expr = "'Lifetime'"
+    else:
+        period_expr = "DATE_FORMAT(created_at, '%Y-%m')"
+
+    sql = f"""
+        SELECT {period_expr} AS period,
+               la_grade_id AS grade,
+               COUNT(DISTINCT user_id) AS count
+        FROM lifeapp.la_teacher_grades
+        GROUP BY period, grade
+        ORDER BY period, grade;
+    """
+    try:
+        connection = get_db_connection()
+        with connection.cursor() as cursor:
+            cursor.execute(sql)
+            result = cursor.fetchall()  
+        return jsonify(result), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    finally:
+        connection.close()
+
 
 @app.route('/api/school_count', methods = ['POST'])
 def get_school_count():
@@ -2825,6 +3463,203 @@ def get_total_missions_completed_assigned_by_teacher():
             cursor.execute(sql)
             result = cursor.fetchall()  
         return jsonify(result), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    finally:
+        connection.close()
+
+@app.route('/api/total_missions_completes', methods= ['POST'])
+def get_total_missions_completes() :
+    sql  = """
+        select count(*) as count from lifeapp.la_mission_completes lamc inner join lifeapp.la_missions lam on lam.id = lamc.la_mission_id where lam.type = 1;
+    """
+    try:
+        connection = get_db_connection()
+        with connection.cursor() as cursor:
+            cursor.execute(sql)
+            result = cursor.fetchall()  
+        return jsonify(result), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    finally:
+        connection.close()
+
+@app.route('/api/total_jigyasa_completes', methods= ['POST'])
+def get_total_jigyasa_completes() :
+    sql  = """
+        select count(*) as count from lifeapp.la_mission_completes lamc inner join lifeapp.la_missions lam on lam.id = lamc.la_mission_id where lam.type = 5;
+    """
+    try:
+        connection = get_db_connection()
+        with connection.cursor() as cursor:
+            cursor.execute(sql)
+            result = cursor.fetchall()  
+        return jsonify(result), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    finally:
+        connection.close()
+
+@app.route('/api/total_pragya_completes', methods= ['POST'])
+def get_total_pragya_completes() :
+    sql  = """
+        select count(*) as count from lifeapp.la_mission_completes lamc inner join lifeapp.la_missions lam on lam.id = lamc.la_mission_id where lam.type = 6;
+    """
+    try:
+        connection = get_db_connection()
+        with connection.cursor() as cursor:
+            cursor.execute(sql)
+            result = cursor.fetchall()  
+        return jsonify(result), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    finally:
+        connection.close()
+
+@app.route('/api/total_riddle_completes', methods= ['POST'])
+def get_total_riddle_completes() :
+    sql  = """
+        select count(*) as count from lifeapp.la_mission_completes lamc inner join lifeapp.la_missions lam on lam.id = lamc.la_mission_id where lam.type = 3;
+    """
+    try:
+        connection = get_db_connection()
+        with connection.cursor() as cursor:
+            cursor.execute(sql)
+            result = cursor.fetchall()  
+        return jsonify(result), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    finally:
+        connection.close()
+
+@app.route('/api/total_puzzle_completes', methods= ['POST'])
+def get_total_puzzle_completes() :
+    sql  = """
+        select count(*) as count from lifeapp.la_mission_completes lamc inner join lifeapp.la_missions lam on lam.id = lamc.la_mission_id where lam.type = 4;
+    """
+    try:
+        connection = get_db_connection()
+        with connection.cursor() as cursor:
+            cursor.execute(sql)
+            result = cursor.fetchall()  
+        return jsonify(result), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    finally:
+        connection.close()
+
+@app.route('/api/total_quiz_completes', methods= ['POST'])
+def get_total_quiz_completes() :
+    sql = """
+        select count(*) as count from lifeapp.la_quiz_game_results;
+    """
+    try:
+        connection = get_db_connection()
+        with connection.cursor() as cursor:
+            cursor.execute(sql)
+            result = cursor.fetchone()['count']
+        return jsonify({'count': result}), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        connection.close()
+    
+@app.route('/api/mission_participation_rate', methods=['POST'])
+def get_mission_participation_rate():
+    sql_total_students = """
+        SELECT COUNT(*) AS count FROM lifeapp.users WHERE `type` = 3;
+    """
+    sql_mission_complete = """
+        SELECT COUNT(DISTINCT lamc.user_id) AS count FROM lifeapp.la_mission_completes lamc inner join lifeapp.la_missions lam on lam.id = lamc.la_mission_id where lam.type = 1;
+    """
+    try:
+        connection = get_db_connection()
+        with connection.cursor() as cursor:
+            cursor.execute(sql_total_students)
+            total_students = cursor.fetchone()['count']
+
+            cursor.execute(sql_mission_complete)
+            mission_complete_user = cursor.fetchone()['count']
+
+            participation_rate = (mission_complete_user / total_students) * 100 if total_students > 0 else 0
+
+        return jsonify({"participation_rate": round(participation_rate, 2)}), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    finally:
+        connection.close()
+
+@app.route('/api/jigyasa_participation_rate', methods=['POST'])
+def get_jigyasa_participation_rate():
+    sql_total_students = """
+        SELECT COUNT(*) AS count FROM lifeapp.users WHERE `type` = 3;
+    """
+    sql_jigyasa_complete = """
+        SELECT COUNT(DISTINCT lamc.user_id) AS count FROM lifeapp.la_mission_completes lamc inner join lifeapp.la_missions lam on lam.id = lamc.la_mission_id where lam.type = 5;
+    """
+    try:
+        connection = get_db_connection()
+        with connection.cursor() as cursor:
+            cursor.execute(sql_total_students)
+            total_students = cursor.fetchone()['count']
+
+            cursor.execute(sql_jigyasa_complete)
+            jigyasa_complete_user = cursor.fetchone()['count']
+
+            participation_rate = (jigyasa_complete_user / total_students) * 100 if total_students > 0 else 0
+
+        return jsonify({"participation_rate": round(participation_rate, 2)}), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    finally:
+        connection.close()
+
+
+@app.route('/api/pragya_participation_rate', methods=['POST'])
+def get_pragya_participation_rate():
+    sql_total_students = """
+        SELECT COUNT(*) AS count FROM lifeapp.users WHERE `type` = 3;
+    """
+    sql_pragya_complete = """
+        SELECT COUNT(DISTINCT lamc.user_id) AS count FROM lifeapp.la_mission_completes lamc inner join lifeapp.la_missions lam on lam.id = lamc.la_mission_id where lam.type = 6;
+    """
+    try:
+        connection = get_db_connection()
+        with connection.cursor() as cursor:
+            cursor.execute(sql_total_students)
+            total_students = cursor.fetchone()['count']
+
+            cursor.execute(sql_pragya_complete)
+            pragya_complete_user = cursor.fetchone()['count']
+
+            participation_rate = (pragya_complete_user / total_students) * 100 if total_students > 0 else 0
+
+        return jsonify({"participation_rate": round(participation_rate, 2)}), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    finally:
+        connection.close()
+
+@app.route('/api/quiz_participation_rate', methods=['POST'])
+def get_quiz_participation_rate():
+    sql_total_students = """
+        SELECT COUNT(*) AS count FROM lifeapp.users WHERE `type` = 3;
+    """
+    sql_quiz_complete = """
+        select count(distinct user_id) as count from lifeapp.la_quiz_game_results;
+    """
+    try:
+        connection = get_db_connection()
+        with connection.cursor() as cursor:
+            cursor.execute(sql_total_students)
+            total_students = cursor.fetchone()['count']
+
+            cursor.execute(sql_quiz_complete)
+            quiz_complete_user = cursor.fetchone()['count']
+
+            participation_rate = (quiz_complete_user / total_students) * 100 if total_students > 0 else 0
+
+        return jsonify({"participation_rate": round(participation_rate, 2)}), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
     finally:
@@ -3478,62 +4313,80 @@ def get_count_school_rate_dashboard():
 
 @app.route('/api/demograph-schools', methods=['POST'])
 def get_schools_demograph():
-    data = request.get_json() or {}
-    grouping = data.get('grouping', 'monthly').lower()
-    allowed_groupings = ['daily', 'weekly', 'monthly', 'quarterly', 'yearly', 'lifetime']
-    if grouping not in allowed_groupings:
-        grouping = 'monthly'
-    
-    # Build the period expression based on the grouping value using created_at.
-    if grouping == 'daily':
-        period_expr = "DATE(created_at)"
-    elif grouping == 'weekly':
-        period_expr = "CONCAT(YEAR(created_at), '-W', WEEK(created_at, 1))"
-    elif grouping == 'monthly':
-        period_expr = "DATE_FORMAT(created_at, '%Y-%m')"
-    elif grouping == 'quarterly':
-        period_expr = "CONCAT(YEAR(created_at), '-Q', QUARTER(created_at))"
-    elif grouping == 'yearly':
-        period_expr = "YEAR(created_at)"
-    else:  # lifetime grouping: group all records together
-        period_expr = "'lifetime'"
-    
-    connection = get_db_connection()
     try:
+        data = request.get_json() or {}
+        grouping = data.get('grouping', 'monthly').lower()
+        state_filter = data.get('state', '').strip()
+        
+        # Validate and normalize grouping
+        allowed_groupings = ['daily', 'weekly', 'monthly', 'quarterly', 'yearly', 'lifetime']
+        grouping = grouping if grouping in allowed_groupings else 'monthly'
+
+        connection = get_db_connection()
         with connection.cursor() as cursor:
-            # First, group by state and created_at, then group that in an outer query.
+            # Build period expression
+            period_expr = {
+                'daily': "DATE(created_at)",
+                'weekly': "CONCAT(YEAR(created_at), '-W', LPAD(WEEK(created_at, 3), 2, '0'))",
+                'monthly': "DATE_FORMAT(created_at, '%%Y-%%m')",
+                'quarterly': "CONCAT(YEAR(created_at), '-Q', QUARTER(created_at))",
+                'yearly': "YEAR(created_at)",
+                'lifetime': "'lifetime'"
+            }[grouping]
+
+            # State filter condition
+            state_condition = ""
+            if state_filter and state_filter.lower() != 'all':
+                state_condition = "AND normalized_state = %(state_filter)s"
+
             sql = f"""
                 SELECT 
-                    {period_expr} AS period,
-                    normalized_state,
-                    SUM(school_count) AS total_count
+                    period,
+                    normalized_state as state,
+                    SUM(school_count) as count
                 FROM (
                     SELECT 
-                        created_at,
-                        CASE 
-                            WHEN state IN ('Gujrat', 'Gujarat') THEN 'Gujarat'
-                            WHEN state IN ('Tamilnadu', 'Tamil Nadu') THEN 'Tamil Nadu'
-                            ELSE state 
+                        {period_expr} AS period,
+                        CASE
+                            WHEN LOWER(state) IN ('gujrat', 'gujarat') THEN 'Gujarat'
+                            WHEN LOWER(state) IN ('tamilnadu', 'tamil nadu') THEN 'Tamil Nadu'
+                            WHEN LOWER(state) = 'nct of delhi' THEN 'Delhi'
+                            ELSE TRIM(LOWER(state))
                         END AS normalized_state,
                         COUNT(*) AS school_count
                     FROM lifeapp.schools
-                    WHERE state != 'null' AND state != '2'
-                    GROUP BY state, created_at
-                ) AS subquery
+                    WHERE state IS NOT NULL 
+                        AND state != 'null'
+                        AND state != ''
+                    GROUP BY period, state
+                ) AS normalized
+                WHERE 1=1 {state_condition}
                 GROUP BY period, normalized_state
-                ORDER BY period, total_count DESC;
+                ORDER BY period, count DESC
             """
-            cursor.execute(sql)
+
+            params = {'state_filter': state_filter.title()} if state_condition else {}
+            cursor.execute(sql, params)
             result = cursor.fetchall()
-            formatted_result = [
-                {"period": row['period'], "state": row['normalized_state'], "count": row['total_count']}
-                for row in result
-            ]
-        return jsonify(formatted_result), 200
+
+            # Convert datetime objects to strings and format state names
+            formatted_result = []
+            for row in result:
+                period = str(row['period'])  # Convert potential datetime to string
+                formatted_result.append({
+                    'period': period,
+                    'state': row['state'].title() if row['state'] else 'Unknown',
+                    'count': row['count']
+                })
+
+            return jsonify(formatted_result), 200
+
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        app.logger.error(f"Error fetching school demographics: {str(e)}")
+        return jsonify({"error": "Internal server error"}), 500
     finally:
-        connection.close()
+        if 'connection' in locals() and connection:
+            connection.close()
 
 ###################################################################################
 ###################################################################################

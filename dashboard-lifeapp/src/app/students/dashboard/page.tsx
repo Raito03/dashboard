@@ -802,6 +802,8 @@ export default function StudentDashboard() {
                 const options = {
                     chart: {
                         map: topology,
+                        height:500,
+                        width: 500
                     },
                     title: {
                         text: "Student Distribution Across India",
@@ -832,10 +834,20 @@ export default function StudentDashboard() {
                             },
                             dataLabels: {
                                 enabled: true,
-                                format: '{point.name}',
+                                format: '{point.name} {point.value}', // Name and value with line break
                                 style: {
-                                    fontSize: '8px'
-                                }
+                                  fontSize: '10px',
+                                  color: '#2d2d2d', // Dark gray for better readability
+                                  textOutline: '1px white', // White outline for contrast
+                                  fontWeight: 'bold',
+                                  textAlign: 'center',
+                                  whiteSpace: 'normal' // Allow text wrappin
+                                },
+                                backgroundColor: 'rgba(255,255,255,0.7)',
+                                padding: 4,
+                                borderRadius: 4,
+                                verticalAlign: 'middle',
+                                shape: 'rect',
                             },
                         },
                     ],
