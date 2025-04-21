@@ -4100,6 +4100,7 @@ export default function UserAnalyticsDashboard() {
   const chartRef14 = useRef<ReactECharts | null>(null);
   const chartRef15 = useRef<ReactECharts | null>(null);
   const chartRef16 = useRef<ReactECharts | null>(null);
+  const chartRef17 = useRef<ReactECharts | null>(null);
 
   const handleDownloadChart = (
       chartRef: React.RefObject<ReactECharts | null>,
@@ -4119,6 +4120,74 @@ export default function UserAnalyticsDashboard() {
       }
   };
   
+  const PBLgroupings = ['daily', 'weekly', 'monthly', 'quarterly', 'yearly', 'lifetime'];
+  const statusOptionsPBL = ['all', 'submitted', 'approved', 'rejected'];
+
+  interface PBLSubmissionData {
+    period: string;
+    count: number;
+  }
+  const [ groupingPBL, setGroupingPBL ] = useState<string>('monthly');
+  const [ statusPBL, setStatusPBL ] = useState<string>('all');
+  const [ dataPBL, setDataPBL ] = useState<PBLSubmissionData[]>([]);
+  const [ loadingPBL, setLoadingPBL ] = useState<boolean>(true);
+
+  useEffect(() => {
+    setLoadingPBL(true);
+    fetch(`${api_startpoint}/api/PBLsubmissions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ grouping: groupingPBL, status: statusPBL })
+    })
+      .then(res => res.json())
+      .then(json => {
+        setDataPBL(json.data || []);
+        setLoadingPBL(false);
+      })
+      .catch(err => {
+        console.error(err);
+        setLoadingPBL(false);
+      });
+  }, [groupingPBL, statusPBL]);
+
+  const chartOptionPBL = {
+    title: { text: 'PBL Submissions Over Time', left: 'center' },
+    tooltip: { trigger: 'axis' },
+    xAxis: {
+      type: 'category',
+      data: dataPBL.map(p => formatPeriod(p.period, groupingPBL))
+    },
+    yAxis: {
+      type: 'value'
+    },
+    dataZoom: [
+      { type: 'inside', start: 0, end: 100 },
+      { type: 'slider', start: 0, end: 100 }
+    ],
+    series: [
+      {
+        name: 'Count',
+        type: 'bar',
+        data: dataPBL.map(d => d.count),
+        label: {
+          show: true,
+          position: 'top'
+        }
+      }
+    ]
+  }
+
+  const [totalCountPBL, setTotalCountPBL] = useState<number>(0);
+  // Fetch total count
+  useEffect(() => {
+    fetch(`${api_startpoint}/api/PBLsubmissions/total`)
+      .then(res => res.json())
+      .then(json => {
+        setTotalCountPBL(json.total ?? 0);
+      })
+      .catch(err => console.error(err));
+  }, []);
+
   return (
     <div className={`page bg-light ${inter.className} font-sans`}>
       {/* Fixed Sidebar */}
@@ -4189,6 +4258,7 @@ export default function UserAnalyticsDashboard() {
                 { title: 'Total Quiz Completes', value: tqcTotal, icon: <IconPercentage />, color: 'bg-sky-900',},
                 { title: 'Total Riddle Completes', value: trcTotal, icon: <IconPercentage />, color: 'bg-sky-900',},
                 { title: 'Total Puzzle Completes', value: tpzcTotal, icon: <IconPercentage />, color: 'bg-sky-900',},
+                { title: 'Total PBL Mission Completes', value: totalCountPBL, icon: <IconPercentage />, color: 'bg-sky-900',},
                 { title: 'Mission Participation Rate', value: missionsParticipationRate, icon: <IconPercentage />, color: 'bg-sky-900', suffix: '%'},
                 { title: 'Quiz Participation Rate', value: quizParticipationRate, icon: <IconPercentage />, color: 'bg-sky-900', suffix: '%'},
                 { title: 'Jigyasa Participation Rate', value: jigyasaParticipationRate, icon: <IconPercentage />, color: 'bg-sky-900', suffix: '%'},
@@ -4859,6 +4929,55 @@ export default function UserAnalyticsDashboard() {
                             <div className="spinner-border text-purple" role="status" style={{ width: '8rem', height: '8rem' }}></div>
                           </div>
                         : <ReactECharts ref={chartRef15} option={couponRedeemsSeriesOptions} style={{ height: 400 }} />}
+                      </div>
+                  </div>
+                </div>
+
+                {/* PBL submissions Over Time */}
+                <div className="col-12 col-xl-6">
+                  <div className="card shadow-sm border-0 h-100">
+                      <div className="card-header bg-transparent py-3">
+                          <h3 className="card-title mb-0 fw-semibold">PBL Submissions Over Time</h3>
+                          {/* Download button */}
+                          <button
+                            onClick={() => handleDownloadChart(chartRef17,'PBL_submissions_graph')}
+                            className="ml-2 inline-flex items-center gap-1 px-3 py-1.5 bg-sky-600 text-white text-xs font-medium rounded-md hover:bg-sky-700 transition-colors duration-200"
+                          >
+                            <svg
+                              xmlns="http://www.w3.org/2000/svg"
+                              fill="none"
+                              viewBox="0 0 24 24"
+                              strokeWidth={1.5}
+                              stroke="currentColor"
+                              className="w-4 h-4"
+                            >
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M7.5 12l4.5 4.5m0 0l4.5-4.5m-4.5 4.5V3"
+                              />
+                            </svg>
+                            Download
+                          </button>
+                      </div>
+                      <div style={{ marginBottom: '20px' }}> 
+                        <label className='ml-2'>
+                          Grouping:
+                          <select value={groupingPBL} onChange={e => setGroupingPBL(e.target.value)}>
+                            {PBLgroupings.map(g => <option key={g} value={g}>{g}</option>)}
+                          </select>
+                        </label>
+                        <label className="ml-2">
+                          Status:
+                          <select value={statusPBL} onChange={e => setStatusPBL(e.target.value)}>
+                            {statusOptionsPBL.map(s => <option key={s} value={s}>{s}</option>)}
+                          </select>
+                        </label>
+                        {loadingPBL
+                        ? <div className="text-center">
+                            <div className="spinner-border text-purple" role="status" style={{ width: '8rem', height: '8rem' }}></div>
+                          </div>
+                        : <ReactECharts ref={chartRef17} option={chartOptionPBL} style={{ height: 400 }} />}
                       </div>
                   </div>
                 </div>

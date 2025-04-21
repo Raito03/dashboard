@@ -20,7 +20,7 @@ import {
   XCircle,
 } from "lucide-react";
 import error from 'next/error';
-const groupings = ['daily', 'weekly', 'monthly', 'quarterly', 'yearly', 'lifetime'];
+
 interface SearchableDropdownProps {
     options: string[];
     placeholder: string;
@@ -66,26 +66,8 @@ interface MissionStatusData {
     "Mission Approved"?: number;
     [key: string]: string | number | undefined; // Allow dynamic keys
 }
-
-interface MissionRow {
-    period: string | null;
-    count: number;
-    subject_title: string;
-    level_title: string;
-}
   
-interface TransformedPeriod {
-    period: string;
-    // For each level, the total count
-    [level: string]: any;
-    // Optional property to hold the breakdown per level.
-    __breakdown?: {
-        [level: string]: {
-        [subject: string]: number;
-        };
-    };
-}
-
+  
 function SearchableDropdown({
     options,
     placeholder,
@@ -820,8 +802,8 @@ export default function StudentDashboard() {
                 const options = {
                     chart: {
                         map: topology,
-                        height:700,
-                        width: 700
+                        height:500,
+                        width: 500
                     },
                     title: {
                         text: "Student Distribution Across India",
@@ -978,79 +960,6 @@ export default function StudentDashboard() {
             }
             }
             fetchTotalPointsRedeemed()
-    }, [])
-
-  interface Sessions {
-    id: number;
-    name: string;
-    status: number;
-    zoom_link: string;
-    zoom_password: string;
-    heading: string;
-    description?: string; // Add this line
-    date_time: string;
-  }
-  
-    // Fetch sessions from the API endpoint.
-  const [sessions, setSessions] = useState<Sessions[]>([]);
-  const fetchSessions = () => {
-      setLoading(true);
-      fetch(`${api_startpoint}/api/sessions`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      })
-        .then((res) => res.json())
-        .then((data) => {
-          setSessions(data);
-          // console.log(sessions)
-          setLoading(false);
-        })
-        .catch((err) => {
-          console.error('Error fetching sessions:', err);
-          setLoading(false);
-        });
-  };
-
-  useEffect(() => {
-      fetchSessions();
-  }, []);
-
-    const [sessionParticipantTotal, setSessionParticipantTotal] = useState<number>(0)
-      useEffect(() => {
-          async function fetchSessionParticipantTotal() {
-              try {
-                  const res = await fetch(`${api_startpoint}/api/session_participants_total`, {
-                      method: 'POST'
-                  })
-                  const data = await res.json()
-                  if (data && data.length > 0) {
-                    setSessionParticipantTotal(data[0].count)
-                  }
-              } catch (error) {
-                  console.error('Error fetching user count:', error)
-              }
-              }
-              fetchSessionParticipantTotal()
-    }, [])
-  
-    const [mentorsParticipatedSessionsTotal, setMentorsParticipatedSessionsTotal] = useState<number>(0)
-      useEffect(() => {
-          async function fetchMentorsParticipatedSessionsTotal() {
-              try {
-                  const res = await fetch(`${api_startpoint}/api/mentor_participated_in_sessions_total`, {
-                      method: 'POST'
-                  })
-                  const data = await res.json()
-                  if (data && data.length > 0) {
-                    setMentorsParticipatedSessionsTotal(data[0].count)
-                  }
-              } catch (error) {
-                  console.error('Error fetching user count:', error)
-              }
-              }
-              fetchMentorsParticipatedSessionsTotal()
     }, [])
 
     const [tmcAssignedByTeacher, setTmcAssignedByTeacher] = useState<number>(0)
@@ -1260,1325 +1169,88 @@ export default function StudentDashboard() {
         currentQuizPage * rowsPerPageQuiz,
         (currentQuizPage + 1) * rowsPerPageQuiz
     );
+
+    // Modal state and filter states
   const [modalOpenLevel, setModalOpenLevel] = useState(false)
-  const [MissionCoinModal, setMissionCoinModal] = useState(false)
-  const [JigyasaCoinModal, setJigyasaCoinModal] = useState(false)
-  const [PragyaCoinModal, setPragyaCoinModal] = useState(false)
-  const [CouponRedeemsModal, setCouponRedeemsModal] = useState(false)
-  // const [selectedLevel, setSelectedLevel] = useState<string>('all')
+  const [selectedLevel, setSelectedLevel] = useState<string>('all')
   const [selectedSubject, setSelectedSubject] = useState<string>('science')
-  const [EchartDataLevel, setEchartDataLevel] = useState<LevelCountEntry[]>([]);
-  const [groupingLevel, setGroupingLevel] = useState('monthly');
-  const [loadingLevel, setLoadingLevel] = useState(true);
-  const [errorLevel, setErrorLevel] = useState<string | null>(null);
-  // 1) Define the exact keys:
-  type Level = 'level1'|'level2'|'level3'|'level4';
-  type FilterLevel = Level|'all';
-
-  // 2) Keep a single selectedLevel in state
-  const [selectedLevel, setSelectedLevel] = useState<FilterLevel>('all');
-
-  // 3) Derive the array you’ll actually send & chart from it
-  const allLevels: Level[] = ['level1','level2','level3','level4'];
-  const levelsToFetch: Level[] =
-    selectedLevel === 'all' ? allLevels : [selectedLevel];
-
-  useEffect(() => {
-  setLoadingLevel(true);
-  fetch(`${api_startpoint}/api/student-count-by-level-over-time`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      grouping: groupingLevel,
-      levels: levelsToFetch
-    })
-  })
-    .then(r => r.json())
-    .then(data => {
-      // spread-fix from before
-      const transformed = data.map((item: any) => ({
-        ...item,
-        period: item.period || 'Unknown'
-      }));
-      setEchartDataLevel(transformed);
-    })
-    .catch(console.error)
-    .finally(() => setLoadingLevel(false));
-}, [groupingLevel, selectedLevel]);
-
-  // Fetch new data whenever the grouping changes.
-  // useEffect(() => {
-  //   fetchDataLevelOverTime(groupingLevel);
-  // }, [groupingLevel]);
-
-  // Prepare the legend – here fixed order for levels.
   
+  // Data, loading, and error states for API data
+  const [dataLevel, setDataLevel] = useState<any>({})
+  const [loadingLevel, setLoadingLevel] = useState(false)
+  const [errorLevel, setErrorLevel] = useState<string | null>(null)
 
-  // 2) Tell TS that your color map only ever has those keys:
-  const levelColors: Record<Level, string> = {
-    level1: '#1E3A8A',
-    level2: '#3B82F6',
-    level3: '#60A5FA',
-    level4: '#93C5FD',
-  }
-  interface LevelCountEntry {
-    period: string | null;
-    level1_count: number;
-    level2_count: number;
-    level3_count: number;
-    level4_count: number;
-  }
-  
-  const seriesData = levelsToFetch.map(level => ({
-    name:
-      level === 'level1' ? 'Level 1: Grade 1–5' :
-      level === 'level2' ? 'Level 2: Grade 6+' :
-      level === 'level3' ? 'Level 3: Grade 7+' :
-                           'Level 4: Grade 8+',
-    type: 'bar' as const,
-    stack: 'total' as const,
-    data: EchartDataLevel.map(item => item[`${level}_count`] || 0),
-    itemStyle: { color: levelColors[level] }
-  }));
-
-  // 2) Generate the legend labels from your series names:
-  const legendData = seriesData.map(s => s.name);
-
-  // 1) After you’ve built `seriesData`, compute the total for each period:
-  const totalCountsLevel = EchartDataLevel.map(item =>
-    [item.level1_count, item.level2_count, item.level3_count, item.level4_count]
-      .map(v => Number(v))
-      .reduce((sum, val) => sum + val, 0)
-  );
-  
-
-  const totalSeriesCountLevel = {
-    name: 'Total',
-    type: 'bar',
-    // ← NO `stack` here, so it draws from 0 up to the total
-    data: totalCountsLevel,
-    barGap: '-100%',            // overlap exactly on top of the stacks
-    itemStyle: { color: 'transparent' },
-    label: {
-      show: true,
-      position: 'top',       // outside left of the full bar
-      distance: 5,            // padding from the edge
-      formatter: '{c}',       // show the numeric total
-      verticalAlign: 'middle',
-      offset: [0, 0], 
-      fontWeight: 'bold',
-      color: '#333'
-    },
-    tooltip: { show: false },
-    emphasis: { disabled: true },
-    z: -1                        // render behind your colored stacks
-  };
-
-  // ECharts option configuration.
-  const EchartLevelOption = {
-    title: {
-      text: 'Student Count by Level Over Time',
-      left: 'center'
-    },
-    tooltip: {
-      trigger: 'axis',
-      axisPointer: { type: 'shadow' }
-    },
-    legend: {
-      orient: 'horizontal',   // lay items out in a row
-      top: 'bottom',
-      bottom: 10,
-      data: legendData
-    },
-    grid: {
-      left: '3%',
-      right: '4%',
-      bottom: '15%',
-      containLabel: true
-    },
-    xAxis: {
-      type: 'category',
-      data: EchartDataLevel.map(item => item.period),
-      boundaryGap: groupingLevel === 'lifetime' ? true : false,
-      axisLabel: { rotate: groupingLevel === 'daily' ? 45 : 0 }
-    },
-    yAxis: {
-      type: 'value'
-    },
-    dataZoom: [
-      { type: 'inside', start: 0, end: 100 },
-      { type: 'slider', start: 0, end: 100 }
-    ],
-    series: [...seriesData, totalSeriesCountLevel]
-  };
-  const formatPeriod = (period: string, grouping: string) => {
-    if (grouping === 'daily') {
-      try {
-        const date = new Date(period);
-        return date.toLocaleDateString('en-GB'); // DD/MM/YYYY
-        // or for DD-MM-YYYY:
-        // return `${date.getDate()}-${date.getMonth() + 1}-${date.getFullYear()}`;
-      } catch {
-        return period;
-      }
-    }
-    return period;
-  };
-    const [pointsMissionGrouping, setPointsMissionGrouping] = useState<'daily'|'weekly'|'monthly'|'quarterly'|'yearly'|'lifetime'>('monthly');
-    const [pointsMissionData, setPointsMissionData] = useState<{ period: string; points: number }[]>([]);
-    const [pointsMissionLoading, setPointsMissionLoading] = useState<boolean>(true);
-  
-    // 2. Fetch mission‐points over time whenever grouping changes
-    useEffect(() => {
-      const fetchPoints = async () => {
-        setPointsMissionLoading(true);
-        try {
-          const res = await fetch(`${api_startpoint}/api/mission-points-over-time`, {
+  // Function to fetch API data based on the selected level filter
+  const fetchData = async (level: string) => {
+    setLoadingLevel(true)
+    setErrorLevel(null)
+    try {
+        const res = await fetch(`${api_startpoint}/api/student_count_by_level_778`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ grouping: pointsMissionGrouping })
+            headers: {
+              'Content-Type': 'application/json'  // This header is required
+            },
+            body: JSON.stringify({ level: level })
           });
-          const json = await res.json();
-          // assume json.data is [{ period, points }, …]
-          setPointsMissionData(json.data);
-        } catch (err) {
-          console.error('Error loading points data', err);
-        } finally {
-          setPointsMissionLoading(false);
-        }
-      };
-      fetchPoints();
-    }, [pointsMissionGrouping]);
-  
-    const pointsMissionCoinSeries = {
-      name: 'Points',
-      type: 'bar' as const,
-      data: pointsMissionData.map(d => d.points),
-      barMaxWidth: '50%',
-      itemStyle: { color: '#5470C6' }
-    };
-  
-    const totalMissionCoinSeries = {
-      name: 'Total',
-      type: 'bar' as const,
-      // no stack, so it draws from 0→value just like a normal bar
-      data: pointsMissionData.map(d => d.points),
-      barGap: '-100%',               // sit exactly under the colored bar
-      itemStyle: { color: 'transparent' },
-      label: {
-        show: true,
-        position: 'top',       // outside left of the full bar
-        distance: 5,            // padding from the edge
-        formatter: '{c}',       // show the numeric total
-        // verticalAlign: 'middle',
-        // offset: [-25, 0], 
-        fontWeight: 'bold',
-        color: '#333'
-      },
-      tooltip: { show: false },
-      emphasis: { disabled: true },
-      z: -1                          // draw behind your real bars
-    };
-    // 3. Build your ECharts option
-    const pointsMissionChartOption = {
-      title: { text: 'Mission Points Over Time', left: 'center' },
-      tooltip: {
-        trigger: 'axis',
-        axisPointer: { type: 'shadow' }
-      },
-      xAxis: {
-        type: 'category',
-        data: pointsMissionData.map(d => formatPeriod(d.period, pointsMissionGrouping)),
-        boundaryGap: true,
-        axisLabel: {
-          rotate: pointsMissionGrouping === 'daily' ? 45 : 0
-        }
-      },
-      yAxis: {
-        type: 'value',
-        name: 'Points'
-      },
-      dataZoom: [
-        { type: 'inside', start: 0, end: 100 },
-        { type: 'slider', start: 0, end: 100 }
-      ],
-      grid: {
-        left: '3%',
-        right: '4%',
-        bottom: '10%',
-        containLabel: true
-      },
-      series: [
-        pointsMissionCoinSeries,
-        totalMissionCoinSeries
-      ]
-    };
+      if (!res.ok) {
+        throw new Error("Failed to fetch data.")
+      }
+      const result = await res.json()
+      setDataLevel(result)
+    } catch (err: unknown) {
+      if (err instanceof Error) {
+        setErrorLevel(err.message || "Error fetching data.")
+      } else {
+        setErrorLevel("Error fetching data.")
+      }
+    } finally {
+      setLoadingLevel(false)
+    }
+  }
   
 
-    const [pointsJigyasaGrouping, setPointsJigyasaGrouping] = useState<'daily'|'weekly'|'monthly'|'quarterly'|'yearly'|'lifetime'>('monthly');
-      const [pointsJigyasaData, setPointsJigyasaData] = useState<{ period: string; points: number }[]>([]);
-      const [pointsJigyasaLoading, setPointsJigyasaLoading] = useState<boolean>(true);
-    
-      // 2. Fetch mission‐points over time whenever grouping changes
-      useEffect(() => {
-        const fetchPoints = async () => {
-          setPointsJigyasaLoading(true);
-          try {
-            const res = await fetch(`${api_startpoint}/api/jigyasa-points-over-time`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ grouping: pointsJigyasaGrouping })
-            });
-            const json = await res.json();
-            // assume json.data is [{ period, points }, …]
-            setPointsJigyasaData(json.data);
-          } catch (err) {
-            console.error('Error loading points data', err);
-          } finally {
-            setPointsJigyasaLoading(false);
-          }
-        };
-        fetchPoints();
-      }, [pointsJigyasaGrouping]);
-    
-      const pointsJigyasaCoinSeries = {
-        name: 'Points',
-        type: 'bar' as const,
-        data: pointsJigyasaData.map(d => d.points),
-        barMaxWidth: '50%',
-        itemStyle: { color: '#5470C6' }
-      };
-    
-      const totalJigyasaCoinSeries = {
-        name: 'Total',
-        type: 'bar' as const,
-        // no stack, so it draws from 0→value just like a normal bar
-        data: pointsJigyasaData.map(d => d.points),
-        barGap: '-100%',               // sit exactly under the colored bar
-        itemStyle: { color: 'transparent' },
-        label: {
-          show: true,
-          position: 'top',       // outside left of the full bar
-          distance: 5,            // padding from the edge
-          formatter: '{c}',       // show the numeric total
-          // verticalAlign: 'middle',
-          // offset: [-25, 0], 
-          fontWeight: 'bold',
-          color: '#333'
-        },
-        tooltip: { show: false },
-        emphasis: { disabled: true },
-        z: -1                          // draw behind your real bars
-      };
-      // 3. Build your ECharts option
-      const pointsJigyasaChartOption = {
-        title: { text: 'Jigyasa Points Over Time', left: 'center' },
-        tooltip: {
-          trigger: 'axis',
-          axisPointer: { type: 'shadow' }
-        },
-        xAxis: {
-          type: 'category',
-          data: pointsJigyasaData.map(d => formatPeriod(d.period, pointsJigyasaGrouping)),
-          boundaryGap: true,
-          axisLabel: {
-            rotate: pointsJigyasaGrouping === 'daily' ? 45 : 0
-          }
-        },
-        yAxis: {
-          type: 'value',
-          name: 'Points'
-        },
-        dataZoom: [
-          { type: 'inside', start: 0, end: 100 },
-          { type: 'slider', start: 0, end: 100 }
-        ],
-        grid: {
-          left: '3%',
-          right: '4%',
-          bottom: '10%',
-          containLabel: true
-        },
-        series: [
-          pointsJigyasaCoinSeries,
-          totalJigyasaCoinSeries
-        ]
-      };
-     const [pointsPragyaGrouping, setPointsPragyaGrouping] = useState<'daily'|'weekly'|'monthly'|'quarterly'|'yearly'|'lifetime'>('monthly');
-      const [pointsPragyaData, setPointsPragyaData] = useState<{ period: string; points: number }[]>([]);
-      const [pointsPragyaLoading, setPointsPragyaLoading] = useState<boolean>(true);
-    
-      // 2. Fetch mission‐points over time whenever grouping changes
-      useEffect(() => {
-        const fetchPoints = async () => {
-          setPointsPragyaLoading(true);
-          try {
-            const res = await fetch(`${api_startpoint}/api/pragya-points-over-time`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ grouping: pointsPragyaGrouping })
-            });
-            const json = await res.json();
-            // assume json.data is [{ period, points }, …]
-            setPointsPragyaData(json.data);
-          } catch (err) {
-            console.error('Error loading points data', err);
-          } finally {
-            setPointsPragyaLoading(false);
-          }
-        };
-        fetchPoints();
-      }, [pointsPragyaGrouping]);
-    
-      const pointsPragyaCoinSeries = {
-        name: 'Points',
-        type: 'bar' as const,
-        data: pointsPragyaData.map(d => d.points),
-        barMaxWidth: '50%',
-        itemStyle: { color: '#5470C6' }
-      };
-    
-      const totalPragyaCoinSeries = {
-        name: 'Total',
-        type: 'bar' as const,
-        // no stack, so it draws from 0→value just like a normal bar
-        data: pointsPragyaData.map(d => d.points),
-        barGap: '-100%',               // sit exactly under the colored bar
-        itemStyle: { color: 'transparent' },
-        label: {
-          show: true,
-          position: 'top',       // outside left of the full bar
-          distance: 5,            // padding from the edge
-          formatter: '{c}',       // show the numeric total
-          // verticalAlign: 'middle',
-          // offset: [-25, 0], 
-          fontWeight: 'bold',
-          color: '#333'
-        },
-        tooltip: { show: false },
-        emphasis: { disabled: true },
-        z: -1                          // draw behind your real bars
-      };
-      // 3. Build your ECharts option
-      const pointsPragyaChartOption = {
-        title: { text: 'Pragya Points Over Time', left: 'center' },
-        tooltip: {
-          trigger: 'axis',
-          axisPointer: { type: 'shadow' }
-        },
-        xAxis: {
-          type: 'category',
-          data: pointsPragyaData.map(d => formatPeriod(d.period, pointsPragyaGrouping)),
-          boundaryGap: true,
-          axisLabel: {
-            rotate: pointsPragyaGrouping === 'daily' ? 45 : 0
-          }
-        },
-        yAxis: {
-          type: 'value',
-          name: 'Points'
-        },
-        dataZoom: [
-          { type: 'inside', start: 0, end: 100 },
-          { type: 'slider', start: 0, end: 100 }
-        ],
-        grid: {
-          left: '3%',
-          right: '4%',
-          bottom: '10%',
-          containLabel: true
-        },
-        series: [
-          pointsPragyaCoinSeries,
-          totalPragyaCoinSeries
-        ]
-      };
-      // ----------------------------- Coupon Redeems over Time ----------------------------------------
-      // 1. State/hooks for mission‐points chart
-      const [couponRedeemsGrouping, setCouponRedeemsGrouping] = useState<'daily'|'weekly'|'monthly'|'quarterly'|'yearly'|'lifetime'>('monthly');
-      const [couponRedeemsData, setCouponRedeemsData] = useState<{ period: string; coins: number }[]>([]);
-      const [couponRedeemsLoading, setCouponRedeemsLoading] = useState<boolean>(true);
-    
-      // Fetch data on grouping change
-      useEffect(() => {
-        setCouponRedeemsLoading(true);
-        fetch(`${api_startpoint}/api/coupon-redeems-over-time`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ grouping: couponRedeemsGrouping })
-        })
-          .then(res => res.json())
-          .then(json => setCouponRedeemsData(json.data))
-          .catch(console.error)
-          .finally(() => setCouponRedeemsLoading(false));
-      }, [couponRedeemsGrouping]);
-    
-       // Main bar series
-      const CouponRedeemsSeries = {
-        name: 'Coins',
-        type: 'bar' as const,
-        data: couponRedeemsData.map(d => d.coins),
-        barMaxWidth: '50%',
-        itemStyle: { color: '#FF8C42' }
-      }
-    
-      // Invisible total series for labels
-      const totalCouponRedeemsSeries = {
-        name: 'Total',
-        type: 'bar' as const,
-        data: couponRedeemsData.map(d => d.coins),
-        barGap: '-100%',
-        itemStyle: { color: 'transparent' },
-        label: {
-          show: true,
-          position: 'top',
-          formatter: '{c}',
-          fontWeight: 'bold',
-          color: '#333'
-        },
-        tooltip: { show: false },
-        emphasis: { disabled: true },
-        z: -1
-      };
-    
-      // Format daily labels
-      // const formatPeriod = (period: string) => {
-      //   if (couponRedeemsGrouping === 'daily') {
-      //     const date = new Date(period);
-      //     return date.toISOString().split('T')[0]; // YYYY-MM-DD
-      //   }
-      //   return period;
-      // };
-      const couponRedeemsSeriesOptions = {
-        title: { text: 'Coupon Redeems Over Time', left: 'center' },
-        tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
-        xAxis: {
-          type: 'category',
-          data: couponRedeemsData.map(d => formatPeriod(d.period, couponRedeemsGrouping)),
-          axisLabel: { rotate: couponRedeemsGrouping === 'daily' ? 45 : 0 }
-        },
-        yAxis: { type: 'value', name: 'Coins' },
-        dataZoom: [
-          { type: 'inside', start: 0, end: 100 },
-          { type: 'slider', start: 0, end: 100 }
-        ],
-        series: [CouponRedeemsSeries, totalCouponRedeemsSeries]
-      };
-    
-
-    const missionGroupings = ['daily', 'weekly', 'monthly', 'quarterly', 'yearly', 'lifetime'];
-    const jigyasaGroupings = ['daily', 'weekly', 'monthly', 'quarterly', 'yearly', 'lifetime'];
-    const pragyaGroupings = ['daily', 'weekly', 'monthly', 'quarterly', 'yearly', 'lifetime'];
-    const [selectedQuizSubject, setSelectedQuizSubject] = useState<string>('all');
-    const [quizSubjects, setQuizSubjects] = useState<Array<{ id: number; title: string }>>([]);
-
-    // Fetch subjects on component mount
-    useEffect(() => {
-        const fetchSubjects = async () => {
-        try {
-            const res = await fetch(`${api_startpoint}/api/subjects_list`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ status: 1 })
-            });
-            const data = await res.json();
-            const parsedSubjects = data.map((subject: any) => ({
-            id: subject.id,
-            title: JSON.parse(subject.title).en
-            }));
-            setQuizSubjects(parsedSubjects);
-        } catch (error) {
-            console.error('Error fetching subjects:', error);
-        }
-        };
-        fetchSubjects();
-    }, []);
-
-  // --------------------- missions completed over time ------------------------------------------
-  const [missionGrouping, setMissionGrouping] = useState<string>('daily');
-  const [missionData, setMissionData] = useState<any[]>([]);
-  const [missionLoading, setMissionLoading] = useState<boolean>(true);
-  const [missionStatus, setMissionStatus] = useState<string>('all');
-  const [selectedMissionSubject, setSelectedMissionSubject] = useState<string>('all');
-  const [missionCompleteModal, setMissionCompleteModal] = useState<boolean>(false);
-
-  const missionStatusOptions = [
-    { value: 'all', label: 'All Statuses' },
-    { value: 'submitted', label: 'Submitted' },
-    { value: 'rejected', label: 'Rejected' },
-    { value: 'approved', label: 'Approved' }
-  ];
-  // Fetch mission completed data whenever the grouping changes
-  useEffect(() => {
-    const fetchMissionData = async () => {
-      setMissionLoading(true);
-      try {
-        const response = await fetch(`${api_startpoint}/api/histogram_level_subject_challenges_complete`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ 
-            grouping: missionGrouping,
-            status: missionStatus,
-            subject: selectedMissionSubject === 'all' ? null : selectedMissionSubject
-          })
-        });
-        const data = await response.json();
-        // Log raw data for debugging
-        // console.log('Mission data:', data);
-        setMissionData(data);
-      } catch (error) {
-        console.error('Error fetching mission data:', error);
-      } finally {
-        setMissionLoading(false);
-      }
-    };
-
-    fetchMissionData();
-  }, [missionGrouping, missionStatus, selectedMissionSubject]);
-  // Robust parser for JSON text fields.
-  const getParsedField = (raw: any): string => {
-    if (typeof raw === 'object' && raw !== null) {
-      return raw.en || '';
-    }
-    if (typeof raw === 'string') {
-      // Check if the string looks like JSON (starts with {)
-      if (raw.trim().startsWith('{')) {
-        try {
-          const parsed = JSON.parse(raw);
-          return parsed.en || raw;
-        } catch {
-          return raw;
-        }
-      }
-      return raw;
-    }
-    return '';
-  };
-
-
-  const groupedByPeriod: Record<string, Record<string, number>> = {};
-  missionData.forEach(item => {
-    const period = item.period;
-    // Use robust parsing for level_title.
-    const level = getParsedField(item.level_title);
-    if (!groupedByPeriod[period]) {
-      groupedByPeriod[period] = {};
-    }
-    if (!groupedByPeriod[period][level]) {
-      groupedByPeriod[period][level] = 0;
-    }
-    groupedByPeriod[period][level] += Number(item.count);
-  });
-
-
-  // Sorted periods for x-axis
-  const periods = Object.keys(groupedByPeriod).sort();
-  // Unique levels across data
-  const uniqueLevels = Array.from(
-    new Set(missionData.map(item => getParsedField(item.level_title)))
-  );
-
-  // Build series data: for each unique level, for each period, use the count (or 0 if missing)
-  const series = uniqueLevels.map((level, idx) => ({
-    name: level,
-    type: 'bar',
-    stack: 'total',
-    data: periods.map(period => groupedByPeriod[period][level] || 0),
-    itemStyle: { color: ['#5470C6', '#91CC75', '#FAC858', '#EE6666', '#73C0DE', '#3BA272'][idx % 6] }
-  }));
-
-
-  // Configure the ECharts option for the mission completed chart.
-  // Configure the chart options.
-  const missionChartOption = {
-    title: {
-      text: 'Mission Completed Over Time',
-      left: 'center'
-    },
-    tooltip: {
-      trigger: 'axis'
-    },
-    legend: {
-      data: uniqueLevels,
-      top: 'bottom'
-    },
-    xAxis: {
-      type: 'category',
-      data: periods,
-      boundaryGap: true,
-      axisLabel: {
-        rotate: missionGrouping === 'daily' ? 45 : 0
-      }
-    },
-    yAxis: {
-      type: 'value'
-    },
-    dataZoom: [
-      { type: 'inside', start: 0, end: 100 },
-      { type: 'slider', start: 0, end: 100 }
-    ],
-    series: series
-  };
-
-  const transformData = (data: MissionRow[]): TransformedPeriod[] => {
-    const result: Record<string, TransformedPeriod> = {};
-  
-    data.forEach(row => {
-      // Use a fallback if period is null.
-      const period = row.period || 'Unknown';
-      if (!result[period]) {
-        result[period] = { period, __breakdown: {} };
-      }
-      // Use the level title directly as key (or format it if needed).
-      const level = getParsedField(row.level_title) || 'Unknown';
-      const subject = getParsedField(row.subject_title)
-      // Aggregate the total count per level
-      result[period][level] = (result[period][level] || 0) + row.count;
-      // Also store the subject breakdown.
-      if (!result[period].__breakdown![level]) {
-        result[period].__breakdown![level] = {};
-      }
-      result[period].__breakdown![level][subject] =
-        (result[period].__breakdown![level][subject] || 0) + row.count;
-    });
-  
-    return Object.values(result);
-  };
-
-  const missionDataTransformed = transformData(missionData)
-  const periodsMissionTransformed = missionDataTransformed.map(item => item.period);
-  const seriesMissionTransformed = uniqueLevels.map((level, idx) => ({
-    name: level,
-    type: 'bar',
-    stack: 'total',
-    data: missionDataTransformed.map(item => item[level] || 0),
-    // Customize item color as desired.
-    itemStyle: { color: ['#5470C6', '#91CC75', '#FAC858', '#EE6666', '#73C0DE', '#3BA272'][idx % 6] }
-  }));
-  
-  // 1) First compute the total for each period:
-  const totalCountsMissions = periodsMissionTransformed.map(period =>
-    // groupedByPeriod is your { [period]: { [level]: count }} from before
-    Object.values(groupedByPeriod[period]).reduce((sum, v) => sum + v, 0)
-  );
-
-  // 2) Build your stacked‑bar series as before, then append this “total” series:
-  const totalSeries = {
-    name: 'Total',            // you can omit this from your legend.data if you want
-    type: 'bar',
-    // stack: 'total',           // same stack so it sits on top
-    data: totalCountsMissions,
-    barGap: '-100%',          // overlap exactly on top
-    itemStyle: {              // make the bar itself invisible
-      color: 'transparent'
-    },
-    label: {
-      show: true,
-      position: 'top',       // outside left of the full bar
-      distance: 5,            // padding from the edge
-      formatter: '{c}',       // show the numeric total
-      verticalAlign: 'middle',
-      offset: [0, 0], 
-      fontWeight: 'bold',
-      color: '#333'
-    },
-    tooltip: {                // hide its tooltip, since it's just labels
-      show: false
-    },
-    emphasis: {               // make sure it never highlights
-      disabled: true
-    }
-  };
-
-  // ECharts option with custom tooltip:
-  const optionMissionTransformed = {
-    title: {
-      text: 'Mission Submitted Over Time',
-      left: 'center'
-    },
-    tooltip: {
-      trigger: 'axis',
-      formatter: function (params: any) {
-        // `params` is an array of the series data in the hovered axis.
-        // const period = params[0].axisValue; // the period (x-axis value)
-        // // Find the breakdown for this period in your transformed data.
-        // const periodData = missionDataTransformed.find((d: any) => d.period === period);
-        // let tooltipHtml = `<strong>${period}</strong><br/>`;
-        // params.forEach((p: any) => {
-        //   tooltipHtml += `${p.seriesName}: ${p.data}<br/>`;
-        //   // If the breakdown exists, add subject-level breakdown.
-        //   if (periodData && periodData.__breakdown && periodData.__breakdown[p.seriesName]) {
-        //     tooltipHtml += 'Subjects:<br/>';
-        //     Object.entries(periodData.__breakdown[p.seriesName]).forEach(([subject, count]) => {
-        //       tooltipHtml += `&nbsp;&nbsp;${subject}: ${count}<br/>`;
-        //     });
-        //   }
-        // });
-        // return tooltipHtml;
-        let tooltipHtml = `<strong>${params[0].axisValue}</strong><br/>`;
-        params.forEach((p: any) => {
-          tooltipHtml += `
-            <div style="display: flex; align-items: center; gap: 5px;">
-              <span style="display: inline-block;
-                          width: 10px;
-                          height: 10px;
-                          background-color: ${p.color};
-                          border-radius: 2px;">
-              </span>
-              ${p.seriesName}: ${p.data}
-            </div>
-          `;
-          
-          // Add subject breakdown if available
-          const periodData = missionDataTransformed.find((d: any) => d.period === p.axisValue);
-          if (periodData?.__breakdown?.[p.seriesName]) {
-            tooltipHtml += '<div style="margin-left: 15px; margin-top: 5px;">Subjects:';
-            Object.entries(periodData.__breakdown[p.seriesName]).forEach(([subject, count]) => {
-              tooltipHtml += `
-                <div style="display: flex; align-items: center; gap: 5px; margin-top: 3px;">
-                  <span style="display: inline-block;
-                              width: 8px;
-                              height: 8px;
-                              background-color: ${p.color};
-                              opacity: 0.7;
-                              border-radius: 1px;">
-                  </span>
-                  ${subject}: ${count}
-                </div>
-              `;
-            });
-            tooltipHtml += '</div>';
-          }
-        });
-        return tooltipHtml;
-      }
-    },
-    legend: {
-      data: uniqueLevels,
-      top: 'bottom'
-    },
-    grid: {
-      left: '3%',
-      right: '4%',
-      top: '15%',
-      bottom: '15%',
-      containLabel: true
-    },
-    xAxis: {
-      type: 'category',
-      data: periodsMissionTransformed.map(p => formatPeriod(p, missionGrouping)),
-      boundaryGap: true
-    },
-    yAxis: {
-      type: 'value'
-    },
-    dataZoom: [
-      { type: 'inside', start: 0, end: 100 },
-      { type: 'slider', start: 0, end: 100 }
-    ],
-    series: [
-      ...seriesMissionTransformed,  // your original level‑by‑level stacks
-      totalSeries                   // the invisible total bar on top
-    ],
-  };
-
-  // -------------------- Jigyasa completed over time ------------------------------
-  const [jigyasaGrouping, setJigyasaGrouping] = useState<string>('daily');
-  const [jigyasaData, setJigyasaData] = useState<any[]>([]);
-  const [jigyasaLoading, setJigyasaLoading] = useState<boolean>(true);
-  const [jigyasaStatus, setJigyasaStatus] = useState<string>('all');
-  // Add state for jigyasa subject filter
-  const [selectedJigyasaSubject, setSelectedJigyasaSubject] = useState<string>('all');
-  const [jigyasaCompleteModal, setJigyasaCompleteModal] = useState<boolean>(false);
-  // Fetch Jigyasa completed data whenever the grouping changes
-  useEffect(() => {
-    const fetchJigyasaData = async () => {
-      setJigyasaLoading(true);
-      try {
-        const response = await fetch(`${api_startpoint}/api/histogram_level_subject_jigyasa_complete`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ 
-            grouping: jigyasaGrouping,
-            status: jigyasaStatus,
-            subject: selectedJigyasaSubject === 'all' ? null : selectedJigyasaSubject
-          })
-        });
-        const data = await response.json();
-        // Log raw data for debugging
-        // console.log('jigyasa data:', data);
-        setJigyasaData(data);
-      } catch (error) {
-        console.error('Error fetching jigyasa data:', error);
-      } finally {
-        setJigyasaLoading(false);
-      }
-    };
-
-    fetchJigyasaData();
-  },  [jigyasaGrouping, jigyasaStatus, selectedJigyasaSubject]);
-
-  const groupedByPeriodJigyasa: Record<string, Record<string, number>> = {};
-  jigyasaData.forEach(item => {
-    const period = item.period;
-    // Use robust parsing for level_title.
-    const level = getParsedField(item.level_title);
-    if (!groupedByPeriodJigyasa[period]) {
-      groupedByPeriodJigyasa[period] = {};
-    }
-    if (!groupedByPeriodJigyasa[period][level]) {
-      groupedByPeriodJigyasa[period][level] = 0;
-    }
-    groupedByPeriodJigyasa[period][level] += Number(item.count);
-  });
-
-  const periodsJigyasa = Object.keys(groupedByPeriodJigyasa).sort();
-  // Unique levels across data
-  const uniqueLevelsJigyasa = Array.from(
-    new Set(jigyasaData.map(item => getParsedField(item.level_title)))
-  );
-  
-  const seriesJigyasa = uniqueLevelsJigyasa.map((level, idx) => ({
-    name: level,
-    type: 'bar',
-    stack: 'total',
-    data: periodsJigyasa.map(period => groupedByPeriodJigyasa[period][level] || 0),
-    itemStyle: { color: ['#5470C6', '#91CC75', '#FAC858', '#EE6666', '#73C0DE', '#3BA272'][idx % 6] }
-  }));
-
-  const jigyasaChartOption = {
-    title: {
-      text: 'Jigyasa Completed Over Time',
-      left: 'center'
-    },
-    tooltip: {
-      trigger: 'axis'
-    },
-    legend: {
-      data: uniqueLevelsJigyasa,
-      top: 'bottom'
-    },
-    xAxis: {
-      type: 'category',
-      data: periodsJigyasa,
-      boundaryGap: true,
-      axisLabel: {
-        rotate: jigyasaGrouping === 'daily' ? 45 : 0
-      }
-    },
-    yAxis: {
-      type: 'value'
-    },
-    dataZoom: [
-      { type: 'inside', start: 0, end: 100 },
-      { type: 'slider', start: 0, end: 100 }
-    ],
-    series: seriesJigyasa
-  };
-
-  const jigyasaDataTransformed = transformData(jigyasaData)
-  const periodsJigyasaTransformed = jigyasaDataTransformed.map(item => item.period);
-  const seriesJigyasaTransformed = uniqueLevelsJigyasa.map((level, idx) => ({
-    name: level,
-    type: 'bar',
-    stack: 'total',
-    data: jigyasaDataTransformed.map(item => item[level] || 0),
-    // Customize item color as desired.
-    itemStyle: { color: ['#5470C6', '#91CC75', '#FAC858', '#EE6666', '#73C0DE', '#3BA272'][idx % 6] }
-  }));
-
-  // 1) First compute the total for each period:
-  const totalCountsJigyasa = periodsJigyasaTransformed.map(period =>
-    // groupedByPeriod is your { [period]: { [level]: count }} from before
-    Object.values(groupedByPeriodJigyasa[period]).reduce((sum, v) => sum + v, 0)
-  );
-
-  // 2) Build your stacked‑bar series as before, then append this “total” series:
-  const totalSeriesJigyasa = {
-    name: 'Total',            // you can omit this from your legend.data if you want
-    type: 'bar',
-    // stack: 'total',           // same stack so it sits on top
-    data: totalCountsJigyasa,
-    barGap: '-100%',          // overlap exactly on top
-    itemStyle: {              // make the bar itself invisible
-      color: 'transparent'
-    },
-    label: {
-      show: true,
-      position: 'top',       // outside left of the full bar
-      distance: 5,            // padding from the edge
-      formatter: '{c}',       // show the numeric total
-      verticalAlign: 'middle',
-      offset: [0, 0], 
-      fontWeight: 'bold',
-      color: '#333'
-    },
-    tooltip: {                // hide its tooltip, since it's just labels
-      show: false
-    },
-    emphasis: {               // make sure it never highlights
-      disabled: true
-    }
-  };
-  // ECharts option with custom tooltip:
-  const optionJigyasaTransformed = {
-    title: {
-      text: 'Jigyasa Completed Over Time',
-      left: 'center'
-    },
-    tooltip: {
-      trigger: 'axis',
-      formatter: function (params: any) {
-        // // `params` is an array of the series data in the hovered axis.
-        // const period = params[0].axisValue; // the period (x-axis value)
-        // // Find the breakdown for this period in your transformed data.
-        // const periodData = jigyasaDataTransformed.find((d: any) => d.period === period);
-        // let tooltipHtml = `<strong>${period}</strong><br/>`;
-        // params.forEach((p: any) => {
-        //   tooltipHtml += `${p.seriesName}: ${p.data}<br/>`;
-        //   // If the breakdown exists, add subject-level breakdown.
-        //   if (periodData && periodData.__breakdown && periodData.__breakdown[p.seriesName]) {
-        //     tooltipHtml += 'Subjects:<br/>';
-        //     Object.entries(periodData.__breakdown[p.seriesName]).forEach(([subject, count]) => {
-        //       tooltipHtml += `&nbsp;&nbsp;${subject}: ${count}<br/>`;
-        //     });
-        //   }
-        // });
-        // return tooltipHtml;
-        let tooltipHtml = `<strong>${params[0].axisValue}</strong><br/>`;
-        params.forEach((p: any) => {
-          tooltipHtml += `
-            <div style="display: flex; align-items: center; gap: 5px;">
-              <span style="display: inline-block;
-                          width: 10px;
-                          height: 10px;
-                          background-color: ${p.color};
-                          border-radius: 2px;">
-              </span>
-              ${p.seriesName}: ${p.data}
-            </div>
-          `;
-          
-          // Add subject breakdown if available
-          const periodData = jigyasaDataTransformed.find((d: any) => d.period === p.axisValue);
-          if (periodData?.__breakdown?.[p.seriesName]) {
-            tooltipHtml += '<div style="margin-left: 15px; margin-top: 5px;">Subjects:';
-            Object.entries(periodData.__breakdown[p.seriesName]).forEach(([subject, count]) => {
-              tooltipHtml += `
-                <div style="display: flex; align-items: center; gap: 5px; margin-top: 3px;">
-                  <span style="display: inline-block;
-                              width: 8px;
-                              height: 8px;
-                              background-color: ${p.color};
-                              opacity: 0.7;
-                              border-radius: 1px;">
-                  </span>
-                  ${subject}: ${count}
-                </div>
-              `;
-            });
-            tooltipHtml += '</div>';
-          }
-        });
-        return tooltipHtml;
-      }
-    },
-    legend: {
-      data: uniqueLevelsJigyasa,
-      top: 'bottom'
-    },
-    grid: {
-      left: '3%',
-      right: '4%',
-      bottom: '10%',
-      containLabel: true
-    },
-    xAxis: {
-      type: 'category',
-      data: periodsJigyasaTransformed.map(p => formatPeriod(p, jigyasaGrouping)),
-      boundaryGap: true
-    },
-    yAxis: {
-      type: 'value'
-    },
-    dataZoom: [
-      { type: 'inside', start: 0, end: 100 },
-      { type: 'slider', start: 0, end: 100 }
-    ],
-    series: [ ...seriesJigyasaTransformed, totalSeriesJigyasa]
-  };
-  // -------------------------------------------------------------------------------
-
-  // -------------------- Pragya completed over time ------------------------------
-
-  const [pragyaGrouping, setPragyaGrouping] = useState<string>('daily');
-  const [pragyaData, setPragyaData] = useState<any[]>([]);
-  const [pragyaLoading, setPragyaLoading] = useState<boolean>(true);
-  const [pragyaStatus, setPragyaStatus] = useState<string>('all');
-  // Add state for pragya subject filter
-  const [selectedPragyaSubject, setSelectedPragyaSubject] = useState<string>('all');
-  const [pragyaCompleteModal, setPragyaCompleteModal] = useState<boolean>(false);
-  // Fetch pragya completed data whenever the grouping changes
-  useEffect(() => {
-    const fetchPragyaData = async () => {
-      setPragyaLoading(true);
-      try {
-        const response = await fetch(`${api_startpoint}/api/histogram_level_subject_pragya_complete`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ 
-            grouping: pragyaGrouping,
-            status: pragyaStatus,
-            subject: selectedPragyaSubject === 'all' ? null : selectedPragyaSubject
-          })
-        });
-        const data = await response.json();
-        // Log raw data for debugging
-        // console.log('pragya data:', data);
-        setPragyaData(data);
-      } catch (error) {
-        console.error('Error fetching pragya data:', error);
-      } finally {
-        setPragyaLoading(false);
-      }
-    };
-
-    fetchPragyaData();
-  }, [pragyaGrouping, pragyaStatus, selectedPragyaSubject]);
-
-  const groupedByPeriodPragya: Record<string, Record<string, number>> = {};
-  pragyaData.forEach(item => {
-    const period = item.period;
-    // Use robust parsing for level_title.
-    const level = getParsedField(item.level_title);
-    if (!groupedByPeriodPragya[period]) {
-      groupedByPeriodPragya[period] = {};
-    }
-    if (!groupedByPeriodPragya[period][level]) {
-      groupedByPeriodPragya[period][level] = 0;
-    }
-    groupedByPeriodPragya[period][level] += Number(item.count);
-  });
-
-  const periodsPragya = Object.keys(groupedByPeriodPragya).sort();
-  // Unique levels across data
-  const uniqueLevelsPragya = Array.from(
-    new Set(pragyaData.map(item => getParsedField(item.level_title)))
-  );
-  
-  const seriesPragya = uniqueLevelsPragya.map((level, idx) => ({
-    name: level,
-    type: 'bar',
-    stack: 'total',
-    data: periodsPragya.map(period => groupedByPeriodPragya[period][level] || 0),
-    itemStyle: { color: ['#5470C6', '#91CC75', '#FAC858', '#EE6666', '#73C0DE', '#3BA272'][idx % 6] }
-  }));
-
-  const pragyaChartOption = {
-    title: {
-      text: 'Pragya Completed Over Time',
-      left: 'center'
-    },
-    tooltip: {
-      trigger: 'axis'
-    },
-    legend: {
-      data: uniqueLevelsPragya,
-      top: 'bottom'
-    },
-    xAxis: {
-      type: 'category',
-      data: periodsPragya,
-      boundaryGap: true,
-      axisLabel: {
-        rotate: pragyaGrouping === 'daily' ? 45 : 0
-      }
-    },
-    yAxis: {
-      type: 'value'
-    },
-    dataZoom: [
-      { type: 'inside', start: 0, end: 100 },
-      { type: 'slider', start: 0, end: 100 }
-    ],
-    series: seriesPragya
-  };
-
-
-  const pragyaDataTransformed = transformData(pragyaData)
-  const periodsPragyaTransformed = pragyaDataTransformed.map(item => item.period);
-  const seriesPragyaTransformed = uniqueLevelsPragya.map((level, idx) => ({
-    name: level,
-    type: 'bar',
-    stack: 'total',
-    data: pragyaDataTransformed.map(item => item[level] || 0),
-    // Customize item color as desired.
-    itemStyle: { color: ['#5470C6', '#91CC75', '#FAC858', '#EE6666', '#73C0DE', '#3BA272'][idx % 6] }
-  }));
-
-  // 1) First compute the total for each period:
-  const totalCountsPragya = periodsPragyaTransformed.map(period =>
-    // groupedByPeriod is your { [period]: { [level]: count }} from before
-    Object.values(groupedByPeriodPragya[period]).reduce((sum, v) => sum + v, 0)
-  );
-
-  // 2) Build your stacked‑bar series as before, then append this “total” series:
-  const totalSeriesPragya = {
-    name: 'Total',            // you can omit this from your legend.data if you want
-    type: 'bar',
-    // stack: 'total',           // same stack so it sits on top
-    data: totalCountsPragya,
-    barGap: '-100%',          // overlap exactly on top
-    itemStyle: {              // make the bar itself invisible
-      color: 'transparent'
-    },
-    label: {
-      show: true,
-      position: 'top',       // outside left of the full bar
-      distance: 5,            // padding from the edge
-      formatter: '{c}',       // show the numeric total
-      verticalAlign: 'middle',
-      offset: [0, 0], 
-      fontWeight: 'bold',
-      color: '#333'
-    },
-    tooltip: {                // hide its tooltip, since it's just labels
-      show: false
-    },
-    emphasis: {               // make sure it never highlights
-      disabled: true
-    }
-  };
-
-  // ECharts option with custom tooltip:
-  const optionPragyaTransformed = {
-    title: {
-      text: 'Pragya Completed Over Time',
-      left: 'center'
-    },
-    tooltip: {
-      trigger: 'axis',
-      formatter: function (params: any) {
-        // // `params` is an array of the series data in the hovered axis.
-        // const period = params[0].axisValue; // the period (x-axis value)
-        // // Find the breakdown for this period in your transformed data.
-        // const periodData = pragyaDataTransformed.find((d: any) => d.period === period);
-        // let tooltipHtml = `<strong>${period}</strong><br/>`;
-        // params.forEach((p: any) => {
-        //   tooltipHtml += `${p.seriesName}: ${p.data}<br/>`;
-        //   // If the breakdown exists, add subject-level breakdown.
-        //   if (periodData && periodData.__breakdown && periodData.__breakdown[p.seriesName]) {
-        //     tooltipHtml += 'Subjects:<br/>';
-        //     Object.entries(periodData.__breakdown[p.seriesName]).forEach(([subject, count]) => {
-        //       tooltipHtml += `&nbsp;&nbsp;${subject}: ${count}<br/>`;
-        //     });
-        //   }
-        // });
-        // return tooltipHtml;
-        let tooltipHtml = `<strong>${params[0].axisValue}</strong><br/>`;
-        params.forEach((p: any) => {
-          tooltipHtml += `
-            <div style="display: flex; align-items: center; gap: 5px;">
-              <span style="display: inline-block;
-                          width: 10px;
-                          height: 10px;
-                          background-color: ${p.color};
-                          border-radius: 2px;">
-              </span>
-              ${p.seriesName}: ${p.data}
-            </div>
-          `;
-          
-          // Add subject breakdown if available
-          const periodData = pragyaDataTransformed.find((d: any) => d.period === p.axisValue);
-          if (periodData?.__breakdown?.[p.seriesName]) {
-            tooltipHtml += '<div style="margin-left: 15px; margin-top: 5px;">Subjects:';
-            Object.entries(periodData.__breakdown[p.seriesName]).forEach(([subject, count]) => {
-              tooltipHtml += `
-                <div style="display: flex; align-items: center; gap: 5px; margin-top: 3px;">
-                  <span style="display: inline-block;
-                              width: 8px;
-                              height: 8px;
-                              background-color: ${p.color};
-                              opacity: 0.7;
-                              border-radius: 1px;">
-                  </span>
-                  ${subject}: ${count}
-                </div>
-              `;
-            });
-            tooltipHtml += '</div>';
-          }
-        });
-        return tooltipHtml;
-      }
-    },
-    legend: {
-      data: uniqueLevelsPragya,
-      top: 'bottom'
-    },
-    grid: {
-      left: '3%',
-      right: '4%',
-      bottom: '10%',
-      containLabel: true
-    },
-    xAxis: {
-      type: 'category',
-      data: periodsPragyaTransformed.map(p => formatPeriod(p, pragyaGrouping)),
-      boundaryGap: true
-    },
-    yAxis: {
-      type: 'value'
-    },
-    dataZoom: [
-      { type: 'inside', start: 0, end: 100 },
-      { type: 'slider', start: 0, end: 100 }
-    ],
-    series: [...seriesPragyaTransformed, totalSeriesPragya]
-  };
-
-  // -----------------------------------------------------------------------------------------------
-  // Create a ref to access the ECharts instance
-  
-  const chartRef1 = useRef<ReactECharts | null>(null);
-  const chartRef2 = useRef<ReactECharts | null>(null);
-  const chartRef3 = useRef<ReactECharts | null>(null);
-  const chartRef4 = useRef<ReactECharts | null>(null);
-  const chartRef5 = useRef<ReactECharts | null>(null);
-  const chartRef6 = useRef<ReactECharts | null>(null);
-  const chartRef7 = useRef<ReactECharts | null>(null);
-  const chartRef8 = useRef<ReactECharts | null>(null);
-  const chartRef9 = useRef<ReactECharts | null>(null);
-  const chartRef10 = useRef<ReactECharts | null>(null);
-  const chartRef11 = useRef<ReactECharts | null>(null);
-  const chartRef12 = useRef<ReactECharts | null>(null);
-  const chartRef13 = useRef<ReactECharts | null>(null);
-  const chartRef14 = useRef<ReactECharts | null>(null);
-  const chartRef15 = useRef<ReactECharts | null>(null);
-  const chartRef16 = useRef<ReactECharts | null>(null);
   // Fetch data when modal opens or when the selected level changes
+  useEffect(() => {
+    if (modalOpenLevel) {
+      fetchData(selectedLevel)
+    }
+  }, [modalOpenLevel, selectedLevel])
 
-    const handleDownloadChart = (
-        chartRef: React.RefObject<ReactECharts | null>,
-        filename: string
-    ) => {
-        if (chartRef.current) {
-        const echartsInstance = chartRef.current.getEchartsInstance();
-        const imgData = echartsInstance.getDataURL({
-            type: 'png',
-            pixelRatio: 2,
-            backgroundColor: '#fff'
-        });
-        const link = document.createElement('a');
-        link.href = imgData;
-        link.download = filename;
-        link.click();
-        }
-    };
   // Prepare chart options for the bar chart.
   // Note: Adjust to use the correct keys according to your API output.
-
+  const chartOptionsLevel = {
+    title: {
+      text: 'Student Count by Level',
+      left: 'center'
+    },
+    tooltip: {},
+    xAxis: {
+      type: 'category',
+      data: selectedLevel === 'all'
+        ? ['Level 1', 'Level 2', 'Level 3', 'Level 4']
+        : [`Level ${selectedLevel}`],
+    },
+    yAxis: {
+      type: 'value'
+    },
+    series: [
+      {
+        data: selectedLevel === 'all'
+          // Using the keys from your API output – replace "level1_count" etc. if needed.
+          ? [
+              dataLevel.level1_count ?? 0,
+              dataLevel.level2_count ?? 0,
+              dataLevel.level3_count ?? 0,
+              dataLevel.level4_count ?? 0
+            ]
+          : [dataLevel.count ?? 0],
+        type: 'bar',
+        itemStyle: {
+          color: '#0077BE'
+        }
+      }
+    ]
+  }
 
     return(
         <div className={`page bg-light ${inter.className} font-sans`}>
@@ -2641,44 +1313,14 @@ export default function StudentDashboard() {
                                 </div>
                             ))}
                         </div>
+
                         {/* Metrics Grid */}
                         <div className="row g-4 mb-4">
                             {[
                                 { title: 'Total Points Earned', value: totalPointsEarned, icon: <IconUser />, color: 'bg-purple' },
                                 { title: 'Total Points Redeemed', value: totalPointsRedeemed, icon: <IconUserFilled />, color: 'bg-teal' },
-                                { title: 'Teacher Assign Mission Completes', value: tmcAssignedByTeacher, icon: <IconUserExclamation />, color: 'bg-orange', suffix:'' },                
-                                { title: 'Total Sessions Created by Mentors', value: sessions.length, icon: <IconUser />, color: 'bg-blue', suffix:''},
-
+                                { title: 'Teacher Assign Mission Completes', value: tmcAssignedByTeacher, icon: <IconUserExclamation />, color: 'bg-orange', suffix:'' },
                                 // { title: 'Highest Online User Count', value: 36987, icon: <IconUserScan />, color: 'bg-blue', suffix: '' },
-                            ].map((metric, index) => (
-                                <div className="col-sm-6 col-lg-3" key={index}>
-                                    <div className="card">
-                                        <div className="card-body">
-                                            <div className="d-flex align-items-center">
-                                                {/* <div className={`${metric.color} rounded-circle p-3 text-white`}>
-                                                {React.cloneElement(metric.icon, { size: 24 })}
-                                                </div> */}
-                                                <div>
-                                                <div className="subheader">{metric.title}</div>
-                                                    <div className="h1 mb-3">
-                                                        <NumberFlow
-                                                        value={metric.value}
-                                                        suffix={metric.suffix || ''}
-                                                        className="fw-semi-bold text-dark"
-                                                        transformTiming={{endDelay:6, duration:750, easing:'cubic-bezier(0.42, 0, 0.58, 1)'}}
-                                                        />
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                        <div className="row g-4 mb-4">
-                            {[
-                { title: 'Total Participants Joined Mentor Sessions', value: sessionParticipantTotal, icon: <IconUser />, color: 'bg-sky-900', suffix:''},
-                { title: 'Total Mentors Participated for Mentor Connect Sessions', value: mentorsParticipatedSessionsTotal, icon: <IconUser />, color: 'bg-sky-900',suffix:''},
                             ].map((metric, index) => (
                                 <div className="col-sm-6 col-lg-3" key={index}>
                                     <div className="card">
@@ -2788,7 +1430,7 @@ export default function StudentDashboard() {
                                 <div className="card cursor-pointer hover:shadow-lg transition-shadow">
                                     <div className="card-body">
                                         <div className="d-flex align-items-center">
-                                            <div className="bg-purple rounded-circle p-3 text-white me-3">
+                                            <div className="bg-yellow-900 rounded-circle p-3 text-white me-3">
                                                 <IconTrophy size={24} />
                                             </div>
                                             <div>
@@ -2799,113 +1441,82 @@ export default function StudentDashboard() {
                                     </div>
                                 </div>
                             </div>
-                            <div className="col-sm-4 col-lg-4" onClick={() => setMissionCompleteModal(true)}>
-                                <div className="card cursor-pointer hover:shadow-lg transition-shadow">
-                                    <div className="card-body">
-                                        <div className="d-flex align-items-center">
-                                            <div className="bg-cyan-950 rounded-circle p-3 text-white me-3">
-                                                <IconTrophy size={24} />
-                                            </div>
-                                            <div>
-                                                <div className="subheader">Mission Completes</div>
-                                                <div className="text-muted">Click to see Mission Completes Over Time</div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                            <div className="col-sm-4 col-lg-4" onClick={() => setJigyasaCompleteModal(true)}>
-                                <div className="card cursor-pointer hover:shadow-lg transition-shadow">
-                                    <div className="card-body">
-                                        <div className="d-flex align-items-center">
-                                            <div className="bg-red-700 rounded-circle p-3 text-white me-3">
-                                                <IconTrophy size={24} />
-                                            </div>
-                                            <div>
-                                                <div className="subheader">Jigyasa Completes </div>
-                                                <div className="text-muted">Click to see Jigyasa Completes Over Time</div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                            <div className="col-sm-4 col-lg-4" onClick={() => setPragyaCompleteModal(true)}>
-                                <div className="card cursor-pointer hover:shadow-lg transition-shadow">
-                                    <div className="card-body">
-                                        <div className="d-flex align-items-center">
-                                            <div className="bg-zinc-800 rounded-circle p-3 text-white me-3">
-                                                <IconTrophy size={24} />
-                                            </div>
-                                            <div>
-                                                <div className="subheader">Pragya Completes </div>
-                                                <div className="text-muted">Click to see Pragya Completes Over Time</div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                            <div className="col-sm-4 col-lg-4" onClick={() => setMissionCoinModal(true)}>
-                                <div className="card cursor-pointer hover:shadow-lg transition-shadow">
-                                    <div className="card-body">
-                                        <div className="d-flex align-items-center">
-                                            <div className="bg-pink-400 rounded-circle p-3 text-white me-3">
-                                                <IconTrophy size={24} />
-                                            </div>
-                                            <div>
-                                                <div className="subheader">Mission Coins Earned</div>
-                                                <div className="text-muted">Click to see Mission Coins Earned Over Time</div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                            <div className="col-sm-4 col-lg-4" onClick={() => setJigyasaCoinModal(true)}>
-                                <div className="card cursor-pointer hover:shadow-lg transition-shadow">
-                                    <div className="card-body">
-                                        <div className="d-flex align-items-center">
-                                            <div className="bg-red-400 rounded-circle p-3 text-white me-3">
-                                                <IconTrophy size={24} />
-                                            </div>
-                                            <div>
-                                                <div className="subheader">Jigyasa Coins Earned</div>
-                                                <div className="text-muted">Click to see Jigyasa Coins Earned Over Time</div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                            <div className="col-sm-4 col-lg-4" onClick={() => setPragyaCoinModal(true)}>
-                                <div className="card cursor-pointer hover:shadow-lg transition-shadow">
-                                    <div className="card-body">
-                                        <div className="d-flex align-items-center">
-                                            <div className="bg-yellow-500 rounded-circle p-3 text-white me-3">
-                                                <IconTrophy size={24} />
-                                            </div>
-                                            <div>
-                                                <div className="subheader">Pragya Coins Earned</div>
-                                                <div className="text-muted">Click to see Pragya Coins Earned Over Time</div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                            <div className="col-sm-4 col-lg-4" onClick={() => setCouponRedeemsModal(true)}>
-                                <div className="card cursor-pointer hover:shadow-lg transition-shadow">
-                                    <div className="card-body">
-                                        <div className="d-flex align-items-center">
-                                            <div className="bg-green-900 rounded-circle p-3 text-white me-3">
-                                                <IconTrophy size={24} />
-                                            </div>
-                                            <div>
-                                                <div className="subheader">Coupon Redeems</div>
-                                                <div className="text-muted">Click to see Coupon Redeems Over Time</div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
                         </div>
                         
+                        {/* <div className="row g-4 mb-4">
+                            {
+                                isLoading ? (
+                                    <div className="card ">
+                                        <div className="card-body text-center">
+                                            <div className="spinner-border text-purple" role="status">
+                                                <span className="visually-hidden">Loading...</span>
+                                            </div>
+                                            <p className="mt-2">Loading students by grade...</p>
+                                        </div>
+                                    </div>
+                                ): error? (
+                                    <div className="card ">
+                                        <div className="card-body text-center text-danger">
+                                            <p>Error: {error}</p>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <div className="card shadow-sm border-0 mt-4">
+                                        <div className="card-body">
+                                            <h5 className="card-title mb-4">Students by Grade</h5>
+                                            <div className="table-responsive">
+                                                <table className="table table-striped table-hover">
+                                                    <thead>
+                                                        <tr>
+                                                            <th>Grade</th>
+                                                            <th>Number of Students</th>
+                                                            <th>Percentage</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        {studentsByGrade.map((gradeData, index) => (
+                                                            <tr key={index}>
+                                                                <td>
+                                                                    {gradeData.grade === null 
+                                                                        ? 'Unspecified' 
+                                                                        : `Grade ${gradeData.grade}`}
+                                                                </td>
+                                                                <td>{gradeData.count.toLocaleString()}</td>
+                                                                <td>
+                                                                    {((gradeData.count / totalStudents) * 100).toFixed(2)}%
+                                                                </td>
+                                                            </tr>
+                                                        ))}
+                                                    </tbody>
+                                                    <tfoot>
+                                                        <tr className="table-active">
+                                                            <td><strong>Total</strong></td>
+                                                            <td><strong>{totalStudents.toLocaleString()}</strong></td>
+                                                            <td><strong>100%</strong></td>
+                                                        </tr>
+                                                    </tfoot>
+                                                </table>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )
+                            }
+                        </div> */}
+                        {/* <div>
+                            {!HighchartsLib || !chartOptions ? (
+                                    <div className="text-center">
+                                        <div className="spinner-border text-purple" role="status" style={{ width: "8rem", height: "8rem" }}></div>
+                                    </div>
+                                ) : errorMessage ? (
+                                    <div>Error: {errorMessage}</div>
+                                ) : (
+                                    <HighchartsReact
+                                        highcharts={HighchartsLib}
+                                        constructorType="mapChart"
+                                        options={chartOptions}
+                                    />
+                            )}
+                        </div> */}
                         {/* Modals */}
                         {/* Mission Status Modal */}
                         {modalOpen && (
@@ -3035,7 +1646,7 @@ export default function StudentDashboard() {
                         {showDemographicsModal && (
                             <div className="modal fade show" style={{ display: 'block', backgroundColor: 'rgba(0,0,0,0.5)' }}>
                                 <div className="modal-dialog modal-xl">
-                                    <div className="modal-content flex items-center">
+                                    <div className="modal-content">
                                         <div className="modal-header">
                                             <h5 className="modal-title">Student Distribution Across India</h5>
                                             <button 
@@ -3044,7 +1655,7 @@ export default function StudentDashboard() {
                                                 onClick={() => setShowDemographicsModal(false)}
                                             ></button>
                                         </div>
-                                        <div className="modal-body d-flex items-center">
+                                        <div className="modal-body">
                                             {!HighchartsLib || !chartOptions ? (
                                                 <div className="text-center">
                                                     <div className="spinner-border text-purple" role="status" style={{ width: "8rem", height: "8rem" }}></div>
@@ -3059,7 +1670,7 @@ export default function StudentDashboard() {
                                                 />
                                             )}
                                         </div>
-                                        <div className="modal-footer w-full">
+                                        <div className="modal-footer">
                                             <button 
                                                 type="button" 
                                                 className="btn btn-secondary" 
@@ -3201,8 +1812,6 @@ export default function StudentDashboard() {
                                 </div>
                             </div>
                         )}
-
-                        
                         {/*Total number of quiz submitted by students  in each level for each subject in the Life app*/}
                         {/* Modal for Quiz Data */}
                         {openQuizTopicLevelModal && (
@@ -3321,13 +1930,10 @@ export default function StudentDashboard() {
                         {modalOpenLevel && (
                             <div className="fixed inset-0 flex items-center justify-center z-50 bg-black bg-opacity-50">
                             <div className="bg-white p-6 rounded-lg shadow-lg w-3/4 relative">
-                            <button 
-                            type="button" 
-                            className="btn-close" 
-                            onClick={() => setModalOpenLevel(false)}
-                            ></button>
                                 <h2 className="text-lg font-bold mb-4">Student Count by Level</h2>
-                       {/* <div className="mb-4">
+                                
+                                {/* Level Filter Dropdown */}
+                                <div className="mb-4">
                                 <label className="mr-2 font-semibold">Select Level:</label>
                                 <select
                                     value={selectedLevel}
@@ -3340,508 +1946,43 @@ export default function StudentDashboard() {
                                     <option value="3">Level 3</option>
                                     <option value="4">Level 4</option>
                                 </select>
-                                </div> */}
-                        <div className="mb-4">
+                                </div>
+                                {/* Dummy Subject Filter Dropdown */}
+                                <div className="mb-4">
                                 <label className="mr-2 font-semibold">Select Subject:</label>
                                 <select
                                     value={selectedSubject}
-                                    onChange={(e) => {
-                                      setSelectedSubject(e.target.value);
-                                      // setSelectedLevel("all")
-                                    }}
+                                    onChange={(e) => setSelectedSubject(e.target.value)}
                                     className="border p-1 rounded"
                                 >
                                     <option value="science">Science</option>
                                     <option value="maths">Maths</option>
                                 </select>
-                        </div>
-                              <div style={{ marginBottom: '20px' }}>
-                                <label htmlFor="grouping-level-select">Select Time Grouping: </label>
-                                <select
-                                  id="grouping-level-select"
-                                  value={groupingLevel}
-                                  onChange={e => setGroupingLevel(e.target.value)}
-                                >
-                                  {groupings.map(g => (
-                                    <option key={g} value={g}>
-                                      {g.charAt(0).toUpperCase() + g.slice(1)}
-                                    </option>
-                                  ))}
-                                </select>
-                                <label className="mr-2 font-semibold">Select Level:</label>
-                                <select
-                                  value={selectedLevel}
-                                  onChange={e => setSelectedLevel(e.target.value as FilterLevel)}
-                                  className="border p-1 rounded"
-                                >
-                                  <option value="all">All</option>
-                                  <option value="level1">Level 1 (Grade 1–5)</option>
-                                  <option value="level2">Level 2 (Grade 6+)</option>
-                                  <option value="level3">Level 3 (Grade 7+)</option>
-                                  <option value="level4">Level 4 (Grade 8+)</option>
-                                </select>
-                                
+                                </div>
 
-                              </div>
                                 {/* Loading, error, or chart */}
                                 {loadingLevel ? (
-                                  <div style={{ textAlign: 'center' }}>
+                                <div className="text-center">
                                     <div className="spinner-border text-purple" role="status" style={{ width: "8rem", height: "8rem" }}></div>
-                                  </div>
+                                </div>
                                 ) : errorLevel ? (
-                                  <div>Error: {errorLevel}</div>
+                                <div className="text-red-500 text-center py-4">{errorLevel}</div>
                                 ) : (
-                                  <ReactECharts ref={chartRef11} option={EchartLevelOption} style={{ height: '400px', width: '100%' }} />
+                                <ReactECharts
+                                    option={chartOptionsLevel}
+                                    style={{ height: '400px', width: '100%' }}
+                                />
                                 )}
 
+                                {/* Close Button */}
+                                <button
+                                onClick={() => setModalOpenLevel(false)}
+                                className="mt-4 p-2 bg-red-500 text-white rounded"
+                                >
+                                Close
+                                </button>
                             </div>
-                            
                             </div>
-                            
-                        )}
-                        {missionCompleteModal && (
-                            <div className="fixed inset-0 flex items-center justify-center z-50 bg-black bg-opacity-50">
-                            <div className="bg-white p-6 rounded-lg shadow-lg w-3/4 relative">
-                            <button 
-                            type="button" 
-                            className="btn-close" 
-                            onClick={() => setMissionCompleteModal(false)}
-                            ></button>
-                                <div className="col-12 col-xl-12">
-                                    <div className="card shadow-sm border-0 h-100">
-                                        <div className="card-header bg-transparent py-3">
-                                            <h3 className="card-title mb-0 fw-semibold">Mission Submissions</h3>
-                                            {/* Download button */}
-                                            <button
-                                            onClick={() => handleDownloadChart(chartRef3,'missions_completed_graph')}
-                                            className="ml-2 inline-flex items-center gap-1 px-3 py-1.5 bg-sky-600 text-white text-xs font-medium rounded-md hover:bg-sky-700 transition-colors duration-200"
-                                            >
-                                            <svg
-                                                xmlns="http://www.w3.org/2000/svg"
-                                                fill="none"
-                                                viewBox="0 0 24 24"
-                                                strokeWidth={1.5}
-                                                stroke="currentColor"
-                                                className="w-4 h-4"
-                                            >
-                                                <path
-                                                strokeLinecap="round"
-                                                strokeLinejoin="round"
-                                                d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M7.5 12l4.5 4.5m0 0l4.5-4.5m-4.5 4.5V3"
-                                                />
-                                            </svg>
-                                            Download
-                                            </button>
-                                        </div>
-                                        {/* <h2 className="text-2xl font-bold mb-4">Mission Completes Histogram</h2> */}
-                                        {/* Grouping filter dropdown */}
-                                        <div style={{ marginBottom: '20px' }}>
-                                        <label htmlFor="mission-grouping-select" style={{ marginRight: '10px' }}>
-                                            Select Time Grouping:
-                                        </label>
-                                        <select
-                                            id="mission-grouping-select"
-                                            value={missionGrouping}
-                                            onChange={(e) => setMissionGrouping(e.target.value)}
-                                        >
-                                            {missionGroupings.map(g => (
-                                            <option key={g} value={g}>
-                                                {g.charAt(0).toUpperCase() + g.slice(1)}
-                                            </option>
-                                            ))}
-                                        </select>
-                                        <label htmlFor="mission-status-select" style={{ marginLeft: '20px', marginRight: '10px' }}>
-                                            Status:
-                                        </label>
-                                        <select
-                                            id="mission-status-select"
-                                            value={missionStatus}
-                                            onChange={(e) => setMissionStatus(e.target.value)}
-                                        >
-                                            {missionStatusOptions.map(option => (
-                                            <option key={option.value} value={option.value}>
-                                                {option.label}
-                                            </option>
-                                            ))}
-                                        </select>
-                                        <label htmlFor="mission-subject-select" style={{ marginLeft: '20px', marginRight: '10px' }}>
-                                            Subject:
-                                        </label>
-                                        <select
-                                            id="mission-subject-select"
-                                            value={selectedMissionSubject}
-                                            onChange={(e) => setSelectedMissionSubject(e.target.value)}
-                                        >
-                                            <option value="all">All Subjects</option>
-                                            {quizSubjects.map(subject => (
-                                            <option key={subject.id} value={subject.title}>
-                                                {subject.title}
-                                            </option>
-                                            ))}
-                                        </select>
-                                        
-                                        </div>
-
-                                        {/* Mission Completed Chart */}
-                                        {missionLoading ? (
-                                        <div className="text-center">
-                                            <div className="spinner-border text-purple" role="status" style={{ width: '8rem', height: '8rem' }}></div>
-                                        </div>
-                                        ) : (
-                                        <ReactECharts ref={chartRef3} option={optionMissionTransformed} style={{ height: '400px', width: '100%' }} />
-                                        )}
-                                    </div>
-                                </div>
-                            </div>
-                            
-                            </div>
-                            
-                        )}
-                        {jigyasaCompleteModal && (
-                            <div className="fixed inset-0 flex items-center justify-center z-50 bg-black bg-opacity-50">
-                            <div className="bg-white p-6 rounded-lg shadow-lg w-3/4 relative">
-                            <button 
-                            type="button" 
-                            className="btn-close" 
-                            onClick={() => setJigyasaCompleteModal(false)}
-                            ></button>
-                                <div className="col-12 col-xl-12">
-                                    <div className="card shadow-sm border-0 h-100">
-                                        <div className="card-header bg-transparent py-3">
-                                            <h3 className="card-title mb-0 fw-semibold">Jigyasa Completed</h3>
-                                            {/* Download button */}
-                                        <button
-                                            onClick={() => handleDownloadChart(chartRef5,'jigyasa_completed_graph')}
-                                            className="ml-2 inline-flex items-center gap-1 px-3 py-1.5 bg-sky-600 text-white text-xs font-medium rounded-md hover:bg-sky-700 transition-colors duration-200"
-                                        >
-                                            <svg
-                                            xmlns="http://www.w3.org/2000/svg"
-                                            fill="none"
-                                            viewBox="0 0 24 24"
-                                            strokeWidth={1.5}
-                                            stroke="currentColor"
-                                            className="w-4 h-4"
-                                            >
-                                            <path
-                                                strokeLinecap="round"
-                                                strokeLinejoin="round"
-                                                d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M7.5 12l4.5 4.5m0 0l4.5-4.5m-4.5 4.5V3"
-                                            />
-                                            </svg>
-                                            Download
-                                        </button>
-                                        </div>
-                                        {/* <h2 className="text-2xl font-bold mb-4">Mission Completes Histogram</h2> */}
-                                        {/* Grouping filter dropdown */}
-                                        <div style={{ marginBottom: '20px' }}>
-                                        <label htmlFor="jigyasa-grouping-select" style={{ marginRight: '10px' }}>
-                                            Select Time Grouping:
-                                        </label>
-                                        <select
-                                            id="jigyasa-grouping-select"
-                                            value={jigyasaGrouping}
-                                            onChange={(e) => setJigyasaGrouping(e.target.value)}
-                                        >
-                                            {jigyasaGroupings.map(g => (
-                                            <option key={g} value={g}>
-                                                {g.charAt(0).toUpperCase() + g.slice(1)}
-                                            </option>
-                                            ))}
-                                        </select>
-                                        <label htmlFor="jigyasa-status-select" style={{ marginLeft: '20px' }}>Status:</label>
-                                        <select
-                                            id="jigyasa-status-select"
-                                            value={jigyasaStatus}
-                                            onChange={(e) => setJigyasaStatus(e.target.value)}
-                                        >
-                                            {missionStatusOptions.map(option => (
-                                            <option key={option.value} value={option.value}>{option.label}</option>
-                                            ))}
-                                        </select>
-                                        <label htmlFor="jigyasa-subject-select" style={{ marginLeft: '20px', marginRight: '10px' }}>
-                                            Subject:
-                                        </label>
-                                        <select
-                                            id="jigyasa-subject-select"
-                                            value={selectedJigyasaSubject}
-                                            onChange={(e) => setSelectedJigyasaSubject(e.target.value)}
-                                        >
-                                            <option value="all">All Subjects</option>
-                                            {quizSubjects.map(subject => (
-                                            <option key={subject.id} value={subject.title}>
-                                                {subject.title}
-                                            </option>
-                                            ))}
-                                        </select>
-                                        
-                                        </div>
-
-                                        {/* Mission Completed Chart */}
-                                        {jigyasaLoading ? (
-                                        <div className="text-center">
-                                            <div className="spinner-border text-purple" role="status" style={{ width: '8rem', height: '8rem' }}></div>
-                                        </div>
-                                        ) : (
-                                        <ReactECharts ref={chartRef5} option={optionJigyasaTransformed} style={{ height: '400px', width: '100%' }} />
-                                        )}
-                                    </div>
-                                </div>
-                            </div>
-                            
-                            </div>
-                            
-                        )}
-                        {pragyaCompleteModal && (
-                            <div className="fixed inset-0 flex items-center justify-center z-50 bg-black bg-opacity-50">
-                            <div className="bg-white p-6 rounded-lg shadow-lg w-3/4 relative">
-                            <button 
-                            type="button" 
-                            className="btn-close" 
-                            onClick={() => setPragyaCompleteModal(false)}
-                            ></button>
-                                <div className="col-12 col-xl-12">
-                                    <div className="card shadow-sm border-0 h-100">
-                                        <div className="card-header bg-transparent py-3">
-                                            <h3 className="card-title mb-0 fw-semibold">Pragya Completed</h3>
-                                            {/* Download button */}
-                                        <button
-                                            onClick={() => handleDownloadChart(chartRef6,'pragya_completed_graph')}
-                                            className="ml-2 inline-flex items-center gap-1 px-3 py-1.5 bg-sky-600 text-white text-xs font-medium rounded-md hover:bg-sky-700 transition-colors duration-200"
-                                        >
-                                            <svg
-                                            xmlns="http://www.w3.org/2000/svg"
-                                            fill="none"
-                                            viewBox="0 0 24 24"
-                                            strokeWidth={1.5}
-                                            stroke="currentColor"
-                                            className="w-4 h-4"
-                                            >
-                                            <path
-                                                strokeLinecap="round"
-                                                strokeLinejoin="round"
-                                                d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M7.5 12l4.5 4.5m0 0l4.5-4.5m-4.5 4.5V3"
-                                            />
-                                            </svg>
-                                            Download
-                                        </button>
-                                        </div>
-                                        {/* <h2 className="text-2xl font-bold mb-4">Mission Completes Histogram</h2> */}
-                                        {/* Grouping filter dropdown */}
-                                        <div style={{ marginBottom: '20px' }}>
-                                        <label htmlFor="pragya-grouping-select" style={{ marginRight: '10px' }}>
-                                            Select Time Grouping:
-                                        </label>
-                                        <select
-                                            id="pragya-grouping-select"
-                                            value={pragyaGrouping}
-                                            onChange={(e) => setPragyaGrouping(e.target.value)}
-                                        >
-                                            {pragyaGroupings.map(g => (
-                                            <option key={g} value={g}>
-                                                {g.charAt(0).toUpperCase() + g.slice(1)}
-                                            </option>
-                                            ))}
-                                        </select>
-                                        <label htmlFor="pragya-status-select" style={{ marginLeft: '20px' }}>Status:</label>
-                                        <select
-                                            id="pragya-status-select"
-                                            value={pragyaStatus}
-                                            onChange={(e) => setPragyaStatus(e.target.value)}
-                                        >
-                                            {missionStatusOptions.map(option => (
-                                            <option key={option.value} value={option.value}>{option.label}</option>
-                                            ))}
-                                        </select>
-                                        <label htmlFor="pragya-subject-select" style={{ marginLeft: '20px', marginRight: '10px' }}>
-                                            Subject:
-                                        </label>
-                                        <select
-                                            id="pragya-subject-select"
-                                            value={selectedPragyaSubject}
-                                            onChange={(e) => setSelectedPragyaSubject(e.target.value)}
-                                        >
-                                            <option value="all">All Subjects</option>
-                                            {quizSubjects.map(subject => (
-                                            <option key={subject.id} value={subject.title}>
-                                                {subject.title}
-                                            </option>
-                                            ))}
-                                        </select>
-                                        
-                                        </div>
-
-                                        {/* Mission Completed Chart */}
-                                        {pragyaLoading ? (
-                                        <div className="text-center">
-                                            <div className="spinner-border text-purple" role="status" style={{ width: '8rem', height: '8rem' }}></div>
-                                        </div>
-                                        ) : (
-                                        <ReactECharts ref={chartRef6} option={optionPragyaTransformed} style={{ height: '400px', width: '100%' }} />
-                                        )}
-                                    </div>
-                                </div>
-                            </div>
-                            
-                            </div>
-                            
-                        )}
-                        {MissionCoinModal && (
-                            <div className="fixed inset-0 flex items-center justify-center z-50 bg-black bg-opacity-50">
-                            <div className="bg-white p-6 rounded-lg shadow-lg w-3/4 relative">
-                            <button 
-                            type="button" 
-                            className="btn-close" 
-                            onClick={() => setMissionCoinModal(false)}
-                            ></button>
-                            <div className="col-12 col-xl-12">
-                                              <div className="card shadow-sm border-0 h-100">
-                                                  <div className="card-header bg-transparent py-3">
-                                                      <h3 className="card-title mb-0 fw-semibold">Mission Coins Earned Over Time</h3>
-                                                      {/* Download button */}
-                                                  </div>
-                                                  <div style={{ marginBottom: '20px' }}> 
-                                                    <label htmlFor="points-grouping">Group by:</label>
-                                                    <select
-                                                      id="points-grouping"
-                                                      value={pointsMissionGrouping}
-                                                      onChange={e => setPointsMissionGrouping(e.target.value as any)}
-                                                      className="border rounded p-1"
-                                                    >
-                                                      {['daily','weekly','monthly','quarterly','yearly','lifetime'].map(g => (
-                                                        <option key={g} value={g}>{g.charAt(0).toUpperCase() + g.slice(1)}</option>
-                                                      ))}
-                                                    </select>
-                                                    {pointsMissionLoading
-                                                    ? <div className="text-center">
-                                                        <div className="spinner-border text-purple" role="status" style={{ width: '8rem', height: '8rem' }}></div>
-                                                      </div>
-                                                    : <ReactECharts ref={chartRef12} option={pointsMissionChartOption} style={{ height: 400 }} />}
-                                                  </div>
-                                              </div>
-                                            </div>
-                            </div>
-                            
-                            </div>
-                            
-                        )}
-                         {JigyasaCoinModal && (
-                            <div className="fixed inset-0 flex items-center justify-center z-50 bg-black bg-opacity-50">
-                            <div className="bg-white p-6 rounded-lg shadow-lg w-3/4 relative">
-                            <button 
-                            type="button" 
-                            className="btn-close" 
-                            onClick={() => setJigyasaCoinModal(false)}
-                            ></button>
-                            <div className="col-12 col-xl-12">
-                                              <div className="card shadow-sm border-0 h-100">
-                                                  <div className="card-header bg-transparent py-3">
-                                                      <h3 className="card-title mb-0 fw-semibold">Jigyasa Coins Earned Over Time</h3>
-                                                      {/* Download button */}
-                                                      
-                                                  </div>
-                                                  <div style={{ marginBottom: '20px' }}> 
-                                                    <label htmlFor="points-jigyasa-grouping">Group by:</label>
-                                                    <select
-                                                      id="points-jigyasa-grouping"
-                                                      value={pointsJigyasaGrouping}
-                                                      onChange={e => setPointsJigyasaGrouping(e.target.value as any)}
-                                                      className="border rounded p-1"
-                                                    >
-                                                      {['daily','weekly','monthly','quarterly','yearly','lifetime'].map(g => (
-                                                        <option key={g} value={g}>{g.charAt(0).toUpperCase() + g.slice(1)}</option>
-                                                      ))}
-                                                    </select>
-                                                    {pointsJigyasaLoading
-                                                    ? <div className="text-center">
-                                                        <div className="spinner-border text-purple" role="status" style={{ width: '8rem', height: '8rem' }}></div>
-                                                      </div>
-                                                    : <ReactECharts ref={chartRef13} option={pointsJigyasaChartOption} style={{ height: 400 }} />}
-                                                  </div>
-                                              </div>
-                                            </div>
-                            </div>
-                            
-                            </div>
-                            
-                        )}
-                         {PragyaCoinModal && (
-                            <div className="fixed inset-0 flex items-center justify-center z-50 bg-black bg-opacity-50">
-                            <div className="bg-white p-6 rounded-lg shadow-lg w-3/4 relative">
-                            <button 
-                            type="button" 
-                            className="btn-close" 
-                            onClick={() => setPragyaCoinModal(false)}
-                            ></button>
-                            <div className="col-12 col-xl-12">
-                                              <div className="card shadow-sm border-0 h-100">
-                                                  <div className="card-header bg-transparent py-3">
-                                                      <h3 className="card-title mb-0 fw-semibold">Pragya Coins Earned Over Time</h3>
-                                                      {/* Download button */}
-                                                      
-                                                  </div>
-                                                  <div style={{ marginBottom: '20px' }}> 
-                                                    <label htmlFor="points-pragya-grouping">Group by:</label>
-                                                    <select
-                                                      id="points-pragya-grouping"
-                                                      value={pointsPragyaGrouping}
-                                                      onChange={e => setPointsPragyaGrouping(e.target.value as any)}
-                                                      className="border rounded p-1"
-                                                    >
-                                                      {['daily','weekly','monthly','quarterly','yearly','lifetime'].map(g => (
-                                                        <option key={g} value={g}>{g.charAt(0).toUpperCase() + g.slice(1)}</option>
-                                                      ))}
-                                                    </select>
-                                                    {pointsPragyaLoading
-                                                    ? <div className="text-center">
-                                                        <div className="spinner-border text-purple" role="status" style={{ width: '8rem', height: '8rem' }}></div>
-                                                      </div>
-                                                    : <ReactECharts ref={chartRef14}option={pointsPragyaChartOption} style={{ height: 400 }} />}
-                                                  </div>
-                                              </div>
-                                            </div>
-                            </div>
-                            
-                            </div>
-                            
-                        )}
-                         {CouponRedeemsModal && (
-                            <div className="fixed inset-0 flex items-center justify-center z-50 bg-black bg-opacity-50">
-                            <div className="bg-white p-6 rounded-lg shadow-lg w-3/4 relative">
-                            <button 
-                            type="button" 
-                            className="btn-close" 
-                            onClick={() => setCouponRedeemsModal(false)}
-                            ></button>
-                             <div className="col-12 col-xl-12">
-                                              <div className="card shadow-sm border-0 h-100">
-                                                  <div className="card-header bg-transparent py-3">
-                                                      <h3 className="card-title mb-0 fw-semibold">Coupon Redeems Over Time</h3>
-                                                      {/* Download button */}
-                                                  </div>
-                                                  <div style={{ marginBottom: '20px' }}> 
-                                                    <label htmlFor="points-couponRedeems-grouping">Group by:</label>
-                                                    <select
-                                                      id="points-couponRedeems-grouping"
-                                                      value={couponRedeemsGrouping}
-                                                      onChange={e => setCouponRedeemsGrouping(e.target.value as any)}
-                                                      className="border rounded p-1"
-                                                    >
-                                                      {['daily','weekly','monthly','quarterly','yearly','lifetime'].map(g => (
-                                                        <option key={g} value={g}>{g.charAt(0).toUpperCase() + g.slice(1)}</option>
-                                                      ))}
-                                                    </select>
-                                                    {couponRedeemsLoading
-                                                    ? <div className="text-center">
-                                                        <div className="spinner-border text-purple" role="status" style={{ width: '8rem', height: '8rem' }}></div>
-                                                      </div>
-                                                    : <ReactECharts ref={chartRef15} option={couponRedeemsSeriesOptions} style={{ height: 400 }} />}
-                                                  </div>
-                                              </div>
-                                            </div>
-                            </div>
-                            
-                            </div>
-                            
                         )}
 
                         <div className="card shadow-sm border-0 mb-4">

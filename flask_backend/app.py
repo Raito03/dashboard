@@ -1001,7 +1001,93 @@ def get_histogram_topic_level_subject_quizgames_2():
         if connection:
             connection.close()
 
+@app.route('/api/PBLsubmissions', methods=['POST'])
+def get_PBLsubmissions():
+    payload = request.get_json() or {}
+    grouping = payload.get('grouping', 'monthly')
+    status = payload.get('status', 'all')
 
+    # Mapping of grouping keys to SQL expressions
+    GROUPING_SQL = {
+        'daily':     "DATE(lamc.created_at)",
+        'weekly':    "DATE_FORMAT(lamc.created_at, '%x-%v')",
+        'monthly':   "DATE_FORMAT(lamc.created_at, '%Y-%m')",
+        'quarterly': "CONCAT(YEAR(lamc.created_at), '-Q', QUARTER(lamc.created_at))",
+        'yearly':    "YEAR(lamc.created_at)",
+        'lifetime':  "'All Time'"
+    }
+
+    # Status filters
+    STATUS_CONDITIONS = {
+        'submitted': "lamc.approved_at IS NULL AND lamc.rejected_at IS NULL",
+        'approved':  "lamc.approved_at IS NOT NULL",
+        'rejected':  "lamc.rejected_at IS NOT NULL",
+        'all':       "1"
+    }
+
+    # Validate inputs
+    if grouping not in GROUPING_SQL or status not in STATUS_CONDITIONS:
+        return jsonify(error='Invalid grouping or status'), 400
+
+    period_expr = GROUPING_SQL[grouping]
+    status_where = STATUS_CONDITIONS[status]
+
+    sql = f"""
+    SELECT
+        {period_expr} AS period,
+        COUNT(*) AS count
+    FROM lifeapp.la_mission_assigns lama
+    INNER JOIN lifeapp.la_missions lam
+        ON lam.id = lama.la_mission_id
+    INNER JOIN lifeapp.la_mission_completes lamc
+        ON lama.user_id = lamc.user_id
+        AND lama.la_mission_id = lamc.la_mission_id
+    WHERE lam.allow_for = 2
+      AND {status_where}
+    GROUP BY period
+    ORDER BY period;
+    """
+
+    conn = get_db_connection()
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute(sql)
+            results = cursor.fetchall()
+    finally:
+        conn.close()
+
+    return jsonify(data=results)
+
+@app.route('/api/PBLsubmissions/total', methods=['GET'])
+def get_total_PBLsubmissions():
+    # Returns the total count for a given status (default 'all')
+    # status = request.args.get('status', 'all')
+    # if status not in STATUS_CONDITIONS:
+    #     return jsonify(error='Invalid status'), 400
+
+    # status_where = STATUS_CONDITIONS[status]
+    sql = f"""
+    SELECT
+        COUNT(*) AS total
+    FROM lifeapp.la_mission_assigns lama
+    INNER JOIN lifeapp.la_missions lam
+        ON lam.id = lama.la_mission_id
+    INNER JOIN lifeapp.la_mission_completes lamc
+        ON lama.user_id = lamc.user_id
+        AND lama.la_mission_id = lamc.la_mission_id
+    WHERE lam.allow_for = 2;
+    """
+
+    conn = get_db_connection()
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute(sql)
+            result = cursor.fetchone()
+            total = result.get('total', 0) if result else 0
+    finally:
+        conn.close()
+
+    return jsonify(total=total)
 
 @app.route('/api/total-student-count', methods=['GET'])
 def get_total_student_count():
@@ -1631,49 +1717,61 @@ def get_teacher_states():
 @app.route('/api/teachers-by-grade-subject-section', methods=['POST'])
 def teachers_by_grade_subject_section():
     """
-    This endpoint returns teacher counts broken down by la_grade_id (grade),
-    by subject (from las.title), and further by section (from lass.name).
+    Returns teacher counts broken down by grade, subject, section, and board.
     """
-    connection = get_db_connection()
+    conn = get_db_connection()
     try:
-        with connection.cursor() as cursor:
+        with conn.cursor() as cursor:
             sql = """
-                SELECT COUNT(*) AS count, 
-                       las.title, 
-                       la_grade_id, 
-                       lass.name AS section
-                FROM lifeapp.la_teacher_grades latg 
-                INNER JOIN lifeapp.la_subjects las ON las.id = latg.la_subject_id 
-                INNER JOIN lifeapp.la_sections lass ON lass.id = latg.la_section_id
-                WHERE las.status = 1
-                GROUP BY la_subject_id, la_grade_id, la_section_id
-                ORDER BY la_subject_id, la_grade_id, la_section_id;
+                SELECT 
+                   lgr.id   AS grade_id,
+                   lgr.name AS grade_name,
+                   las.id   AS subject_id,
+                   las.title,
+                   lsct.id  AS section_id,
+                   lsct.name AS section_name,
+                   lab.id   AS board_id,
+                   lab.name AS board_name,
+                   COUNT(u.id) AS count
+                FROM lifeapp.users u
+                LEFT JOIN lifeapp.la_teacher_grades ltg ON ltg.user_id        = u.id
+                LEFT JOIN lifeapp.la_grades         lgr ON ltg.la_grade_id    = lgr.id
+                LEFT JOIN lifeapp.la_subjects       las ON las.id             = ltg.la_subject_id
+                LEFT JOIN lifeapp.la_sections       lsct ON lsct.id            = ltg.la_section_id
+                LEFT JOIN lifeapp.la_boards         lab ON u.la_board_id       = lab.id
+                WHERE u.type = 5
+                  AND las.status = 1
+                GROUP BY lgr.id, las.id, lsct.id, lab.id
+                ORDER BY lgr.id, las.id, lsct.id, lab.id;
             """
             cursor.execute(sql)
             rows = cursor.fetchall()
-            # Optionally, if las.title is stored as a JSON string, convert it.
-            # For example, if rows[0]['title'] is '{"en": "Science"}':
-            for row in rows:
-                try:
-                    title_json = json.loads(row['title'])
-                    # Use "en" language if available, else fallback.
-                    row['subject'] = title_json.get('en', row['title'])
-                except Exception:
-                    row['subject'] = row['title']
-            
-            # Return only the keys we care about: grade, subject, section and count
-            result = [{
-                'grade': row['la_grade_id'],
-                'subject': row['subject'],
-                'section': row['section'],
-                'count': row['count']
-            } for row in rows]
 
-            return jsonify(result)
+            # decode JSON titles into plain text
+            for r in rows:
+                try:
+                    title_obj = json.loads(r['title'])
+                    r['subject'] = title_obj.get('en', title_obj)
+                except Exception:
+                    r['subject'] = r['title']
+
+            result = []
+            for r in rows:
+                result.append({
+                    'grade':   r['grade_id'],
+                    'subject': r['subject'],
+                    'section': r['section_name'],
+                    'board':   r['board_name'] or 'Unspecified',
+                    'count':   r['count']
+                })
+
+        return jsonify(result)
+
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
     finally:
-        connection.close()
+        conn.close()
 
 @app.route('/api/teacher_dashboard_search', methods=['POST'])
 def fetch_teacher_dashboard():
@@ -1688,7 +1786,7 @@ def fetch_teacher_dashboard():
     # New filters for teacher subject and grade:
     teacher_subject = filters.get('teacher_subject')
     teacher_grade = filters.get('teacher_grade')
-    
+    board = filters.get('board')
     # Start with base SQL. We join to la_teacher_grades (ltg), la_grades (lgr), and la_sections (lsct)
     sql = """
         WITH cte AS (
@@ -1708,7 +1806,8 @@ def fetch_teacher_dashboard():
             u.created_at, u.updated_at,
             las.title,
             lgr.name as grade_name, 
-            lsct.name as section_name
+            lsct.name as section_name,
+            lab.name as board_name
         FROM lifeapp.users u
         INNER JOIN lifeapp.schools ls ON ls.id = u.school_id
         LEFT JOIN cte ON cte.teacher_id = u.id
@@ -1716,6 +1815,7 @@ def fetch_teacher_dashboard():
         LEFT JOIN lifeapp.la_subjects las on las.id = ltg.la_subject_id
         LEFT JOIN lifeapp.la_grades lgr ON ltg.la_grade_id = lgr.id
         LEFT JOIN lifeapp.la_sections lsct ON ltg.la_section_id = lsct.id
+        LEFT JOIN lifeapp.la_boards lab on u.la_board_id = lab.id
         WHERE u.type = 5
     """
     params = []
@@ -1751,7 +1851,9 @@ def fetch_teacher_dashboard():
     if to_date:
         sql += " AND u.created_at <= %s"
         params.append(to_date)
-    
+    if board and board.strip():
+        sql += " AND lab.id = %s"
+        params.append(board)
     try:
         connection = get_db_connection()
         with connection.cursor() as cursor:
@@ -4665,6 +4767,10 @@ def get_mentor_participated_in_sessions_total():
 @app.route('/api/quiz_sessions', methods=['POST'])
 def get_quiz_sessions():
     try:
+        data = request.get_json()
+        start_date = data.get('start_date')
+        end_date = data.get('end_date')
+
         connection = get_db_connection()
         with connection.cursor() as cursor:
             sql = """
@@ -4678,6 +4784,8 @@ def get_quiz_sessions():
                     laqg.time AS time_taken,
                     laqgr.total_questions,
                     laqgr.total_correct_answers,
+                    laqgr.created_at,
+                    laqgr.coins,
                     u.name AS user_name,
                     ls.name AS school_name,
                     u.earn_coins,
@@ -4696,10 +4804,21 @@ def get_quiz_sessions():
                 INNER JOIN lifeapp.la_topics lat 
                     ON lat.id = laqg.la_topic_id
                 INNER JOIN lifeapp.schools ls 
-                    ON ls.id = u.school_id;
+                    ON ls.id = u.school_id
+                WHERE 1=1
             """
-            cursor.execute(sql)
+            
+            params = []
+            if start_date:
+                sql += " AND laqgr.created_at >= %s"
+                params.append(start_date)
+            if end_date:
+                sql += " AND laqgr.created_at <= %s"
+                params.append(end_date)
+
+            cursor.execute(sql, params)
             result = cursor.fetchall()
+            
         return jsonify(result), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500

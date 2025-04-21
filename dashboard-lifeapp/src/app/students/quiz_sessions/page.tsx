@@ -29,6 +29,8 @@ interface QuizSession {
   earn_coins: number;
   heart_coins: number;
   brain_coins: number;
+  created_at: string;
+  coins: number;
 }
 
 interface QuestionDetail {
@@ -149,6 +151,9 @@ function ExpandedQuestions({ questions }: ExpandedQuestionsProps) {
 
 
 export default function StudentRelatedQuizSessions() {
+  const [startDate, setStartDate] = useState<string>('');
+  const [endDate, setEndDate] = useState<string>('');
+
   const [quizData, setQuizData] = useState<QuizSession[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
 
@@ -166,7 +171,12 @@ export default function StudentRelatedQuizSessions() {
     const fetchData = async () => {
       setLoading(true);
       try {
-        const res = await fetch(`${api_startpoint}/api/quiz_sessions`, { method: 'POST' });
+        const res = await fetch(`${api_startpoint}/api/quiz_sessions`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ start_date: startDate, end_date: endDate }),
+        });
+
         const data = await res.json();
         setQuizData(data);
       } catch (err) {
@@ -176,7 +186,7 @@ export default function StudentRelatedQuizSessions() {
       }
     };
     fetchData();
-  }, []);
+  }, [startDate, endDate]);
 
   // Compute unique subjects
   const subjects = useMemo(() => {
@@ -260,8 +270,32 @@ export default function StudentRelatedQuizSessions() {
     setSelectedSubject('');
     setSelectedLevel('');
     setSelectedTopic('');
+    setStartDate('');
+    setEndDate('');
     setCurrentPage(1);
   };
+  const exportToCSV = () => {
+    const csvContent = [
+      Object.keys(filteredData[0]).join(','), // Header
+      ...filteredData.map(item => 
+        Object.values({
+          ...item,
+          subject_title: JSON.parse(item.subject_title).en,
+          level_title: JSON.parse(item.level_title).en,
+          topic_title: JSON.parse(item.topic_title).en,
+        }).map(v => `"${v}"`).join(',')
+      )
+    ].join('\n');
+  
+    const blob = new Blob([csvContent], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'quiz-sessions.csv';
+    a.click();
+    window.URL.revokeObjectURL(url);
+  };
+
   return (
     <div className={`page bg-body ${inter.className} font-sans`}>
       <Sidebar />
@@ -326,14 +360,51 @@ export default function StudentRelatedQuizSessions() {
                 </div>
               )}
             </div>
-            {hasActiveFilters && (
-              <button
-                onClick={handleClearFilters}
-                className="px-3 py-1 w-[12%] rounded border bg-red-600 text-white hover:bg-red-700 transition-colors"
-              >
-                Clear All Filters
-              </button>
-            )}
+            {/* Filters & Export Row */}
+            <div className="flex flex-wrap items-center gap-4">
+              {/* Left: clear‑filters (only if active) */}
+              {hasActiveFilters && (
+                <button
+                  onClick={handleClearFilters}
+                  className="px-3 py-1 rounded border bg-red-600 text-white hover:bg-red-700 transition-colors"
+                >
+                  Clear All Filters
+                </button>
+              )}
+
+              {/* Right: date pickers */}
+              <div className="flex gap-4 flex-wrap items-end">
+                <div className="flex flex-col gap-1">
+                  <label className="text-sm">Start Date</label>
+                  <input
+                    type="date"
+                    value={startDate}
+                    onChange={(e) => setStartDate(e.target.value)}
+                    className="border rounded p-1"
+                  />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-sm">End Date</label>
+                  <input
+                    type="date"
+                    value={endDate}
+                    onChange={(e) => setEndDate(e.target.value)}
+                    className="border rounded p-1"
+                  />
+                </div>
+
+                {/* Export button, vertically centered by items-center on parent */}
+                <button
+                  onClick={exportToCSV}
+                  className="px-3 py-1 bg-green-600 text-white rounded hover:bg-green-700 transition-colors"
+                >
+                  Export to CSV
+                </button>
+              </div>
+            </div>
+
+
+            
             <div className="flex flex-row gap-4">
               <div className="bg-white shadow rounded p-4 border border-gray-200">
                 <div className="text-xs text-gray-500 uppercase mb-1">Total Game Sessions</div>
@@ -380,6 +451,8 @@ export default function StudentRelatedQuizSessions() {
                         <th className="text-left">Time Taken</th>
                         <th className="text-left">Total Q</th>
                         <th className="text-left">Correct Q</th>
+                        <th className="text-left">Created At</th>
+                        <th className="text-left">Coins</th>
                         <th className="text-left">User Name</th>
                         <th className="text-left">School</th>
                         <th className="text-left">Earn Coins</th>
@@ -398,6 +471,8 @@ export default function StudentRelatedQuizSessions() {
                           <td>{entry.time_taken}</td>
                           <td>{entry.total_questions}</td>
                           <td>{entry.total_correct_answers}</td>
+                          <td>{entry.created_at}</td>
+                          <td>{entry.coins}</td>
                           <td>{entry.user_name}</td>
                           <td>{entry.school_name}</td>
                           <td>{entry.earn_coins}</td>

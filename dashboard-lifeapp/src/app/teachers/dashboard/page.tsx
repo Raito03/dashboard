@@ -404,44 +404,69 @@ export default function TeachersDashboard() {
 
 // Fetch the subject list from the API endpoint (e.g., /api/subjects_list)
     // Fetch subjects list from the API endpoint
-useEffect(() => {
-    async function fetchSubjects() {
-      try {
-        const res = await fetch(`${api_startpoint}/api/subjects_list`, {
-          method: "POST",
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({status : "1"})
-        });
-        const data = await res.json();
-        if (Array.isArray(data)) {
-          // Filter active subjects if needed, then map to an object with id and title.
-          // Here, we assume only subjects with status 1 are active.
-          const subjects = data
-            .filter((item) => item.status === 1)
-            .map((item) => {
-              let subjectTitle = "";
-              try {
-                const titleObj = JSON.parse(item.title);
-                subjectTitle = titleObj.en;
-              } catch (error) {
-                subjectTitle = item.title;
-              }
-              return {
-                id: item.id.toString(), // Convert the id to a string
-                title: subjectTitle,
-              };
+    useEffect(() => {
+        async function fetchSubjects() {
+        try {
+            const res = await fetch(`${api_startpoint}/api/subjects_list`, {
+            method: "POST",
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({status : "1"})
             });
-          setSubjectsList(subjects);
-        } else {
-          setSubjectsList([]);
+            const data = await res.json();
+            if (Array.isArray(data)) {
+            // Filter active subjects if needed, then map to an object with id and title.
+            // Here, we assume only subjects with status 1 are active.
+            const subjects = data
+                .filter((item) => item.status === 1)
+                .map((item) => {
+                let subjectTitle = "";
+                try {
+                    const titleObj = JSON.parse(item.title);
+                    subjectTitle = titleObj.en;
+                } catch (error) {
+                    subjectTitle = item.title;
+                }
+                return {
+                    id: item.id.toString(), // Convert the id to a string
+                    title: subjectTitle,
+                };
+                });
+            setSubjectsList(subjects);
+            } else {
+            setSubjectsList([]);
+            }
+        } catch (error) {
+            console.error("Error fetching subjects:", error);
+            setSubjectsList([]);
         }
-      } catch (error) {
-        console.error("Error fetching subjects:", error);
-        setSubjectsList([]);
-      }
-    }
-    fetchSubjects();
-  }, []);
+        }
+        fetchSubjects();
+    }, []);
+
+    // Inside TeachersDashboard component
+    const [selectedBoard, setSelectedBoard] = useState("");
+    const [boardsList, setBoardsList] = useState<{ id: string; name: string }[]>([]);
+
+    // Fetch boards
+    useEffect(() => {
+        async function fetchBoards() {
+          try {
+            const res = await fetch(`${api_startpoint}/api/boards`, {
+              method: 'POST'
+            });
+            const data = await res.json();
+            if (Array.isArray(data)) {
+              setBoardsList(data.map(board => ({
+                id: board.id.toString(),
+                name: board.name
+              })));
+            }
+          } catch (error) {
+            console.error("Error fetching boards:", error);
+          }
+        }
+        fetchBoards();
+    }, []);
 
     const handleSearch = async () => {
         const filters = {
@@ -454,6 +479,7 @@ useEffect(() => {
             teacher_grade: selectedGradeFilter ? parseInt(selectedGradeFilter) : "",    // New grade filter
             from_date: selectedFromDate, // Include the From Date filter
             to_date: selectedToDate,      // Include the To Date filter
+            board: selectedBoard,
         };
     
         setIsTableLoading(true);
@@ -513,6 +539,7 @@ useEffect(() => {
         setSelectedToDate("");   // Clear the To Date
         setSelectedTeacherSubject("");
         setSelectedGradeFilter("");
+        setSelectedBoard("");
         setTableData([]);
     };
 
@@ -621,6 +648,8 @@ useEffect(() => {
                 const options = {
                     chart: {
                         map: topology,
+                        height: 700,
+                        width: 700,
                     },
                     title: {
                         text: "Teacher Distribution Across India",
@@ -651,10 +680,20 @@ useEffect(() => {
                             },
                             dataLabels: {
                                 enabled: true,
-                                format: '{point.name}',
+                                format: '{point.name}  {point.value}',
                                 style: {
-                                    fontSize: '8px'
-                                }
+                                    fontSize: '10px',
+                                    color: '#2d2d2d', // Dark gray for better readability
+                                    textOutline: '1px white', // White outline for contrast
+                                    fontWeight: 'bold',
+                                    textAlign: 'center',
+                                    whiteSpace: 'normal' // Allow text wrappin
+                                  },
+                                  backgroundColor: 'rgba(255,255,255,0.7)',
+                                  padding: 4,
+                                  borderRadius: 4,
+                                  verticalAlign: 'middle',
+                                  shape: 'rect',
                             },
                         },
                     ],
@@ -812,196 +851,292 @@ useEffect(() => {
         grade: number | string;
         subject: string;
         section: string;
+        board: string;
         count: number;
     }
+
+    type NestedStructure = Record<
+        string,
+        Record<
+            string,
+            {
+            total: number;
+            sections: Record<
+                string,
+                {
+                total: number;
+                boards: Record<string, number>;
+                }
+            >;
+            }
+        >
+    >;
       
       // Suppose detailedData is fetched from your API endpoint.
     const TeachersDrilldownChart: React.FC<{ detailedData: DrilldownChartData[] }> = ({ detailedData }) => {
-        // We'll store the current chart option in state
-        const [chartOption, setChartOption] = useState<any>({});
-        // Whether we are in drilldown mode
-        const [drilled, setDrilled] = useState(false);
-        // Save the aggregated option so we can come back
-        const [aggregatedOption, setAggregatedOption] = useState<any>(null);
-        
+        const [drillLevel, setDrillLevel] = useState(0);  // 0=grade/subject, 1=sections, 2=boards
+        const [nested, setNested] = useState<NestedStructure>({});
+        const [mainOption, setMainOption] = useState<any>(null);
+        // const [chartOption, setChartOption] = useState<any>(null);
+        const [lastDrillInfo, setLastDrillInfo] = useState<any>(null);
+        const [chartInstance, setChartInstance] = useState<any>(null);
+        const [chartOption, setChartOption] = useState<any>({}); 
+        const [isChartReady, setIsChartReady] = useState(false);
+        // Build nested data & main chart
         useEffect(() => {
-            if (!detailedData || detailedData.length === 0) return;
-        
-            // Process the data into a nested structure:
-            const groupData: Record<
-            string,
-            Record<string, { total: number; sections: Record<string, number> }>
-            > = {};
-        
-            detailedData.forEach(row => {
-            const grade = row.grade.toString();
-            const subject = row.subject;
-            const section = row.section;
-            const count = Number(row.count);
-        
-            if (!groupData[grade]) {
-                groupData[grade] = {};
-            }
-            if (!groupData[grade][subject]) {
-                groupData[grade][subject] = { total: 0, sections: {} };
-            }
-            groupData[grade][subject].total += count;
-            groupData[grade][subject].sections[section] = (groupData[grade][subject].sections[section] || 0) + count;
-            });
-        
-            // Create a sorted list of grade categories (as strings)
-            const gradeCategories = Object.keys(groupData)
-            .map(Number)
-            .sort((a, b) => a - b)
-            .map(String);
-        
-            // Create the unique list of subjects across grades
-            const subjectsSet = new Set<string>();
-            Object.values(groupData).forEach(subjectObj => {
-            Object.keys(subjectObj).forEach(subject => subjectsSet.add(subject));
-            });
-            const subjects = Array.from(subjectsSet);
-        
-            // Build series for aggregated view: one series per subject
-            const seriesData = subjects.map(subject => {
-            return {
-                name: subject,
-                type: 'bar',
-                data: gradeCategories.map(grade => {
-                const gradeData = groupData[grade];
-                if (gradeData && gradeData[subject]) {
-                    return {
-                    value: gradeData[subject].total,
-                    // We pass the grade and subject together for drilldown later
-                    drillInfo: { grade, subject }
-                    };
-                }
-                return { value: 0 };
-                })
-            };
-            });
-        
-            const aggregated = {
-            // title: { text: 'Teachers Distribution by Grade and Subject' },
-            tooltip: {
-                trigger: 'axis'
-            },
-            legend: {
-                data: subjects
-            },
-            xAxis: {
-                type: 'category',
-                data: gradeCategories,
-                name: 'Grade'
-            },
-            yAxis: {
-                type: 'value',
-                name: 'Teacher Count'
-            },
-            series: seriesData,
+          if (!detailedData.length) return;
+          const build: NestedStructure = {};
+          detailedData.forEach(({ grade, subject, section, board, count }) => {
+            const g = String(grade);
+            build[g] = build[g] || {};
+            build[g][subject] = build[g][subject] || { total: 0, sections: {} };
+            build[g][subject].total += count;
+      
+            const secMap = build[g][subject].sections;
+            secMap[section] = secMap[section] || { total: 0, boards: {} };
+            secMap[section].total += count;
+            secMap[section].boards[board] =
+              (secMap[section].boards[board] || 0) + count;
+          });
+          setNested(build);
+      
+          // Prepare grade‑subject aggregate
+          const grades = Object.keys(build).sort((a, b) => +a - +b);
+          const subjects = Array.from(
+            new Set(grades.flatMap((g) => Object.keys(build[g])))
+          );
+      
+          const series = subjects.map((subj) => ({
+            name: subj,
+            type: 'bar',
+            label: { show: true, position: 'top' },
+            data: grades.map((g) => ({
+              value: build[g][subj]?.total || 0,
+              drillInfo: { grade: g, subject: subj }
+            }))
+          }));
+      
+          const option = {
+            tooltip: { trigger: 'axis' },
+            legend: { data: subjects },
+            xAxis: { type: 'category', data: grades, name: 'Grade' },
+            yAxis: { type: 'value', name: 'Teacher Count' },
+            series,
             graphic: {
                 elements: [
-                {
+                  {
                     type: 'text',
                     left: 'center',
-                    bottom: 10, // distance from bottom of chart container
+                    bottom: 10,
                     style: {
-                    text: 'Note: Click on bars to drill down by section',
-                    font: '14px sans-serif',
-                    fill: '#555',
+                      text: 'Note: Click on bars to drill down by Section',
+                      font: '14px sans-serif',
+                      fill: '#555'
                     }
-                }
+                  }
                 ]
             }
-            
-            };
-        
-            setAggregatedOption(aggregated);
-            setChartOption(aggregated);
-            setDrilled(false);
+          };
+      
+          setMainOption(option);
+          setChartOption(option);
+          setIsChartReady(true); // Mark as ready after data processing
+          setDrillLevel(0);
         }, [detailedData]);
-        
-        // Handler for clicking on a bar to drill down
-            const onChartClick = (params: any) => {
-            // If already drilled, ignore
-            if (drilled) return;
-        
-            // params.data.drillInfo should exist if we set it in aggregated view
-            if (params.data && params.data.drillInfo) {
-                const { grade, subject } = params.data.drillInfo;
-                // Build drilldown option based on groupData for this grade and subject
-                // We recompute the grouping for the current grade:
-                const filteredData = detailedData.filter(row => row.grade.toString() === grade && row.subject === subject);
-                
-                // Build section breakdown: section -> total count
-                const sections: Record<string, number> = {};
-                filteredData.forEach(row => {
-                const section = row.section;
-                sections[section] = (sections[section] || 0) + row.count;
-                });
-        
-                // Create drilldown chart option
-                const drillOption = {
-                title: { text: `Detail for Grade ${grade} - ${subject}` },
-                tooltip: {},
-                xAxis: {
-                    type: 'category',
-                    data: Object.keys(sections),
-                    name: 'Section'
-                },
-                yAxis: {
-                    type: 'value',
-                    name: 'Teacher Count'
-                },
-                series: [{
-                    type: 'bar',
-                    data: Object.entries(sections).map(([section, count]) => ({ value: count, name: section }))
-                }],
-                graphic: {
-                    elements: [
-                    {
-                        type: 'text',
-                        left: 'center',
-                        bottom: 10, // distance from bottom of chart container
-                        style: {
-                        text: 'Note: Click on "Back" to go to the main graph',
-                        font: '14px sans-serif',
-                        fill: '#555',
-                        }
-                    }
-                    ]
+      
+        // Handle clicks to drill down
+        const onChartClick = (params: any) => {
+          const info = params.data?.drillInfo;
+          if (!info) return;
+      
+          // === Level 0 → 1: show sections for (grade,subject)
+          if (drillLevel === 0) {
+            const { grade, subject } = info;
+            const secsMap = nested[grade][subject].sections;
+            const secs = Object.keys(secsMap);
+      
+            setChartOption({
+              title: { text: `Grade ${grade} — ${subject}` },
+              tooltip: { trigger: 'axis' },
+              xAxis: { type: 'category', data: secs, name: 'Section' },
+              yAxis: { type: 'value', name: 'Teacher Count' },
+              series: [
+                {
+                  type: 'bar',
+                  label: { show: true, position: 'top' },
+                  data: secs.map((sec) => ({
+                    name: sec,
+                    value: secsMap[sec].total,
+                    drillInfo: { grade, subject, section: sec }
+                  }))
                 }
-                
-                };
-        
-                setChartOption(drillOption);
-                setDrilled(true);
-            }
-            };
-        
-            // Handler to return to the aggregated view
-            const handleBack = () => {
-            if (aggregatedOption) {
-                setChartOption(aggregatedOption);
-                setDrilled(false);
-            }
-            };
-        
-            // Set up event handlers
-            const onEvents = {
-            'click': onChartClick
+              ],
+              graphic: {
+                elements: [{
+                  type: 'text',
+                  left: 'center',
+                  bottom: 10,
+                  style: {
+                    text: 'Note: Click on bars to drill down by Boards',
+                    font: '14px sans-serif',
+                    fill: '#555'
+                  }
+                }]
+              },
+            });
+            setLastDrillInfo(info);
+            setDrillLevel(1);
+          }
+          // === Level 1 → 2: show boards for (grade,subject,section)
+          else if (drillLevel === 1) {
+            const { grade, subject, section } = info;
+            const boardsMap =
+              nested[grade][subject].sections[section].boards;
+            const boards = Object.keys(boardsMap);
+      
+            setChartOption({
+              title: { text: `Grade ${grade} — ${subject} / ${section}` },
+              tooltip: { trigger: 'axis' },
+              xAxis: { type: 'category', data: boards, name: 'Board' },
+              yAxis: { type: 'value', name: 'Teacher Count' },
+              series: [
+                {
+                  type: 'bar',
+                  label: { show: true, position: 'top' },
+                  data: boards.map((b) => ({
+                    name: b,
+                    value: boardsMap[b]
+                  }))
+                }
+              ],
+              graphic: {
+                elements: [
+                  {
+                    type: 'text',
+                    left: 'center',
+                    bottom: 10,
+                    style: {
+                      text: 'Note: Use the Back button to return',
+                      font: '14px sans-serif',
+                      fill: '#555'
+                    }
+                  }
+                ]
+              }
+            });
+            setLastDrillInfo(info);
+            setDrillLevel(2);
+          }
         };
+        
+        // Download handler
+        const handleDownload = () => {
+            if (chartInstance) {
+              const url = chartInstance.getDataURL({ type: 'png', pixelRatio: 2, backgroundColor: '#fff' });
+              const link = document.createElement('a');
+              link.href = url;
+              link.download = 'teachers-chart.png';
+              link.click();
+            }
+        };
+        // Back‑button logic
+        const handleBack = () => {
+          if (drillLevel === 2) {
+            // back → sections
+            const { grade, subject } = lastDrillInfo;
+            const secsMap = nested[grade][subject].sections;
+            const secs = Object.keys(secsMap);
+            setChartOption({
+              title: { text: `Grade ${grade} — ${subject}` },
+              tooltip: { trigger: 'axis' },
+              xAxis: { type: 'category', data: secs, name: 'Section' },
+              yAxis: { type: 'value', name: 'Teacher Count' },
+              series: [
+                {
+                  type: 'bar',
+                  label: { show: true, position: 'top' },
+                  data: secs.map((sec) => ({
+                    name: sec,
+                    value: secsMap[sec].total,
+                    drillInfo: { grade, subject, section: sec }
+                  }))
+                }
+              ],
+              graphic: {
+                elements: [
+                  {
+                    type: 'text',
+                    left: 'center',
+                    bottom: 10,
+                    style: {
+                      text: 'Note: Click on bars to drill down by Board',
+                      font: '14px sans-serif',
+                      fill: '#555'
+                    }
+                  }
+                ]
+              }
+            });
+            setDrillLevel(1);
+          } else {
+            // back → main
+            setChartOption(mainOption);
+            setDrillLevel(0);
+          }
+        };
+        
+        // const [isChartReady, setIsChartReady] = useState(false);
+
+        // Add this useEffect to handle initial load
+        useEffect(() => {
+            if (chartOption && chartInstance) {
+                setIsChartReady(true);
+            }
+        }, [chartOption, chartInstance]);
+
+        // Modify the onChartReady handler
+        const handleChartReady = (echartsInstance: any) => {
+            setChartInstance(echartsInstance);
+            setIsChartReady(true);
+        };
+
         return (
-            <div>
-                {drilled && <button onClick={handleBack} style={{ marginBottom: '10px' }}>Back</button>}
-                <ReactECharts
-                option={chartOption}
-                onEvents={onEvents}
-                style={{ height: '500px', width: '100%' }}
-                />
+        <div>
+            <div className="d-flex gap-2 mb-3">
+                {drillLevel > 0 && (
+                    <button className="btn btn-secondary" onClick={handleBack}>
+                        {drillLevel === 2 ? '← Back to Sections' : '← Back to Subjects'}
+                    </button>
+                )}
+                <button 
+                    className="btn btn-primary" 
+                    onClick={handleDownload}
+                    disabled={!isChartReady}
+                >
+                    Download PNG
+                </button>
             </div>
-        );
-    }
+
+            {/* {!isChartReady ? (
+                <div className="text-center p-4">
+                    <div className="spinner-border text-purple" role="status">
+                        <span className="visually-hidden">Loading Chart...</span>
+                    </div>
+                </div>
+            ) : ( */}
+                <ReactECharts
+                    option={chartOption}
+                    onEvents={{ click: onChartClick }}
+                    style={{ height: 500, width: '100%' }}
+                    onChartReady={handleChartReady}
+                    shouldSetOption={(prevProps, nextProps) => 
+                        JSON.stringify(prevProps.option) !== JSON.stringify(nextProps.option)
+                    }
+                />
+            {/* )} */}
+        </div>
+    );
+};
       
     const [showGraphSectionModal, setShowGraphSectionModal] = useState(false);
     // Function to export tableData as CSV
@@ -1058,46 +1193,63 @@ useEffect(() => {
         setTeacherForm(prev => ({ ...prev, [field]: value }));
     };
 
-  const handleAddTeacher = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setAddingTeacher(true);
-    setAddTeacherError(null);
-    try {
-      const res = await fetch(`${api_startpoint}/api/add_teacher`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(teacherForm)
-      });
-      const result = await res.json();
-      if (!res.ok) {
-        throw new Error(result.error || "Failed to add teacher");
-      }
-      setShowAddTeacherModal(false);
-      setTeacherForm({
-        name: "",
-        email: "",
-        mobile_no: "",
-        state: "",
-        city: "",
-        school: "",
-        school_id: "",
-        teacher_subject: "",
-        teacher_grade: "",
-        teacher_section: ""
-      });
-      // Optionally, refresh table data here.
-    } catch (err: unknown) {
-      if (err instanceof Error) {
-        setAddTeacherError(err.message);
-      } else {
-        setAddTeacherError("Unknown error occurred");
-      }
-    } finally {
-      setAddingTeacher(false);
-    }
-  };
+    const handleAddTeacher = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setAddingTeacher(true);
+        setAddTeacherError(null);
+        try {
+        const res = await fetch(`${api_startpoint}/api/add_teacher`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(teacherForm)
+        });
+        const result = await res.json();
+        if (!res.ok) {
+            throw new Error(result.error || "Failed to add teacher");
+        }
+        setShowAddTeacherModal(false);
+        setTeacherForm({
+            name: "",
+            email: "",
+            mobile_no: "",
+            state: "",
+            city: "",
+            school: "",
+            school_id: "",
+            teacher_subject: "",
+            teacher_grade: "",
+            teacher_section: ""
+        });
+        // Optionally, refresh table data here.
+        } catch (err: unknown) {
+        if (err instanceof Error) {
+            setAddTeacherError(err.message);
+        } else {
+            setAddTeacherError("Unknown error occurred");
+        }
+        } finally {
+        setAddingTeacher(false);
+        }
+    };
       
-  
+    
+    const [tmcAssignedByTeacher, setTmcAssignedByTeacher] = useState<number>(0)
+    useEffect(() => {
+        async function fetchTmcAssignedByTeacher() {
+            try {
+                const res = await fetch(`${api_startpoint}/api/total-missions-completed-assigned-by-teacher`, {
+                    method: 'POST'
+                })
+                const data = await res.json()
+                if (data && data.length > 0) {
+                    setTmcAssignedByTeacher(data[0].count)
+                }
+            } catch (error) {
+                console.error('Error fetching total-missions-completed-assigned-by-teacher:', error)
+            }
+            }
+            fetchTmcAssignedByTeacher()
+    }, [])
     return (
         <div className={`page bg-light ${inter.className} font-sans`}>
             <Sidebar />
@@ -1136,6 +1288,7 @@ useEffect(() => {
                                 { title: 'Highest Online User Count', value: 0, icon: <IconUserScan />, color: 'bg-blue', suffix: '' },
                                 { title: 'Total Number of Schools', value: schoolCount, icon: <IconUserScan />, color: 'bg-blue', suffix: '' },
                                 { title: 'Total number of resources downloaded', value: 165, icon: <IconUserScan />, color: 'bg-blue', suffix: '' },
+                                { title: 'Teacher Assign Mission Completes', value: tmcAssignedByTeacher, icon: <IconUserScan />, color: 'bg-sky-900',},
                             ].map((metric, index) => (
                                 <div className="col-sm-6 col-lg-3" key={index}>
                                     <div className="card">
@@ -1242,7 +1395,7 @@ useEffect(() => {
                         {showDemographicsModal && (
                             <div className="modal fade show" style={{ display: 'block', backgroundColor: 'rgba(0,0,0,0.5)' }}>
                                 <div className="modal-dialog modal-xl">
-                                    <div className="modal-content">
+                                    <div className="modal-content flex items-center">
                                         <div className="modal-header">
                                             <h5 className="modal-title">Teacher Distribution Across India</h5>
                                             <button 
@@ -1266,7 +1419,7 @@ useEffect(() => {
                                                 />
                                             )}
                                         </div>
-                                        <div className="modal-footer">
+                                        <div className="modal-footer w-full">
                                             <button 
                                                 type="button" 
                                                 className="btn btn-secondary" 
@@ -1496,6 +1649,21 @@ useEffect(() => {
                                             onChange={(e) => setSelectedToDate(e.target.value)}
                                         />
                                     </div>
+                                    {/* Add this  board select input with other filters */}
+                                    <div className="col-12 col-md-6 col-lg-3">
+                                        <select
+                                            className="form-select"
+                                            value={selectedBoard}
+                                            onChange={(e) => setSelectedBoard(e.target.value)}
+                                        >
+                                            <option value="">Select Board</option>
+                                            {boardsList.map((board) => (
+                                            <option key={board.id} value={board.id}>
+                                                {board.name}
+                                            </option>
+                                            ))}
+                                        </select>
+                                    </div>
                                 </div>
                                 {/* Action Buttons */}
                                 <div className="d-flex flex-wrap gap-2 mt-4">
@@ -1566,6 +1734,7 @@ useEffect(() => {
                                                                 <th>Subject</th>
                                                                 <th>Grade</th>
                                                                 <th>Section</th>
+                                                                <th>Board</th>
                                                                 <th>Actions</th>
                                                             </tr>
                                                         </thead>
@@ -1587,6 +1756,7 @@ useEffect(() => {
                                                                     <td>{JSON.parse(row.title).en}</td>
                                                                     <td>{row.grade_name}</td>
                                                                     <td>{row.section_name}</td>
+                                                                    <td>{row.board_name}</td>
                                                                     <td >
                                                                         <button
                                                                         className="btn btn-sm btn-primary me-2 "

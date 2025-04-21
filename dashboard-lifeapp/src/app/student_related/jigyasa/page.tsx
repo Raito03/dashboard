@@ -373,7 +373,7 @@ export default function StudentRelatedJigyasa() {
 
                         {openModal && (
                                 <div className="fixed inset-0 bg-black bg-opacity-50 mt-0 flex justify-center items-center z-50">
-                                <div className="bg-white p-6 gap-1 rounded-xl shadow-lg max-w-xl w-full ">
+                                <div className="bg-white p-6 gap-1 rounded-xl shadow-lg max-w-xl w-full max-h-[90vh] overflow-y-auto ">
                                     <h2 className="text-xl font-semibold mb-4">Add New Mission</h2>
 
                                     <label className="block mt-2">Subject</label>
@@ -462,7 +462,7 @@ export default function StudentRelatedJigyasa() {
 
                         {showEditModal && (
                         <div className="fixed inset-0 bg-black bg-opacity-50 mt-0 flex justify-center items-center z-50">
-                            <div className="bg-white rounded-xl shadow p-6 w-full max-w-lg">
+                            <div className="bg-white rounded-xl shadow p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto">
                             <h2 className="text-xl font-semibold mb-4">Edit Mission</h2>
                             <div className="flex flex-col gap-1">
                                 <label className="block mt-1">Title</label>
