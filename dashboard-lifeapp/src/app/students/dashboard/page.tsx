@@ -949,16 +949,24 @@ export default function StudentDashboard() {
         async function fetchTotalPointsEarned() {
         try {
             const res = await fetch(`${api_startpoint}/api/total-points-earned`, {
-                method: 'POST'
+            method: 'POST'
             })
+            
+            if (!res.ok) {
+            throw new Error(`HTTP error! status: ${res.status}`);
+            }
+
             const data = await res.json()
-            if (data && data.length > 0) {
-                setTotalPointsEarned(data[0].total_points)
+            
+            // Access the total_points directly from the response object
+            if (data && typeof data.total_points === 'string') {
+            setTotalPointsEarned(parseInt(data.total_points))
             }
         } catch (error) {
-            console.error('Error fetching user count:', error)
+            console.error('Error fetching total points:', error)
         }
         }
+        
         fetchTotalPointsEarned()
     }, [])
 

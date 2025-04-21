@@ -3520,21 +3520,38 @@ def get_challenges_completed_per_mission():
     finally:
         connection.close()
 
-@app.route('/api/total-points-earned', methods = ['POST'])
+@app.route('/api/total-points-earned', methods=['POST'])
 def get_total_points_earned():
-    sql = """
-        select sum(points) as total_points from lifeapp.la_mission_completes;
+    sql1 = """
+        SELECT COALESCE(SUM(points), 0) AS total_points 
+        FROM lifeapp.la_mission_completes;
+    """
+    sql2 = """
+        SELECT COALESCE(SUM(coins), 0) AS total_coins 
+        FROM lifeapp.la_quiz_game_results;
     """
     try:
         connection = get_db_connection()
         with connection.cursor() as cursor:
-            cursor.execute(sql)
-            result = cursor.fetchall()  
-        return jsonify(result), 200
+            # Execute first query to get points sum
+            cursor.execute(sql1)
+            result_points = cursor.fetchone()
+            total_points = result_points['total_points']
+
+            # Execute second query to get coins sum
+            cursor.execute(sql2)
+            result_coins = cursor.fetchone()
+            total_coins = result_coins['total_coins']
+
+            # Calculate combined total
+            combined_total = total_points + total_coins
+
+        return jsonify({"total_points": combined_total}), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
     finally:
-        connection.close()
+        if 'connection' in locals():
+            connection.close()
 
 @app.route('/api/total-points-redeemed', methods = ['POST'])
 def get_total_points_redeemed():
