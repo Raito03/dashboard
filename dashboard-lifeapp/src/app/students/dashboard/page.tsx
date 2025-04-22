@@ -480,7 +480,9 @@ export default function StudentDashboard() {
     const [tableData, setTableData] = useState<any[]>([]);
     const [currentPage, setCurrentPage] = useState<number>(0);
     const [selectedMobileNo, setSelectedMobileNo] = useState("");
-    const [selectedSchoolCode, setSelectedSchoolCode] = useState("");
+    const [inputCode, setInputCode] = useState("");
+    // Update existing state declaration
+    const [selectedSchoolCode, setSelectedSchoolCode] = useState<string[]>([]);
     const rowsPerPage = 50;
     const [isTableLoading, setIsTableLoading] = useState(false);
     // Handler for search button
@@ -498,7 +500,7 @@ export default function StudentDashboard() {
             from_date: selectedFromDate, // Include the From Date filter
             to_date: selectedToDate,      // Include the To Date filter
             mobile_no: selectedMobileNo,
-            schoolCode : selectedSchoolCode,
+            schoolCode : selectedSchoolCode.length > 0 ? selectedSchoolCode : undefined,
         };
 
         setIsTableLoading(true); // Set loading to true when search starts
@@ -537,7 +539,8 @@ export default function StudentDashboard() {
         setSelectedToDate("");   // Clear the To Date
         // Clear other filters...
         setSelectedMobileNo("");
-        setSelectedSchoolCode("");
+        setInputCode("");
+        setSelectedSchoolCode([]);
         setTableData([]);
     };
 
@@ -4008,15 +4011,41 @@ export default function StudentDashboard() {
                                             className="form-control"
                                         />
                                     </div>
-                                    <div className="col-12 col-md-6 col-lg-3">
-                                        <input
+                                    <div className="col-12 col-md-6 col-lg-4">
+                                        <div className="border rounded p-2 bg-white">
+                                            
+                                            <input
                                             type="text"
-                                            placeholder="Search With School code"
-                                            className="form-control"
-                                            value={selectedSchoolCode}
-                                            onChange={(e) => setSelectedSchoolCode(e.target.value)}
-                                        />
-                                    </div>
+                                            placeholder="Search With School code (comma separated)"
+                                            className="form-control border-0 p-0"
+                                            value={inputCode}
+                                            onChange={(e) => setInputCode(e.target.value)}
+                                            onKeyDown={(e) => {
+                                                if (['Enter', ',', ' '].includes(e.key)) {
+                                                e.preventDefault();
+                                                const code = inputCode.trim();
+                                                if (code && !selectedSchoolCode.includes(code)) {
+                                                    setSelectedSchoolCode(prev => [...prev, code]);
+                                                }
+                                                setInputCode('');
+                                                }
+                                            }}
+                                            />
+                                            <div className="d-flex flex-wrap gap-2 mt-2">
+                                            {selectedSchoolCode.map(code => (
+                                                <span key={code} className="badge bg-purple text-white d-flex align-items-center">
+                                                {code}
+                                                <button 
+                                                    type="button" 
+                                                    className="btn-close btn-close-white ms-2" 
+                                                    onClick={() => setSelectedSchoolCode(prev => prev.filter(c => c !== code))}
+                                                    aria-label="Remove"
+                                                ></button>
+                                                </span>
+                                            ))}
+                                            </div>
+                                        </div>
+                                        </div>
                                 </div>
 
                                 {/* Action Buttons */}

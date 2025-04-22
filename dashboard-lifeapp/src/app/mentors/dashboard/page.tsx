@@ -604,6 +604,35 @@ export default function MentorsDashboard() {
       })
       .catch((error) => console.error('Error deleting mentor:', error));
   };
+
+  const [showCsvModal, setShowCsvModal] = useState(false);
+  const [csvFile, setCsvFile] = useState<File | null>(null);
+  const [uploadStatus, setUploadStatus] = useState<string | null>(null);
+  const handleCsvUpload = async () => {
+    if (!csvFile) return;
+  
+    const formData = new FormData();
+    formData.append('csv', csvFile);
+  
+    try {
+      setUploadStatus('Uploading...');
+      const res = await fetch(`${api_startpoint}/api/upload_mentors_csv`, {
+        method: 'POST',
+        body: formData,
+      });
+  
+      if (!res.ok) throw new Error(await res.text());
+      
+      setUploadStatus('Upload successful!');
+      setTimeout(() => {
+        setShowCsvModal(false);
+        fetchMentors(); // Refresh the list
+      }, 1500);
+    } catch (error) {
+      console.error('Upload failed:', error);
+      setUploadStatus('Upload failed. Please check the file format.');
+    }
+  };
   
   return (
     <div className={`page bg-body ${inter.className} font-sans`}>
@@ -618,9 +647,15 @@ export default function MentorsDashboard() {
                   <h6 className="text-sm text-gray-500">Total Mentors</h6>
                   <p className="text-2xl font-bold text-gray-800">{mentors.length}</p>
                 </div>
-                <div className="flex justify-center justify-items-center  w-1/6 h-1/2">
+                <div className="flex justify-center justify-items-center w-2/6 h-1/2 gap-2">
                   <button className="btn btn-primary text-center mb-0 " onClick={() => setShowAddModal(true)}>
                     <IconPlus size={18} /> Add Mentor
+                  </button>
+                  <button 
+                    className="btn btn-info text-center mb-0 text-white"
+                    onClick={() => setShowCsvModal(true)}
+                  >
+                    <IconPlus size={18} /> Upload CSV
                   </button>
                 </div>
                 
@@ -941,6 +976,45 @@ export default function MentorsDashboard() {
               </div>
             )}
 
+            {showCsvModal && (
+              <div className="modal fade show mt-0" style={{ display: "block", backgroundColor: "rgba(0,0,0,0.5)" }}>
+                <div className="modal-dialog">
+                  <div className="modal-content">
+                    <div className="modal-header">
+                      <h5 className="modal-title">Upload Mentors CSV</h5>
+                      <button type="button" className="btn-close" onClick={() => setShowCsvModal(false)}></button>
+                    </div>
+                    <div className="modal-body">
+                      <div className="mb-3">
+                        <label className="form-label">Select CSV File</label>
+                        <input 
+                          type="file" 
+                          className="form-control"
+                          accept=".csv"
+                          onChange={(e) => setCsvFile(e.target.files?.[0] || null)}
+                        />
+                        <div className="form-text">
+                          CSV format: name,email,mobile_no,pin,state,city,gender,dob
+                        </div>
+                      </div>
+                      {uploadStatus && <div className="alert alert-info">{uploadStatus}</div>}
+                    </div>
+                    <div className="modal-footer">
+                      <button className="btn btn-secondary" onClick={() => setShowCsvModal(false)}>
+                        Cancel
+                      </button>
+                      <button 
+                        className="btn btn-primary" 
+                        onClick={handleCsvUpload}
+                        disabled={!csvFile || !!uploadStatus}
+                      >
+                        Upload
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>

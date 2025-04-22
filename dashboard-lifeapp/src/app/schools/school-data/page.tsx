@@ -391,6 +391,38 @@ export default function SchoolData() {
     setCurrentPage(prev => (prev + 1) * rowsPerPage < tableData.length ? prev + 1 : prev);
   };
 
+  // Add this state near other modal states
+  const [showCsvModal, setShowCsvModal] = useState(false);
+  const [csvFile, setCsvFile] = useState<File | null>(null);
+  const [uploadStatus, setUploadStatus] = useState<string | null>(null);
+
+  // Add this handler
+  const handleCsvUpload = async () => {
+    if (!csvFile) return;
+
+    const formData = new FormData();
+    formData.append('csv', csvFile);
+
+    try {
+      setUploadStatus('Uploading...');
+      const res = await fetch(`${api_startpoint}/api/upload_schools_csv`, {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!res.ok) throw new Error(await res.text());
+      
+      setUploadStatus('Upload successful!');
+      setTimeout(() => {
+        setShowCsvModal(false);
+        fetchSchools();
+      }, 1500);
+    } catch (error) {
+      console.error('Upload failed:', error);
+      setUploadStatus('Upload failed. Please check the file format.');
+    }
+  };
+
   // ------------------- Render -------------------
   return (
     <div className={`page bg-light ${inter.className} font-sans`}>
@@ -493,6 +525,9 @@ export default function SchoolData() {
                     </button>
                     <button className="btn btn-success d-inline-flex align-items-center" onClick={() => setShowAddModal(true)}>
                       <Plus className="me-2" size={16} /> Add School
+                    </button>
+                    <button className="btn btn-info d-inline-flex align-items-center text-white" onClick={() => setShowCsvModal(true)}>
+                      <Plus className="me-2" size={16} /> Upload CSV
                     </button>
                   </div>
                 </div>
@@ -730,6 +765,46 @@ export default function SchoolData() {
                 </button>
                 <button className="btn btn-danger" onClick={handleDeleteConfirm}>
                   Delete
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* ADD SCHOOL VIA CSV MODAL */}
+      {showCsvModal && (
+        <div className="modal fade show" style={{ display: "block", backgroundColor: "rgba(0,0,0,0.5)" }}>
+          <div className="modal-dialog">
+            <div className="modal-content">
+              <div className="modal-header">
+                <h5 className="modal-title">Upload Schools CSV</h5>
+                <button type="button" className="btn-close" onClick={() => setShowCsvModal(false)}></button>
+              </div>
+              <div className="modal-body">
+                <div className="mb-3">
+                  <label className="form-label">Select CSV File</label>
+                  <input 
+                    type="file" 
+                    className="form-control"
+                    accept=".csv"
+                    onChange={(e) => setCsvFile(e.target.files?.[0] || null)}
+                  />
+                  <div className="form-text">
+                    CSV format: name,state,city,district,pin_code,app_visible,is_life_lab,status
+                  </div>
+                </div>
+                {uploadStatus && <div className="alert alert-info">{uploadStatus}</div>}
+              </div>
+              <div className="modal-footer">
+                <button className="btn btn-secondary" onClick={() => setShowCsvModal(false)}>
+                  Cancel
+                </button>
+                <button 
+                  className="btn btn-primary" 
+                  onClick={handleCsvUpload}
+                  disabled={!csvFile || !!uploadStatus}
+                >
+                  Upload
                 </button>
               </div>
             </div>

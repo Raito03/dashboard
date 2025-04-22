@@ -1,5 +1,7 @@
 # app.py
 from binascii import Error
+import csv
+import io
 from flask import Flask, json, jsonify, request
 from flask_cors import CORS
 import pymysql.cursors
@@ -1277,7 +1279,7 @@ def search():
     from_date = filters.get('from_date')  # New filter: starting date
     to_date = filters.get('to_date')      # New filter: ending date
     mobile_no = filters.get('mobile_no')
-    schoolCode = filters.get('schoolCode')
+    schoolCodes = filters.get('schoolCode')
     
     # Build the base query with the CTE, including mission count aggregations
     sql = """
@@ -1355,11 +1357,28 @@ def search():
         elif earn_coins == "1000+":
             sql += " AND u.earn_coins > 1000"
 
-    if schoolCode:
-        sql += " AND u.school_id = %s OR u.school_code = %s"
-        params.append(schoolCode)
-        params.append(int(schoolCode))
-    
+    if schoolCodes:
+        # 1. Make sure it’s a Python list
+        codes = schoolCodes if isinstance(schoolCodes, list) else [schoolCodes]
+
+        # 2. Create “%s,%s,…,%s” with one %s per code
+        placeholders = ",".join(["%s"] * len(codes))
+
+        # 3. Inject both IN‑lists into your SQL
+        sql += f"""
+        AND (
+            u.school_code IN ({placeholders})
+        OR u.school_id   IN ({placeholders})
+        )
+        """
+
+        # 4a. Bind for u.school_code → cast each code to int()
+        params.extend([int(c) for c in codes])
+
+        # 4b. Bind for u.school_id   → use the raw codes (or ints if your IDs are numeric)
+        params.extend(codes)
+
+        
     if mobile_no:
         sql+= " AND u.mobile_no = %s"
         params.append(mobile_no)
@@ -2924,6 +2943,64 @@ def delete_school_data(school_id):
         return jsonify({"error": str(e)}), 500
     finally:
         connection.close()
+
+@app.route('/api/upload_schools_csv', methods=['POST'])
+def upload_schools_csv():
+    if 'csv' not in request.files:
+        return jsonify({"error": "No file uploaded"}), 400
+        
+    file = request.files['csv']
+    if file.filename == '':
+        return jsonify({"error": "No selected file"}), 400
+        
+    if not file.filename.endswith('.csv'):
+        return jsonify({"error": "File must be a CSV"}), 400
+
+    try:
+        # Read CSV file
+        stream = io.StringIO(file.stream.read().decode("UTF8"), newline=None)
+        csv_reader = csv.DictReader(stream)
+        
+        connection = get_db_connection()
+        with connection.cursor() as cursor:
+            sql = """
+                INSERT INTO lifeapp.schools 
+                (name, state, city, district, pin_code, app_visible, is_life_lab, status, created_at, updated_at)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, NOW(), NOW())
+            """
+            
+            count = 0
+            for row in csv_reader:
+                # Validate required fields
+                required_fields = ['name', 'state', 'city', 'district', 'pin_code']
+                if not all(row.get(field) for field in required_fields):
+                    continue  # Skip invalid rows
+                
+                # Convert Yes/No to 1/0
+                app_visible_val = 1 if row.get('app_visible', 'No').strip().lower() == 'yes' else 0
+                is_life_lab_val = 1 if row.get('is_life_lab', 'No').strip().lower() == 'yes' else 0
+                status_val = 1 if row.get('status', 'Inactive').strip().lower() == 'active' else 0
+                
+                cursor.execute(sql, (
+                    row['name'],
+                    row['state'],
+                    row['city'],
+                    row['district'],
+                    row['pin_code'],
+                    app_visible_val,
+                    is_life_lab_val,
+                    status_val
+                ))
+                count += 1
+            
+            connection.commit()
+            return jsonify({"message": f"Successfully uploaded {count} schools"}), 201
+            
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    finally:
+        if 'connection' in locals():
+            connection.close()
 
 # @app.route('/api/state_list', methods=['GET'])
 # def get_state_list():
@@ -4690,7 +4767,65 @@ def do_delete_mentor():
     finally:
         connection.close()
 
+@app.route('/api/upload_mentors_csv', methods=['POST'])
+def upload_mentors_csv():
+    if 'csv' not in request.files:
+        return jsonify({"error": "No file uploaded"}), 400
+        
+    file = request.files['csv']
+    if file.filename == '':
+        return jsonify({"error": "No selected file"}), 400
+        
+    if not file.filename.endswith('.csv'):
+        return jsonify({"error": "File must be a CSV"}), 400
 
+    try:
+        stream = io.StringIO(file.stream.read().decode("UTF8"), newline=None)
+        csv_reader = csv.DictReader(stream)
+        
+        connection = get_db_connection()
+        with connection.cursor() as cursor:
+            sql = """
+                INSERT INTO lifeapp.users 
+                (name, email, mobile_no, pin, state, city, gender, dob, type, 
+                 created_at, updated_at)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 4, NOW(), NOW())
+            """
+            
+            count = 0
+            for row in csv_reader:
+                # Validate required fields
+                required = ['name', 'email', 'mobile_no', 'pin']
+                if not all(row.get(field) for field in required):
+                    continue
+                
+                # Convert empty values to None
+                state = row.get('state') or None
+                city = row.get('city') or None
+                gender = row.get('gender') or 'Male'  # default to Male
+                dob = row.get('dob') or None
+
+                cursor.execute(sql, (
+                    row['name'],
+                    row['email'],
+                    row['mobile_no'],
+                    row['pin'],
+                    state,
+                    city,
+                    gender,
+                    dob
+                ))
+                count += 1
+            
+            connection.commit()
+            return jsonify({"message": f"Successfully uploaded {count} mentors"}), 201
+            
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    finally:
+        if 'connection' in locals():
+            connection.close()
+            
 ###################################################################################
 ###################################################################################
 ######################## MENTORS/SESSIONS APIs ###################################
