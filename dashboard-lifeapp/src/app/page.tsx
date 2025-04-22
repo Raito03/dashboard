@@ -2074,7 +2074,7 @@ export default function UserAnalyticsDashboard() {
 
   const jigyasaChartOption = {
     title: {
-      text: 'Jigyasa Completed Over Time',
+      text: 'Jigyasa Submitted Over Time',
       left: 'center'
     },
     tooltip: {
@@ -2149,7 +2149,7 @@ export default function UserAnalyticsDashboard() {
   // ECharts option with custom tooltip:
   const optionJigyasaTransformed = {
     title: {
-      text: 'Jigyasa Completed Over Time',
+      text: 'Jigyasa Submitted Over Time',
       left: 'center'
     },
     tooltip: {
@@ -2378,7 +2378,7 @@ export default function UserAnalyticsDashboard() {
   // ECharts option with custom tooltip:
   const optionPragyaTransformed = {
     title: {
-      text: 'Pragya Completed Over Time',
+      text: 'Pragya Submitted Over Time',
       left: 'center'
     },
     tooltip: {
@@ -2819,6 +2819,94 @@ export default function UserAnalyticsDashboard() {
     ]
   };
 
+  // ------------------------------------- Quiz Points Earned over Time --------------------------
+  // Add to your state declarations
+  const [pointsQuizGrouping, setPointsQuizGrouping] = useState<'daily'|'weekly'|'monthly'|'quarterly'|'yearly'|'lifetime'>('monthly');
+  const [pointsQuizData, setPointsQuizData] = useState<{ period: string; points: number }[]>([]);
+  const [pointsQuizLoading, setPointsQuizLoading] = useState<boolean>(true);
+
+  // Add useEffect for fetching quiz points
+  useEffect(() => {
+    const fetchPoints = async () => {
+      setPointsQuizLoading(true);
+      try {
+        const res = await fetch(`${api_startpoint}/api/quiz-points-over-time`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ grouping: pointsQuizGrouping })
+        });
+        const json = await res.json();
+        setPointsQuizData(json.data);
+      } catch (err) {
+        console.error('Error loading quiz points data', err);
+      } finally {
+        setPointsQuizLoading(false);
+      }
+    };
+    fetchPoints();
+  }, [pointsQuizGrouping]);
+
+  // Quiz points series configuration
+  const pointsQuizCoinSeries = {
+    name: 'Points',
+    type: 'bar' as const,
+    data: pointsQuizData.map(d => d.points),
+    barMaxWidth: '50%',
+    itemStyle: { color: '#5470C6' }
+  };
+
+  const totalQuizCoinSeries = {
+    name: 'Total',
+    type: 'bar' as const,
+    data: pointsQuizData.map(d => d.points),
+    barGap: '-100%',
+    itemStyle: { color: 'transparent' },
+    label: {
+      show: true,
+      position: 'top',
+      formatter: '{c}',
+      fontWeight: 'bold',
+      color: '#333'
+    },
+    tooltip: { show: false },
+    emphasis: { disabled: true },
+    z: -1
+  };
+
+  // ECharts options
+  const pointsQuizChartOption = {
+    title: { text: 'Quiz Points Over Time', left: 'center' },
+    tooltip: {
+      trigger: 'axis',
+      axisPointer: { type: 'shadow' }
+    },
+    xAxis: {
+      type: 'category',
+      data: pointsQuizData.map(d => formatPeriod(d.period, pointsQuizGrouping)),
+      boundaryGap: true,
+      axisLabel: {
+        rotate: pointsQuizGrouping === 'daily' ? 45 : 0
+      }
+    },
+    yAxis: {
+      type: 'value',
+      name: 'Points'
+    },
+    dataZoom: [
+      { type: 'inside', start: 0, end: 100 },
+      { type: 'slider', start: 0, end: 100 }
+    ],
+    grid: {
+      left: '3%',
+      right: '4%',
+      bottom: '10%',
+      containLabel: true
+    },
+    series: [
+      pointsQuizCoinSeries,
+      totalQuizCoinSeries
+    ]
+  };
   // ------------------------------------- Jigyasa Points Earned Over Time ------------------------
 
   // 1. State/hooks for mission‐points chart
@@ -4109,6 +4197,7 @@ export default function UserAnalyticsDashboard() {
   const chartRef15 = useRef<ReactECharts | null>(null);
   const chartRef16 = useRef<ReactECharts | null>(null);
   const chartRef17 = useRef<ReactECharts | null>(null);
+  const chartRef18 = useRef<ReactECharts | null>(null);
 
   const handleDownloadChart = (
       chartRef: React.RefObject<ReactECharts | null>,
@@ -4589,7 +4678,7 @@ export default function UserAnalyticsDashboard() {
                 <div className="col-12 col-xl-6">
                   <div className="card shadow-sm border-0 h-100">
                     <div className="card-header bg-transparent py-3">
-                        <h3 className="card-title mb-0 fw-semibold">Jigyasa Completed</h3>
+                        <h3 className="card-title mb-0 fw-semibold">Jigyasa Submitted</h3>
                         {/* Download button */}
                       <button
                         onClick={() => handleDownloadChart(chartRef5,'jigyasa_completed_graph')}
@@ -4672,7 +4761,7 @@ export default function UserAnalyticsDashboard() {
                 <div className="col-12 col-xl-6">
                   <div className="card shadow-sm border-0 h-100">
                     <div className="card-header bg-transparent py-3">
-                        <h3 className="card-title mb-0 fw-semibold">Pragya Completed</h3>
+                        <h3 className="card-title mb-0 fw-semibold">Pragya Submitted</h3>
                         {/* Download button */}
                       <button
                         onClick={() => handleDownloadChart(chartRef6,'pragya_completed_graph')}
@@ -4796,6 +4885,53 @@ export default function UserAnalyticsDashboard() {
                           </div>
                         : <ReactECharts ref={chartRef12} option={pointsMissionChartOption} style={{ height: 400 }} />}
                       </div>
+                  </div>
+                </div>
+                {/* Quiz Coins Earned Over Time */}
+                <div className="col-12 col-xl-6">
+                  <div className="card shadow-sm border-0 h-100">
+                    <div className="card-header bg-transparent py-3">
+                      <h3 className="card-title mb-0 fw-semibold">Quiz Points Over Time</h3>
+                      <button
+                        onClick={() => handleDownloadChart(chartRef18, 'quiz_points_graph')}
+                        className="ml-2 inline-flex items-center gap-1 px-3 py-1.5 bg-sky-600 text-white text-xs font-medium rounded-md hover:bg-sky-700 transition-colors duration-200"
+                      >
+                          <svg
+                              xmlns="http://www.w3.org/2000/svg"
+                              fill="none"
+                              viewBox="0 0 24 24"
+                              strokeWidth={1.5}
+                              stroke="currentColor"
+                              className="w-4 h-4"
+                            >
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M7.5 12l4.5 4.5m0 0l4.5-4.5m-4.5 4.5V3"
+                              />
+                            </svg>
+                            Download
+                      </button>
+                    </div>
+                    <div style={{ marginBottom: '20px' }}>
+                      <label htmlFor="quiz-points-grouping">Time Grouping: </label>
+                      <select
+                        id="quiz-points-grouping"
+                        value={pointsQuizGrouping}
+                        onChange={(e) => setPointsQuizGrouping(e.target.value as any)}
+                      >
+                        {groupings.map(g => (
+                          <option key={g} value={g}>{g.charAt(0).toUpperCase() + g.slice(1)}</option>
+                        ))}
+                      </select>
+                    </div>
+                    {pointsQuizLoading ? (
+                      <div className="text-center">
+                        <div className="spinner-border text-purple" role="status" style={{ width: '8rem', height: '8rem' }}></div>
+                      </div>
+                    ) : (
+                      <ReactECharts ref={chartRef18} option={pointsQuizChartOption} style={{ height: '400px', width: '100%' }} />
+                    )}
                   </div>
                 </div>
                 {/* Jigyasa Coins Earned Over Time */}

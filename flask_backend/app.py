@@ -590,6 +590,51 @@ def mission_points_over_time():
 
     return jsonify({ 'data': rows })
 
+@app.route('/api/quiz-points-over-time', methods=['POST'])
+def quiz_points_over_time():
+    """
+    Returns total mission points grouped by the requested time period.
+    Expects JSON payload: { "grouping": "daily" | "weekly" | "monthly" | "quarterly" | "yearly" | "lifetime" }
+    """
+    req = request.get_json() or {}
+    grouping = req.get('grouping', 'monthly')
+
+    # Determine SQL expressions based on grouping
+    if grouping == 'daily':
+        expr = "DATE(created_at)"
+    elif grouping == 'weekly':
+        expr = "CONCAT(YEAR(created_at), '-', LPAD(WEEK(created_at, 1), 2, '0'))"
+    elif grouping == 'monthly':
+        expr = "DATE_FORMAT(created_at, '%Y-%m')"
+    elif grouping == 'quarterly':
+        expr = "CONCAT(YEAR(created_at), '-Q', QUARTER(created_at))"
+    elif grouping == 'yearly':
+        # cast to CHAR so period is a string
+        expr = "CAST(YEAR(created_at) AS CHAR)"
+    else:  # lifetime
+        expr = "'Lifetime'"
+
+    # Build SQL with join and grouping
+    sql = [
+        f"SELECT {expr} AS period, sum(coins) as points",
+        "from lifeapp.la_quiz_game_results",
+    ]
+    # Only add GROUP BY if not lifetime
+    if grouping != 'lifetime':
+        sql.append(f"GROUP BY {expr}")
+        sql.append("ORDER BY period ASC")
+
+    query = ' '.join(sql)
+
+    conn = get_db_connection()
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute(query)
+            rows = cursor.fetchall()
+    finally:
+        conn.close()
+
+    return jsonify({ 'data': rows })
 
 @app.route('/api/jigyasa-points-over-time', methods=['POST'])
 def jigyasa_points_over_time():
@@ -757,7 +802,7 @@ def get_histogram_data_level_subject_challenges_complete():
         period_expressions = {
             'daily': "DATE(lamc.created_at)",
             'weekly': "CONCAT(YEAR(lamc.created_at), '-W', WEEK(lamc.created_at, 1))",
-            'monthly': "DATE_FORMAT(lamc.created_at, '%Y-%m')",
+            'monthly': "DATE_FORMAT(lamc.created_at, '%%Y-%%m')",
             'quarterly': "CONCAT(YEAR(lamc.created_at), '-Q', QUARTER(lamc.created_at))",
             'yearly': "CAST(YEAR(lamc.created_at) AS CHAR)",
             'lifetime': "'lifetime'"
@@ -819,7 +864,7 @@ def get_histogram_data_level_subject_jigyasa_complete():
         period_expressions = {
             'daily': "DATE(lamc.created_at)",
             'weekly': "CONCAT(YEAR(lamc.created_at), '-W', WEEK(lamc.created_at, 1))",
-            'monthly': "DATE_FORMAT(lamc.created_at, '%Y-%m')",
+            'monthly': "DATE_FORMAT(lamc.created_at, '%%Y-%%m')",
             'quarterly': "CONCAT(YEAR(lamc.created_at), '-Q', QUARTER(lamc.created_at))",
             'yearly': "CAST(YEAR(lamc.created_at) AS CHAR)",
             'lifetime': "'lifetime'"
@@ -880,7 +925,7 @@ def get_histogram_data_level_subject_pragya_complete():
         period_expressions = {
             'daily': "DATE(lamc.created_at)",
             'weekly': "CONCAT(YEAR(lamc.created_at), '-W', WEEK(lamc.created_at, 1))",
-            'monthly': "DATE_FORMAT(lamc.created_at, '%Y-%m')",
+            'monthly': "DATE_FORMAT(lamc.created_at, '%%Y-%%m')",
             'quarterly': "CONCAT(YEAR(lamc.created_at), '-Q', QUARTER(lamc.created_at))",
             'yearly': "CAST(YEAR(lamc.created_at) AS CHAR)",
             'lifetime': "'lifetime'"
