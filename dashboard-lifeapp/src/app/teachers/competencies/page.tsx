@@ -15,13 +15,17 @@ const api_startpoint = 'http://152.42.239.141:5000'
 interface Competency {
     id: number;
     competency_title: string; // comes from comp.title in our SQL query
-    document: string;
+    // document: string;
     status: number; // e.g. 1 for ACTIVE, 0 for DEACTIVE
     created_at: string;
     subject_title: string; // JSON string: e.g. '{"en": "Maths"}'
     level_title: string;   // JSON string: e.g. '{"en": "Level 1"}'
     la_subject_id: number;
     la_level_id: number;
+
+    document_id: string;     // raw ID
+    document_path?: string;  // from API
+    document_url?: string;   // built server-side
 
   }
   
@@ -45,13 +49,20 @@ interface Competency {
     const [selectedCompetency, setSelectedCompetency] = useState<Competency | null>(null);
   
     // Form state for Add / Edit
-    const [formCompetency, setFormCompetency] = useState({
+    const [formCompetency, setFormCompetency] = useState<{
+      name: string;
+      la_subject_id: string;
+      la_level_id: string;
+      status: string;
+      document: string | File;  // <-- IMPORTANT: allow both string and File
+    }>({
       name: '',
       la_subject_id: '',
       la_level_id: '',
-      status: '1',
-      document: ''
+      status: '',
+      document: '',   // initial empty string
     });
+    
   
     // Fetch competencies and subjects using the updated endpoint
     const fetchCompetencies = async () => {
@@ -106,30 +117,37 @@ interface Competency {
   
     // Add competency
     const addCompetency = async () => {
-      const payload = {
-        name: formCompetency.name,
-        la_subject_id: formCompetency.la_subject_id,
-        la_level_id: formCompetency.la_level_id,
-        status: parseInt(formCompetency.status, 10),
-        document: formCompetency.document
-      };
+      if (!(formCompetency.document instanceof File)) {
+        alert('Please upload a document before saving.');
+        return;
+      }
+    
+      const form = new FormData();
+      form.append('name', formCompetency.name);
+      form.append('la_subject_id', formCompetency.la_subject_id);
+      form.append('la_level_id', formCompetency.la_level_id);
+      form.append('status', formCompetency.status);
+      form.append('document', formCompetency.document);
+    
       try {
         const res = await fetch(`${api_startpoint}/admin/competencies`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload)
+          body: form
+          // ⚡ NO headers here! Browser will auto-set correct multipart content-type
         });
+    
         const data = await res.json();
-        if (data.message) {
+        if (res.ok && data.message) {
           setShowAddModal(false);
           fetchCompetencies();
         } else {
-          console.error(data.error);
+          console.error(data.error || 'Something went wrong');
         }
       } catch (error) {
         console.error('Error adding competency:', error);
       }
     };
+    
   
     // Open Edit modal
     const openEditModal = (comp: Competency) => {
@@ -139,7 +157,7 @@ interface Competency {
         la_subject_id: comp.subject_title ? comp.la_subject_id.toString() : '',
         la_level_id: comp.level_title ? comp.la_level_id.toString() : '',
         status: comp.status.toString(),
-        document: comp.document
+        document: ''
       });
       setShowEditModal(true);
     };
@@ -147,18 +165,19 @@ interface Competency {
     // Update competency
     const updateCompetency = async () => {
       if (!selectedCompetency) return;
-      const payload = {
-        name: formCompetency.name,
-        la_subject_id: formCompetency.la_subject_id,
-        la_level_id: formCompetency.la_level_id,
-        status: parseInt(formCompetency.status, 10),
-        document: formCompetency.document
-      };
+      const form = new FormData();
+      form.append('name', formCompetency.name);
+      form.append('la_subject_id', formCompetency.la_subject_id);
+      form.append('la_level_id', formCompetency.la_level_id);
+      form.append('status', formCompetency.status);
+      if (formCompetency.document instanceof File) {
+        form.append('document', formCompetency.document);
+      }
       try {
         const res = await fetch(`${api_startpoint}/admin/competencies/${selectedCompetency.id}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload)
+          body: form
         });
         const data = await res.json();
         if (data.message) {
@@ -272,7 +291,17 @@ interface Competency {
                           <td>{parseTitle(comp.subject_title)}</td>
                           <td>{parseTitle(comp.level_title)}</td>
                           <td>{comp.competency_title}</td>
-                          <td>{comp.document}</td>
+                          <td>{comp.document_url ? (
+                              <a href={comp.document_url}
+                                target="_blank"
+                                rel="noopener"
+                                className="text-blue-600 underline">
+                                View
+                              </a>
+                            ) : (
+                              '—'
+                            )}
+                          </td>
                           <td>{comp.status === 1 ? 'Active' : 'Inactive'}</td>
                           <td>{comp.created_at}</td>
                           <td>
@@ -351,14 +380,19 @@ interface Competency {
                     </select>
                   </div>
                   <div className="mb-3">
-                    <label className="form-label">Document</label>
-                    <input
-                      type="text"
-                      className="form-control"
-                      value={formCompetency.document}
-                      onChange={(e) => setFormCompetency({ ...formCompetency, document: e.target.value })}
-                      placeholder="Enter document identifier or URL"
-                    />
+                     <label className="form-label">Document</label>
+                     <input
+                       type="file"
+                       name="document"
+                       accept=".png,.jpg,.jpeg,.pdf,.doc,.docx"
+                       className="form-control"
+                       onChange={e =>
+                         setFormCompetency(prev => ({
+                           ...prev,
+                           document: e.target.files ? e.target.files[0] : ''
+                         }))
+                       }
+                     />
                   </div>
                 </div>
                 <div className="modal-footer">
@@ -439,13 +473,18 @@ interface Competency {
                   <div className="mb-3">
                     <label className="form-label">Document</label>
                     <input
-                      type="text"
+                      type="file"
+                      name="document"
+                      accept=".png,.jpg,.jpeg,.pdf,.doc,.docx"
                       className="form-control"
-                      value={formCompetency.document}
-                      onChange={(e) =>
-                        setFormCompetency({ ...formCompetency, document: e.target.value })
+                      onChange={e =>
+                        setFormCompetency(prev => ({
+                          ...prev,
+                          document: e.target.files ? e.target.files[0] : ''
+                        }))
                       }
                     />
+
                   </div>
                 </div>
                 <div className="modal-footer">

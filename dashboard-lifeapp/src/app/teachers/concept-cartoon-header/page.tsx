@@ -17,6 +17,7 @@ import { Plus, Search, XCircle } from "lucide-react";
 
 // const api_startpoint = 'https://lifeapp-api-vv1.vercel.app'
 const api_startpoint = 'http://152.42.239.141:5000'
+// const api_startpoint = 'http://127.0.0.1:5000'
 export default function ConceptCartoonForm() {
     const [formData, setFormData] = useState({
         heading: '',
@@ -24,12 +25,12 @@ export default function ConceptCartoonForm() {
         button_one_text: '',
         button_one_link: '',
         button_two_text: '',
-        button_two_link: '',
-        media_id: null
+        button_two_link: ''
     });
+    const [selectedFile, setSelectedFile] = useState<File | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [message, setMessage] = useState({ text: '', type: '' });
-    const [selectedFile, setSelectedFile] = useState(null);
+    // const [selectedFile, setSelectedFile] = useState(null);
     const [previewUrl, setPreviewUrl] = useState('');
 
     const handleInputChange = (e: { target: { name: any; value: any; }; }) => {
@@ -58,20 +59,22 @@ export default function ConceptCartoonForm() {
         // Create FormData object for file upload
         const data = new FormData();
         
-        // Append all form fields
-        // Object.keys(formData).forEach(key => {
-        //     if (key !== 'media_id') {
-        //         data.append(key, formData[key]);
-        //     }
-        // });
+        // 1) Append text fields
+        data.append('heading',        formData.heading);
+        data.append('description',    formData.description);
+        data.append('button_one_text', formData.button_one_text);
+        data.append('button_one_link', formData.button_one_link);
+        data.append('button_two_text', formData.button_two_text);
+        data.append('button_two_link', formData.button_two_link);
+
         
         // Append file if selected
         if (selectedFile) {
-            data.append('media', selectedFile);
+                data.append('media', selectedFile);
         }
 
         try {
-            const response = await fetch(`${api_startpoint}/api/concept-cartoons`, {
+            const response = await fetch(`${api_startpoint}/api/concept-cartoon-headers`, {
                 method: 'POST',
                 body: data,
                 // Don't set Content-Type header when using FormData
@@ -90,7 +93,6 @@ export default function ConceptCartoonForm() {
                     button_one_link: '',
                     button_two_text: '',
                     button_two_link: '',
-                    media_id: null
                 });
                 setSelectedFile(null);
                 setPreviewUrl('');
@@ -229,7 +231,10 @@ export default function ConceptCartoonForm() {
                                             id="media" 
                                             name="media"
                                             accept="image/*"
-                                            // onChange={handleFileChange}
+                                            onChange={e => {
+                                                     const file = e.target.files?.[0] ?? null;
+                                                     setSelectedFile(file);
+                                                   }}
                                         />
                                         {previewUrl && (
                                             <div className="mt-2">

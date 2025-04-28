@@ -12,21 +12,44 @@ import { IconLoader2 } from '@tabler/icons-react';
 const inter = Inter({ subsets: ['latin'] });
 // const api_startpoint = 'https://lifeapp-api-vv1.vercel.app'
 const api_startpoint = 'http://152.42.239.141:5000'
-
+// const api_startpoint = 'http://127.0.0.1:5000'
 
 interface Mission {
     id: number;
     title: string;
     description: string;
     question: string;
-    type: string;
+    type: number;
     allow_for: string;
+    subject_id: number;   // ← new
     subject: string;
+    level_id: number;     // ← new
     level: string;
     status: number;
+
+    image_url?: string | null;
+  document_url?: string | null;
 }
 
+const typeOptions = [
+    { label: "Mission", value: 1 },
+    { label: "Quiz", value:2},
+    { label: "Riddle", value:3},
+    { label: "Puzzle", value:4},
+    { label: "Jigyasa", value: 5 },
+    { label: "Pragya", value: 6 },
+];
+
 export default function StudentRelatedJigyasa() {
+    const [filterStatus, setFilterStatus] = useState('');
+    const [filterType, setFilterType] = useState('Jigyasa');
+    const [filterSubject, setFilterSubject] = useState('');
+    const [filterLevel, setFilterLevel] = useState('');
+    const [filteredData, setFilteredData] = useState<Mission[]>([]);
+
+    const [isEditLoading, setIsEditLoading] = useState(false);
+    const [isAddLoading, setIsAddLoading] = useState(false);
+
     const [missions, setMissions] = useState<Mission[]>([]);
     const [loading, setLoading] = useState(true);
     const [currentPage, setCurrentPage] = useState(1);
@@ -51,22 +74,35 @@ export default function StudentRelatedJigyasa() {
     
     const fetchMissions = async () => {
         try {
-        const res = await fetch(`${api_startpoint}/api/missions_resource`, {
-            method:'POST'
-        });
-        const data = await res.json();
-        setMissions(data);
+            const res = await fetch(`${api_startpoint}/api/missions_resource`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    status: filterStatus,
+                    type: typeOptions.find(opt => opt.label === filterType)?.value,
+                    subject: filterSubject,
+                    level: filterLevel
+                })
+            });
+            const data = await res.json();
+            setMissions(data);
         } catch (err) {
-        console.error('Error fetching missions:', err);
+            console.error('Error fetching Jigyasa:', err);
         } finally {
-        setLoading(false);
+            setLoading(false);
         }
     };
 
     useEffect(() => {
         fetchMissions();
 
-        fetch(`${api_startpoint}/api/subjects_list`, { method: 'POST' })
+        fetch(`${api_startpoint}/api/subjects_list`, { 
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }, // Add this line
+            body: JSON.stringify({}) // Optional, but ensures valid POST request
+          })
         .then(res => res.json())
         .then(setSubjects);
 
@@ -82,7 +118,7 @@ export default function StudentRelatedJigyasa() {
               console.log('Levels response:', data);
               setLevels(data);  // <- might need to change to setLevels(data.levels) or similar
             });
-    }, []);
+    }, [filterStatus, filterType, filterSubject, filterLevel]);
   
     
 
@@ -92,25 +128,34 @@ export default function StudentRelatedJigyasa() {
     };
     
     const handleSubmit = async () => {
-        const form = new FormData();
-        Object.entries(formData).forEach(([key, val]) => {
+        setIsAddLoading(true);   // Start the loading spinner
+      
+        try {
+          const form = new FormData();
+          Object.entries(formData).forEach(([key, val]) => {
             if (val !== null && val !== undefined) {
               form.append(key, val);
             }
-        });
-          
-
-        const res = await fetch(`${api_startpoint}/api/add_mission`, {
+          });
+      
+          const res = await fetch(`${api_startpoint}/api/add_mission`, {
             method: 'POST',
             body: form
-        });
-
-        const result = await res.json();
-        if (res.ok) {
-            fetchMissions();
-            setOpenModal(false);
-        } else {
-            alert('Error: ' + result.error);
+          });
+      
+          const result = await res.json();
+      
+          if (res.ok && result.id) {   // safer check: also check if ID is returned
+            await fetchMissions();     // Refresh the table
+            setOpenModal(false);       // Close the modal
+          } else {
+            alert('Error: ' + (result.error || 'Something went wrong.'));
+          }
+        } catch (error) {
+          console.error('Submit error:', error);
+          alert('An unexpected error occurred.');
+        } finally {
+          setIsAddLoading(false);   // Always stop the spinner
         }
     };
 
@@ -134,61 +179,109 @@ export default function StudentRelatedJigyasa() {
     };
   
     const [showEditModal, setShowEditModal] = useState(false);
-    const [editData, setEditData] = useState<any>(null);
+    const [editData, setEditData] = useState<{
+        id: number;
+        title: string;
+        description: string;
+        question: string;
+        subject: string;
+        level: string;
+        type: string;
+        allow_for: string;
+        status: string;
+        image?: File | null;
+        document?: File | null;
+    } | null>(null);
 
-    const handleEditChange = (field: string, value: any) => {
-        setEditData((prev: any) => ({
+    const handleEditInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
+        const { name, value, files } = e.target as HTMLInputElement;
+        setEditData(prev => prev && ({
           ...prev,
-          [field]: value
+          [name]: files ? files[0] : value
         }));
     };
-    
 
     const handleEditSubmit = async () => {
-        const formData = new FormData();
-        for (const key in editData) {
-          if (editData[key] != null) {
-            formData.append(key, editData[key]);
-          }
+        // ① Guard: if there's no editData, bail out
+        if (!editData) {
+            console.warn("Nothing to save – editData is null");
+            return;
         }
+        setIsEditLoading(true);  // Start spinner
+         // ② Now TS knows editData is non-null
+         try {
+        const {
+            id,
+            subject,
+            level,
+            type,
+            allow_for,
+            status,
+            title,
+            description,
+            question,
+            image,
+            document: docFile,
+        } = editData;
+        console.log('🔧 Submitting editData:', editData);
+        const form = new FormData();
+        form.append('id',         editData.id.toString());
+        form.append('subject',    editData.subject);    // this is the subject_id as a string
+        form.append('level',      editData.level);      // level_id as a string
+        form.append('type',       editData.type);       // type value (“1”, “5”, etc)
+        form.append('allow_for',  editData.allow_for);  // “1” or “2”
+        form.append('status',     editData.status);     // “1” or “0”
+        form.append('title',      editData.title);      // raw text, e.g. “My new title”
+        form.append('description',editData.description);
+        form.append('question',   editData.question);
+        // if you let users swap image or doc in the edit modal:
+        // 2) Only append if the user actually picked a new file
+        if (editData.image instanceof File) {
+            form.append('image', editData.image);
+        }
+        if (editData.document instanceof File) {
+            form.append('document', editData.document);
+        }
+
+        // peek at exactly what you’re sending:
+        console.log('📤 FormData entries:', [...form.entries()]);
+
       
         const res = await fetch(`${api_startpoint}/api/update_mission`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: formData,
+        //   headers: { 'Content-Type': 'application/json' },
+          body: form,
         });
       
-        if (res.ok) {
+        
           const updated = await res.json();
           if (updated.success) {
-            setMissions((prev) =>
-              prev.map((m) => (m.id === editData.id ? { ...m, ...editData } : m))
-            );
+            await fetchMissions();    // ← repopulate everything with the real JSON data
             setShowEditModal(false);
+          } else {
+            alert('Update failed: ' + updated.error);
           }
-        } else {
-          alert('Update failed');
-        }
+        } catch (err) {
+            console.error('Error submitting edit:', err);
+            alert('An unexpected error occurred');
+          } finally {
+            setIsEditLoading(false);  // End spinner
+          }
     };
     
-    const [filterStatus, setFilterStatus] = useState('');
-    const [filterType, setFilterType] = useState('Jigyasa');
-    const [filterSubject, setFilterSubject] = useState('');
-    const [filterLevel, setFilterLevel] = useState('');
-    const [filteredData, setFilteredData] = useState<Mission[]>([]);
-
-    // Replace the handleSearch function with useEffect
-    useEffect(() => {
-    const filtered = missions.filter((mission) => {
-      return (
-        (filterStatus === '' || String(mission.status) === filterStatus) &&
-        (filterType === '' || String(mission.type) === filterType) &&
-        (filterSubject === '' || String(mission.subject) === filterSubject) &&
-        (filterLevel === '' || String(mission.level) === filterLevel)
-      );
-    });
-    setFilteredData(filtered);
-  }, [missions, filterStatus, filterType, filterSubject, filterLevel]);  // Add dependencies
+    
+//     // Replace the handleSearch function with useEffect
+//     useEffect(() => {
+//     const filtered = missions.filter((mission) => {
+//       return (
+//         (filterStatus === '' || String(mission.status) === filterStatus) &&
+//         (filterType === '' || String(mission.type) === filterType) &&
+//         (filterSubject === '' || String(mission.subject) === filterSubject) &&
+//         (filterLevel === '' || String(mission.level) === filterLevel)
+//       );
+//     });
+//     setFilteredData(filtered);
+//   }, [missions, filterStatus, filterType, filterSubject, filterLevel]);  // Add dependencies
 
     const handleClearFilters = () => {
     setFilterStatus('');
@@ -203,12 +296,15 @@ export default function StudentRelatedJigyasa() {
 
     const indexOfLast = currentPage * itemsPerPage;
     const indexOfFirst = indexOfLast - itemsPerPage;
-    const currentMissions = filteredData.slice(indexOfFirst, indexOfLast);
-    const totalPages = Math.ceil(filteredData.length / itemsPerPage);
+    const currentMissions = missions.slice(indexOfFirst, indexOfLast);
+    const totalPages = Math.ceil(missions.length / itemsPerPage);
     // Reset to first page when filters change
     useEffect(() => {
         setCurrentPage(1);
-      }, [filteredData]);
+    }, [filteredData]);
+    
+    const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
+
     return (
         <div className={`page bg-body ${inter.className} font-sans`}>
             <Sidebar />
@@ -260,9 +356,9 @@ export default function StudentRelatedJigyasa() {
                                     >
                                         <option value="">All Subjects</option>
                                         {subjects.map((subject) => (
-                                        <option key={subject.id} value={subject.title}>
-                                            {JSON.parse(subject.title).en}
-                                        </option>
+                                            <option key={subject.id} value={subject.id}>  {/* Use subject.id as value */}
+                                                {JSON.parse(subject.title).en}
+                                            </option>
                                         ))}
                                     </select>
                                     <select
@@ -271,10 +367,10 @@ export default function StudentRelatedJigyasa() {
                                         onChange={(e) => setFilterLevel(e.target.value)}
                                     >
                                         <option value="">All</option>
-                                        {levels.map((level, idx) => (
-                                        <option key={idx} value={level.title}>
-                                            {JSON.parse(level.title).en}
-                                        </option>
+                                        {levels.map((level) => (
+                                            <option key={level.id} value={level.id}>  {/* Use level.id as value */}
+                                                {JSON.parse(level.title).en}
+                                            </option>
                                         ))}
                                     </select>
                                     
@@ -305,6 +401,8 @@ export default function StudentRelatedJigyasa() {
                                     <th className="p-2 border">Title</th>
                                     <th className="p-2 border">Description</th>
                                     <th className="p-2 border">Question</th>
+                                    <th className="p-2 border">Image</th>
+                                    <th className="p-2 border">Document</th>
                                     <th className="p-2 border">Type</th>
                                     <th className="p-2 border">Allow For</th>
                                     <th className="p-2 border">Subject</th>
@@ -320,7 +418,28 @@ export default function StudentRelatedJigyasa() {
                                         <td className="p-2 border">{JSON.parse(m.title).en}</td>
                                         <td className="p-2 border">{JSON.parse(m.description).en}</td>
                                         <td className="p-2 border">{JSON.parse(m.question).en}</td>
-                                        <td className="p-2 border">{m.type}</td>
+                                        <td className="p-2 border">
+                                            {m.image_url
+                                                ? <img src={m.image_url!}
+                                                        alt={JSON.parse(m.title).en}
+                                                        className="w-16 h-16 object-cover rounded cursor-pointer transition-transform hover:scale-110"
+                                                        onClick={() => setLightboxUrl(m.image_url!)}
+                                                    />
+                                                : '—'}
+                                        </td>
+                                        <td className="p-2 border">
+                                            {m.document_url
+                                                ? <a href={m.document_url!}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    className="text-blue-600 underline">
+                                                    View
+                                                </a>
+                                                : '—'}
+                                        </td>
+                                        <td className="p-2 border">
+                                        {typeOptions.find(opt => opt.value === m.type)?.label ?? m.type.toString()}
+                                        </td>
                                         <td className="p-2 border">{m.allow_for}</td>
                                         <td className="p-2 border">{JSON.parse(m.subject).en}</td>
                                         <td className="p-2 border">{JSON.parse(m.level).en}</td>
@@ -329,7 +448,20 @@ export default function StudentRelatedJigyasa() {
                                             <div className=" ">
                                             <IconEdit className="text-blue-500 cursor-pointer" 
                                                 onClick={() => {
-                                                    setEditData(m); // `m` is your mission row
+                                                    setEditData({
+                                                        id: m.id,
+                                                        title:       JSON.parse(m.title).en,
+                                                        description: JSON.parse(m.description).en,
+                                                        question:    JSON.parse(m.question).en,
+                                                        // use the numeric IDs (as strings for the <select>)
+                                                        subject:     m.subject_id.toString(),
+                                                        level:       m.level_id.toString(),
+                                                        type:        m.type.toString(),
+                                                        allow_for:   m.allow_for === 'All' ? '1' : '2',
+                                                        status:      m.status.toString(),
+                                                        image:       null,
+                                                        document:    null,
+                                                    }); // `m` is your mission row
                                                     setShowEditModal(true);
                                                 }}
                                             />
@@ -357,7 +489,7 @@ export default function StudentRelatedJigyasa() {
                                 Previous
                                 </button>
                                 <span className="text-sm">
-                                Page {currentPage} of {totalPages} ({filteredData.length} Jigyasa found)
+                                Page {currentPage} of {totalPages} ({missions.length} Jigyasa found)
                                 </span>
                                 <button
                                 onClick={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))}
@@ -377,13 +509,20 @@ export default function StudentRelatedJigyasa() {
                                     <h2 className="text-xl font-semibold mb-4">Add New Mission</h2>
 
                                     <label className="block mt-2">Subject</label>
-                                    <select name="subject" className="w-full border rounded p-2" onChange={handleInputChange}>
+                                    <select name="subject" className="w-full border rounded p-2" value={formData.subject}  onChange={handleInputChange}>
                                     <option value="">Select subject</option>
-                                    {subjects.map((s: any) => <option key={s.id} value={s.id}>{JSON.parse(s.title).en}</option>)}
+                                    {subjects.map((s: any) => {
+                                        try {
+                                        const title = JSON.parse(s.title).en;
+                                        return <option key={s.id} value={s.id}>{title}</option>;
+                                        } catch (e) {
+                                        return <option key={s.id} value={s.id}>Invalid Title</option>;
+                                        }
+                                    })}
                                     </select>
 
                                     <label className="block mt-2">Level</label>
-                                    <select name="level" className="w-full border rounded p-2" onChange={handleInputChange}>
+                                    <select name="level" className="w-full border rounded p-2" value={formData.level} onChange={handleInputChange}>
                                     <option value="">Select level</option>
                                     {levels.map((l: any) => <option key={l.id} value={l.id}>{JSON.parse(l.title).en}</option>)}
                                     </select>
@@ -430,7 +569,17 @@ export default function StudentRelatedJigyasa() {
 
                                     <div className="mt-2 flex justify-between">
                                     <button className="px-4 py-2 bg-gray-900 rounded" onClick={() => setOpenModal(false)}>Cancel</button>
-                                    <button className="px-4 py-2 bg-sky-950 text-white rounded" onClick={handleSubmit}>Submit</button>
+                                    <button
+                                        onClick={handleSubmit}
+                                        className="px-4 py-1 bg-sky-950 text-white rounded flex items-center justify-center gap-2 disabled:opacity-50"
+                                        disabled={isAddLoading}  // Disable button while loading
+                                        >
+                                        {isAddLoading ? (
+                                            <div className="h-4 w-4  border-white border-t-2 animate-spin rounded-full"></div>
+                                        ) : (
+                                            "Submit"
+                                        )}
+                                    </button>
                                     </div>
                                 </div>
                             </div>
@@ -467,23 +616,26 @@ export default function StudentRelatedJigyasa() {
                             <div className="flex flex-col gap-1">
                                 <label className="block mt-1">Title</label>
                                 <input
-                                value={editData.title}
-                                onChange={(e) => handleEditChange('title', e.target.value)}
+                                name = "title"
+                                value={editData?.title}
+                                onChange={handleEditInputChange}
                                 placeholder="Title"
                                 className="border px-3 py-1 rounded"
                                 />
                                 <label className="block mt-1">Description</label>
                                 <textarea
-                                value={editData.description}
-                                onChange={(e) => handleEditChange('description', e.target.value)}
+                                name = "description"
+                                value={editData?.description}
+                                onChange={handleEditInputChange}
                                 placeholder="Description"
                                 className="border px-3 py-1 rounded"
                                 />
 
                                 <label className="block mt-1">Question</label>
                                 <textarea
-                                value={editData.question}
-                                onChange={(e) => handleEditChange('question', e.target.value)}
+                                name = "question"
+                                value={editData?.question}
+                                onChange={handleEditInputChange}
                                 placeholder="Question"
                                 className="border px-3 py-1 rounded"
                                 />
@@ -491,53 +643,57 @@ export default function StudentRelatedJigyasa() {
                                 {/* Subject */}
                                 <label className="block mt-1">Subject</label>
                                 <select
-                                value={editData.subject}
-                                onChange={(e) => handleEditChange('subject', e.target.value)}
-                                className="border px-3 py-1 rounded"
-                                >
-                                <option value="">Select Subject</option>
-                                {subjects.map((s) => (
-                                    <option key={s.id} value={s.id}>
-                                    {JSON.parse(s.title).en}
-                                    </option>
-                                ))}
+                                    name="subject"
+                                    value={editData?.subject}
+                                    onChange={handleEditInputChange}
+                                    className="border px-3 py-1 rounded"
+                                    >
+                                    <option value="">Select Subject</option>
+                                    {subjects.map(s => (
+                                        <option key={s.id} value={s.id.toString()}>
+                                        {JSON.parse(s.title).en}
+                                        </option>
+                                    ))}
                                 </select>
 
                                 {/* Level */}
                                 <label className="block mt-1">Level</label>
                                 <select
-                                value={editData.level}
-                                onChange={(e) => handleEditChange('level', e.target.value)}
-                                className="border px-3 py-1 rounded"
-                                >
-                                <option value="">Select Level</option>
-                                {levels.map((l) => (
-                                    <option key={l.id} value={l.id}>
-                                    {JSON.parse(l.title).en}
-                                    </option>
-                                ))}
+                                    name="level"
+                                    value={editData?.level}
+                                    onChange={handleEditInputChange}
+                                    className="border px-3 py-1 rounded"
+                                    >
+                                    <option value="">Select Level</option>
+                                    {levels.map(l => (
+                                        <option key={l.id} value={l.id.toString()}>
+                                        {JSON.parse(l.title).en}
+                                        </option>
+                                    ))}
                                 </select>
 
                                 {/* Type */}
                                 <label className="block mt-1">Type</label>
                                 <select
-                                value={editData.type}
-                                onChange={(e) => handleEditChange('type', e.target.value)}
-                                className="border px-3 py-1 rounded"
+                                    name="type"     
+                                    value={editData?.type || ""}
+                                    onChange={handleEditInputChange}
+                                    className="border px-3 py-1 rounded"
                                 >
-                                <option value="1">Mission</option>
-                                <option value="2">Quiz</option>
-                                <option value="3">Riddle</option>
-                                <option value="4">Puzzle</option>
-                                <option value="5">Jigyasa</option>
-                                <option value="6">Pragya</option>
+                                    <option value="">Select Type</option>
+                                    {typeOptions.map((opt) => (
+                                        <option key={opt.value} value={opt.value.toString()}>
+                                            {opt.label}
+                                        </option>
+                                    ))}
                                 </select>
 
                                 {/* Allow For */}
                                 <label className="block mt-1">Allow For</label>
                                 <select
-                                value={editData.allow_for}
-                                onChange={(e) => handleEditChange('allow_for', e.target.value)}
+                                name="allow_for" 
+                                value={editData?.allow_for || ""}
+                                onChange={handleEditInputChange}
                                 className="border px-3 py-1 rounded"
                                 >
                                 <option value="1">All</option>
@@ -547,14 +703,33 @@ export default function StudentRelatedJigyasa() {
                                 {/* Status */}
                                 <label className="block mt-1">Status</label>
                                 <select
-                                value={editData.status}
-                                onChange={(e) => handleEditChange('status', e.target.value)}
+                                name = "status"
+                                value={editData?.status || ""}
+                                onChange={handleEditInputChange}
                                 className="border px-3 py-1 rounded"
                                 >
                                 <option value="1">Active</option>
                                 <option value="0">Inactive</option>
                                 </select>
+                                
+                                {/* Image */}
+                                <label className="block mt-2">Image</label>
+                                <input
+                                type="file"
+                                name="image"
+                                accept="image/*"
+                                onChange={handleEditInputChange}
+                                />
 
+                                {/* Document */}
+                                <label className="block mt-2">Document</label>
+                                <input
+                                type="file"
+                                name="document"
+                                accept=".pdf,.doc,.docx"
+                                onChange={handleEditInputChange}
+                                />
+                                
                                 <div className="flex justify-end gap-4 mt-4">
                                 <button
                                     onClick={() => setShowEditModal(false)}
@@ -564,16 +739,44 @@ export default function StudentRelatedJigyasa() {
                                 </button>
                                 <button
                                     onClick={handleEditSubmit}
-                                    className="px-4 py-1 bg-sky-950 text-white rounded"
-                                >
-                                    Save
+                                    className="px-4 py-1 bg-sky-950 text-white rounded flex items-center justify-center gap-2 disabled:opacity-50"
+                                    disabled={isEditLoading}  // Disable button while loading
+                                    >
+                                    {isEditLoading ? (
+                                        <div className="h-4 w-4  border-white border-t-2 animate-spin rounded-full"></div>
+                                    ) : (
+                                        "Save"
+                                    )}
                                 </button>
+
                                 </div>
                             </div>
                             </div>
                         </div>
                         )}
-
+                        {lightboxUrl && (
+                        <div
+                            className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 mt-0"
+                            onClick={() => setLightboxUrl(null)}
+                        >
+                            <div className="relative">
+                            <img
+                                src={lightboxUrl}
+                                alt="Enlarged Preview"
+                                className="max-w-[90vw] max-h-[90vh] rounded-lg shadow-lg"
+                            />
+                            <button
+                                className="absolute top-2 right-2 text-white bg-gray-900 rounded-full p-1"
+                                onClick={(e) => {
+                                e.stopPropagation(); // prevent closing when clicking the button itself
+                                setLightboxUrl(null);
+                                }}
+                            >
+                                ✕
+                            </button>
+                            </div>
+                        </div>
+                        )}
                     </div>
                 </div>
             </div>

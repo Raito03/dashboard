@@ -128,6 +128,30 @@ export default function MissionPage() {
         }
     };
 
+    const handleStatusUpdate = async (rowId: string, missionId: string, studentId: string, action: 'approve' | 'reject') => {
+        try {
+            const response = await fetch(`${api_startpoint}/api/update_mission_status`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    row_id :rowId,
+                    mission_id: missionId,
+                    student_id: studentId,
+                    action: action
+                })
+            });
+    
+            if (!response.ok) throw new Error('Update failed');
+            
+            // Refresh the table data after successful update
+            handleSearch();
+            alert(`Mission ${action === 'approve' ? 'approved' : 'rejected'} successfully!`);
+        } catch (error) {
+            console.error('Error updating status:', error);
+            alert('Failed to update status. Please try again.');
+        }
+    };
+
     return (
         <div className={`page bg-light ${inter.className} font-sans`}>
             <Sidebar />
@@ -163,7 +187,7 @@ export default function MissionPage() {
                                         <div className="col-12 col-md-6 col-lg-3">
                                             <select className="form-select" value={selectedMissionAcceptance} onChange={(e) => setSelectedMissionAcceptance(e.target.value)} >
                                                 <option value="">Missions Approved/Requested</option>
-                                                <option value="Accepted">Missions Approved</option>
+                                                <option value="Approved">Missions Approved</option>
                                                 <option value="Requested">Missions Requested</option>
                                                 <option value="Rejected">Mission Rejected</option>
                                             </select>
@@ -233,10 +257,10 @@ export default function MissionPage() {
                                     Export
                                 </button>
 
-                                <button className="btn btn-success d-inline-flex align-items-center">
+                                {/* <button className="btn btn-success d-inline-flex align-items-center">
                                     <Plus className="me-2" size={16} />
                                     Add Student
-                                </button>
+                                </button> */}
 
                                 {/* <button className="btn btn-purple d-inline-flex align-items-center text-white" style={{ backgroundColor: '#6f42c1' }}>
                                     <BarChart3 className="me-2" size={16} />
@@ -267,6 +291,7 @@ export default function MissionPage() {
                                                 <table className="table table-striped">
                                                     <thead>
                                                         <tr>
+                                                            <th>Row ID</th>
                                                             <th>Mission ID</th>
                                                             <th>Student Name</th>
                                                             <th>School ID</th>
@@ -274,6 +299,7 @@ export default function MissionPage() {
                                                             <th>Mission Title</th>
                                                             <th>Assigned By</th>
                                                             <th>Status</th>
+                                                            {selectedMissionAcceptance === "Requested" && <th>Action</th>}
                                                             <th>Student ID</th>
                                                             <th>Requested At</th>
                                                             <th>Total Points</th>
@@ -301,7 +327,7 @@ export default function MissionPage() {
                                                             return (
                                                             
                                                             <tr key={index}>
-                                                                
+                                                                <td>{row.Row_ID}</td>
                                                                 <td>{row.Mission_ID}</td>
                                                                 <td>{row.Student_Name}</td>
                                                                 <td>{row.School_ID}</td>
@@ -309,6 +335,26 @@ export default function MissionPage() {
                                                                 <td>{MissionTitle}</td>
                                                                 <td>{row.Assigned_By}</td>
                                                                 <td>{row.Status}</td>
+                                                                {selectedMissionAcceptance === "Requested" && (
+                                                                    <td>
+                                                                        {row.Status === "Requested" && (
+                                                                            <div className="d-flex gap-2">
+                                                                                <button 
+                                                                                    className="btn btn-sm btn-success"
+                                                                                    onClick={() => handleStatusUpdate(row.Row_ID,row.Mission_ID, row.Student_ID, 'approve')}
+                                                                                >
+                                                                                    Approve
+                                                                                </button>
+                                                                                <button
+                                                                                    className="btn btn-sm btn-danger"
+                                                                                    onClick={() => handleStatusUpdate(row.Row_ID,row.Mission_ID, row.Student_ID, 'reject')}
+                                                                                >
+                                                                                    Reject
+                                                                                </button>
+                                                                            </div>
+                                                                        )}
+                                                                    </td>
+                                                                )}
                                                                 <td>{row.Student_ID}</td>
                                                                 <td>{row.Requested_At}</td>
                                                                 <td>{row.Total_Points}</td>

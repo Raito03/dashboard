@@ -22,17 +22,21 @@ import {
 
 
 interface CartoonData {
+    id: number;
     la_subject: string;
     la_level_id: string;
     title: string;
-    document: string;
+    media_id: string | null;
+    media_url?: string;
     status: string;
-    id?: number; // Adding ID for update operations
-}
+  }
 
 // const api_startpoint = 'https://lifeapp-api-vv1.vercel.app'
 const api_startpoint = 'http://152.42.239.141:5000'
+// const api_startpoint = 'http://127.0.0.1:5000'
 export default function ConceptCartoons() {
+    const [lightboxUrl, setLightboxUrl] = useState<string|null>(null);
+    const [selectedFile, setSelectedFile] = useState<File | null>(null);
     const [tableData, setTableData] = useState<any[]>([]);
     const [currentPage, setCurrentPage] = useState<number>(0);
     const rowsPerPage = 50;
@@ -47,12 +51,16 @@ export default function ConceptCartoons() {
     
      // State for add modal
     const [showAddModal, setShowAddModal] = useState(false);
-    const [newCartoon, setNewCartoon] = useState<CartoonData>({
-         la_subject: "",
-         la_level_id: "",
-         title: "",
-         document: "",
-         status: "Drafted"
+    const [newCartoon, setNewCartoon] = useState<{
+              la_subject: string;
+              la_level_id: string;
+              title: string;
+              status: string;
+            }>({
+              la_subject: "",
+             la_level_id: "",
+              title: "",
+              status: "Drafted",
     });
 
     const handleClear = () => {
@@ -126,10 +134,11 @@ export default function ConceptCartoons() {
             la_subject: "",
             la_level_id: "",
             title: "",
-            document: "",
             status: "Drafted"
         });
+        setSelectedFile(null); // Also reset the uploaded file!
     };
+    
 
     
     // Handle form changes for adding and editing
@@ -151,19 +160,21 @@ export default function ConceptCartoons() {
     // Handle saving the updated data
     const handleSaveChanges = async () => {
         if (!editingRow) return;
+        // 1) Inspect the object
+        console.log("🤔 editingRow:", editingRow);
+
         
         try {
+            const form = new FormData();
+            form.append('id', String(editingRow.id));
+            form.append('la_subject_id', editingRow.la_subject === 'Science' ? '1' : '2');
+            form.append('la_level_id', editingRow.la_level_id);
+            form.append('title', editingRow.title);
+            form.append('status', editingRow.status === 'Published' ? '1' : '0');
+            if (selectedFile) form.append('media', selectedFile);
             const res = await fetch(`${api_startpoint}/api/update_concept_cartoon`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    id: editingRow.id,
-                    la_subject_id: editingRow.la_subject === 'Science' ? 1 : 2,
-                    la_level_id: editingRow.la_level_id,
-                    title: editingRow.title,
-                    document: editingRow.document,
-                    status: editingRow.status === 'Published' ? 1 : 0
-                })
+              method: 'POST',
+              body: form
             });
             
             if (!res.ok) {
@@ -194,17 +205,13 @@ export default function ConceptCartoons() {
     // Handle adding a new cartoon
     const handleAddCartoon = async () => {
         try {
-            const res = await fetch(`${api_startpoint}/api/add_concept_cartoon`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    la_subject_id: newCartoon.la_subject === 'Science' ? 1 : 2,
-                    la_level_id: newCartoon.la_level_id,
-                    title: newCartoon.title,
-                    document: newCartoon.document,
-                    status: newCartoon.status === 'Published' ? 1 : 0
-                })
-            });
+            const form = new FormData();
+            form.append('la_subject_id', newCartoon.la_subject === 'Science' ? '1' : '2');
+            form.append('la_level_id', newCartoon.la_level_id);
+            form.append('title', newCartoon.title);
+            form.append('status', newCartoon.status === 'Published' ? '1' : '0');
+            if (selectedFile) form.append('media', selectedFile);
+            const res = await fetch(`${api_startpoint}/api/add_concept_cartoon`, { method: 'POST', body: form });
 
             if (!res.ok) {
                 throw new Error(`API responded with status: ${res.status}`);
@@ -328,7 +335,27 @@ export default function ConceptCartoons() {
                                                         <td>{row.la_subject}</td>
                                                         <td>{row.la_level_id}</td>
                                                         <td>{row.title}</td>
-                                                        <td>{row.document}</td>
+                                                        <td>{row.media_url ? (
+                                                                row.media_url.endsWith('.pdf') ? (
+                                                                <div
+                                                                    className="flex items-center space-x-2 cursor-pointer text-blue-600"
+                                                                    onClick={() => window.open(row.media_url, '_blank')}
+                                                                >
+                                                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                                                                    </svg>
+                                                                    <span>View PDF</span>
+                                                                </div>
+                                                                ) : (
+                                                                <img
+                                                                    src={row.media_url}
+                                                                    alt={row.title}
+                                                                    className="w-12 h-12 object-cover rounded cursor-pointer"
+                                                                    onClick={() => setLightboxUrl(row.media_url!)}
+                                                                />
+                                                                )
+                                                            ) : '—'}
+                                                        </td>
                                                         <td>{row.status}</td>
                                                         <td>
                                                             <button 
@@ -374,7 +401,7 @@ export default function ConceptCartoons() {
             </div>
             {/* Add Modal */}
             {showAddModal && (
-                <div className="modal show d-block" tabIndex={-1}>
+                <div className="modal show d-block bg-black bg-opacity-50" tabIndex={-1}>
                     <div className="modal-dialog">
                         <div className="modal-content">
                             <div className="modal-header">
@@ -401,7 +428,13 @@ export default function ConceptCartoons() {
                                     </div>
                                     <div className="mb-3">
                                         <label className="form-label">Document</label>
-                                        <textarea className="form-control" name="document" rows={4} value={newCartoon.document} onChange={(e) => handleFormChange(e)}></textarea>
+                                        <input
+                                            type="file"
+                                            name="media"
+                                            accept="image/*,.pdf,.csv"
+                                            className="form-control"
+                                            onChange={e => setSelectedFile(e.target.files?.[0] ?? null)}
+                                        />                                    
                                     </div>
                                 </form>
                             </div>
@@ -415,7 +448,7 @@ export default function ConceptCartoons() {
             )}
             {/* Edit Modal */}
             {showEditModal && editingRow && (
-                <div className="modal show d-block" tabIndex={-1}>
+                <div className="modal show d-block bg-black bg-opacity-50" tabIndex={-1}>
                     <div className="modal-dialog">
                         <div className="modal-content">
                             <div className="modal-header">
@@ -431,7 +464,7 @@ export default function ConceptCartoons() {
                                             id="la_subject"
                                             name="la_subject"
                                             value={editingRow.la_subject}
-                                            onChange={handleFormChange}
+                                            onChange={e => handleFormChange(e, true)}
                                         >
                                             <option value="Science">Science</option>
                                             <option value="Maths">Maths</option>
@@ -445,7 +478,7 @@ export default function ConceptCartoons() {
                                             id="la_level_id"
                                             name="la_level_id"
                                             value={editingRow.la_level_id}
-                                            onChange={handleFormChange}
+                                            onChange={e => handleFormChange(e, true)}
                                         />
                                     </div>
                                     <div className="mb-3">
@@ -456,19 +489,18 @@ export default function ConceptCartoons() {
                                             id="title"
                                             name="title"
                                             value={editingRow.title}
-                                            onChange={handleFormChange}
+                                            onChange={e => handleFormChange(e, true)}
                                         />
                                     </div>
                                     <div className="mb-3">
                                         <label htmlFor="document" className="form-label">Document</label>
-                                        <textarea
+                                        <input
+                                            type="file"
+                                            name="media"
+                                            accept="image/*,.pdf,.csv"
                                             className="form-control"
-                                            id="document"
-                                            name="document"
-                                            rows={4}
-                                            value={editingRow.document}
-                                            onChange={handleFormChange}
-                                        ></textarea>
+                                            onChange={e => setSelectedFile(e.target.files?.[0] ?? null)}
+                                        />
                                     </div>
                                     <div className="mb-3">
                                         <label htmlFor="status" className="form-label">Status</label>
@@ -477,7 +509,7 @@ export default function ConceptCartoons() {
                                             id="status"
                                             name="status"
                                             value={editingRow.status}
-                                            onChange={handleFormChange}
+                                            onChange={e => handleFormChange(e, true)}
                                         >
                                             <option value="Published">Published</option>
                                             <option value="Drafted">Drafted</option>
@@ -492,6 +524,15 @@ export default function ConceptCartoons() {
                         </div>
                     </div>
                 </div>
+            )}
+
+            {lightboxUrl && (
+            <div
+                className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+                onClick={() => setLightboxUrl(null)}
+            >
+                <img src={lightboxUrl} className="max-w-[90vw] max-h-[90vh]" />
+            </div>
             )}
         </div>
     );

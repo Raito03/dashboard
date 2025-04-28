@@ -8,6 +8,7 @@ const inter = Inter({ subsets: ['latin'] });
 import { Sidebar } from '@/components/ui/sidebar';
 import { IconSearch, IconBell, IconSettings, IconEdit, IconTrash } from '@tabler/icons-react';
 import { ChevronDown, Plus, Search, XCircle } from "lucide-react";
+import cluster from 'cluster';
 
 // const poppins = Poppins({
 //   subsets: ['latin'],
@@ -173,6 +174,8 @@ export default function SchoolData() {
   const [filterName, setFilterName] = useState("");
   const [filterCode, setFilterCode] = useState("");
   const [filterDistrict, setFilterDistrict] = useState("");
+  const [filterCluster, setFilterCluster] = useState("");
+  const [filterBlock, setFilterBlock] = useState("");
   const [filterStatus, setFilterStatus] = useState("");
 
   // Modal states
@@ -186,7 +189,10 @@ export default function SchoolData() {
     state: "",
     city: "",
     district: "",
+    block: "",
+    cluster: "",
     pin_code: "",
+    code: "",
     app_visible: "No",
     is_life_lab: "No",
     status: "Inactive",
@@ -204,6 +210,8 @@ export default function SchoolData() {
       state: selectedState,
       city: selectedCity,
       district: filterDistrict,
+      block: filterBlock,
+      cluster: filterCluster,
       code: filterCode,
       status: filterStatus,
     }
@@ -221,34 +229,44 @@ export default function SchoolData() {
       }
       const data = await res.json();
       // Apply local filtering based on search fields:
-      let filtered = data;
-      if (filterName) {
-        filtered = filtered.filter((s: any) =>
-          s.name.toLowerCase().includes(filterName.toLowerCase())
-        );
-      }
-      if (filterCode) {
-        filtered = filtered.filter((s: any) =>
-          s.code && s.code.toLowerCase().includes(filterCode.toLowerCase())
-        );
-      }
-      if (filterDistrict) {
-        filtered = filtered.filter((s: any) =>
-          s.district.toLowerCase().includes(filterDistrict.toLowerCase())
-        );
-      }
-      if (filterStatus) {
-        filtered = filtered.filter((s: any) =>
-          s.status.toLowerCase() === filterStatus.toLowerCase()
-        );
-      }
-      if (selectedState) {
-        filtered = filtered.filter((s: any) => s.state === selectedState);
-      }
-      if (selectedCity) {
-        filtered = filtered.filter((s: any) => s.city === selectedCity);
-      }
-      setTableData(filtered);
+      // let filtered = data;
+      // if (filterName) {
+      //   filtered = filtered.filter((s: any) =>
+      //     s.name.toLowerCase().includes(filterName.toLowerCase())
+      //   );
+      // }
+      // if (filterCode) {
+      //   filtered = filtered.filter((s: any) =>
+      //     s.code 
+      //   );
+      // }
+      // if (filterDistrict) {
+      //   filtered = filtered.filter((s: any) =>
+      //     s.district.toLowerCase().includes(filterDistrict.toLowerCase())
+      //   );
+      // }
+      // if (filterBlock) {
+      //   filtered = filtered.filter((s: any) =>
+      //     s.block.toLowerCase().includes(filterBlock.toLowerCase())
+      //   );
+      // }
+      // if (filterCluster) {
+      //   filtered = filtered.filter((s: any) =>
+      //     s.cluster.toLowerCase().includes(filterCluster.toLowerCase())
+      //   );
+      // }
+      // if (filterStatus) {
+      //   filtered = filtered.filter((s: any) =>
+      //     s.status.toLowerCase() === filterStatus.toLowerCase()
+      //   );
+      // }
+      // if (selectedState) {
+      //   filtered = filtered.filter((s: any) => s.state === selectedState);
+      // }
+      // if (selectedCity) {
+      //   filtered = filtered.filter((s: any) => s.city === selectedCity);
+      // }
+      setTableData(data);
       setCurrentPage(0);
     } catch (error) {
       console.error("Error fetching schools:", error);
@@ -377,6 +395,8 @@ export default function SchoolData() {
     setFilterName("");
     setFilterCode("");
     setFilterDistrict("");
+    setFilterBlock("");
+    setFilterCode("");
     setFilterStatus("");
     setSelectedState("");
     setSelectedCity("");
@@ -469,7 +489,7 @@ export default function SchoolData() {
                     <input
                       type="text"
                       className="form-control"
-                      placeholder="Enter Code"
+                      placeholder="Enter School Code"
                       value={filterCode}
                       onChange={(e) => setFilterCode(e.target.value)}
                     />
@@ -484,6 +504,24 @@ export default function SchoolData() {
                     />
                   </div>
                   <div className="col-12 col-md-6 col-lg-3">
+                    <input
+                      type="text"
+                      className="form-control"
+                      placeholder="Enter Block"
+                      value={filterBlock}
+                      onChange={(e) => setFilterBlock(e.target.value)}
+                    />
+                  </div>
+                  <div className="col-12 col-md-6 col-lg-3">
+                    <input
+                      type="text"
+                      className="form-control"
+                      placeholder="Enter Cluster"
+                      value={filterCluster}
+                      onChange={(e) => setFilterCluster(e.target.value)}
+                    />
+                  </div>
+                  <div className="col-12 col-md-6 col-lg-3">
                     <select
                       className="form-select"
                       value={filterStatus}
@@ -494,8 +532,6 @@ export default function SchoolData() {
                       <option value="Inactive">Inactive</option>
                     </select>
                   </div>
-                </div>
-                <div className="row g-3 mt-2">
                   <div className="col-12 col-md-6 col-lg-3">
                     <SearchableDropdown
                       options={states}
@@ -514,6 +550,9 @@ export default function SchoolData() {
                       isLoading={false}
                     />
                   </div>
+                </div>
+                <div className="row g-3 mt-2">
+                  
                 </div>
                 <div className="row g-3 mt-2">
                   <div className="col-12 d-flex gap-2">
@@ -555,7 +594,10 @@ export default function SchoolData() {
                             <th>State</th>
                             <th>City</th>
                             <th>District</th>
+                            <th>Block</th>
+                            <th>Cluster</th>
                             <th>Pin Code</th>
+                            <th>Code</th>
                             <th>App Visible</th>
                             <th>Is Life Lab</th>
                             <th>Status</th>
@@ -570,7 +612,10 @@ export default function SchoolData() {
                               <td>{school.state}</td>
                               <td>{school.city}</td>
                               <td>{school.district}</td>
+                              <td>{school.block}</td>
+                              <td>{school.cluster}</td>
                               <td>{school.pin_code}</td>
+                              <td>{school.code}</td>
                               <td>{school.app_visible}</td>
                               <td>{school.is_life_lab}</td>
                               <td>{school.status}</td>
@@ -621,7 +666,7 @@ export default function SchoolData() {
                 <button type="button" className="btn-close" onClick={() => setShowAddModal(false)}></button>
               </div>
               <div className="modal-body">
-                {["name", "state", "city", "district", "pin_code"].map((field) => (
+                {["name", "district", "cluster", "block", "pin_code", "code"].map((field) => (
                   <div className="mb-3" key={field}>
                     <label className="form-label">{field.charAt(0).toUpperCase() + field.slice(1)}</label>
                     <input
@@ -632,6 +677,32 @@ export default function SchoolData() {
                     />
                   </div>
                 ))}
+                <div className="mb-3">
+                  <label className="form-label">State</label>
+                  <SearchableDropdown
+                    options={states}
+                    placeholder="Select State"
+                    value={addSchoolData.state}
+                    onChange={val => {
+                      // when state changes, clear city and fetch its list
+                      setAddSchoolData({ ...addSchoolData, state: val, city: "" });
+                      fetchCitiesForState(val);
+                    }}
+                    isLoading={false}
+                  />
+                </div>
+
+                {/* City field */}
+                <div className="mb-3">
+                  <label className="form-label">City</label>
+                  <SearchableDropdown
+                    options={cities}
+                    placeholder="Select City"
+                    value={addSchoolData.city}
+                    onChange={val => setAddSchoolData({ ...addSchoolData, city: val })}
+                    isLoading={!cities.length}
+                  />
+                </div>
                 <div className="mb-3">
                   <label className="form-label">App Visible</label>
                   <select
@@ -689,7 +760,7 @@ export default function SchoolData() {
                 <button type="button" className="btn-close" onClick={() => setShowEditModal(false)}></button>
               </div>
               <div className="modal-body">
-                {["name", "state", "city", "district", "pin_code"].map((field) => (
+                {["name", "district", "cluster", "block", "pin_code", "code"].map((field) => (
                   <div className="mb-3" key={field}>
                     <label className="form-label">{field.charAt(0).toUpperCase() + field.slice(1)}</label>
                     <input
@@ -700,6 +771,32 @@ export default function SchoolData() {
                     />
                   </div>
                 ))}
+                {/* State field */}
+                <div className="mb-3">
+                  <label className="form-label">State</label>
+                  <SearchableDropdown
+                    options={states}
+                    placeholder="Select State"
+                    value={editSchoolData.state || ""}
+                    onChange={val => {
+                      setEditSchoolData({ ...editSchoolData, state: val, city: "" });
+                      fetchCitiesForState(val);
+                    }}
+                    isLoading={false}
+                  />
+                </div>
+
+                {/* City field */}
+                <div className="mb-3">
+                  <label className="form-label">City</label>
+                  <SearchableDropdown
+                    options={cities}
+                    placeholder="Select City"
+                    value={editSchoolData.city || ""}
+                    onChange={val => setEditSchoolData({ ...editSchoolData, city: val })}
+                    isLoading={!cities.length}
+                  />
+                </div>
                 <div className="mb-3">
                   <label className="form-label">App Visible</label>
                   <select
@@ -790,7 +887,12 @@ export default function SchoolData() {
                     onChange={(e) => setCsvFile(e.target.files?.[0] || null)}
                   />
                   <div className="form-text">
-                    CSV format: name,state,city,district,pin_code,app_visible,is_life_lab,status
+                    CSV format (required columns):<br/>
+                    school_name, state_name, city_name, district_name, block_name,<br/> 
+                    cluster_name, pin_code, school_code, app_visible, is_life_lab<br/>
+                    <small className="text-muted">
+                      Note: app_visible and is_life_lab values should be - yes or no
+                    </small>
                   </div>
                 </div>
                 {uploadStatus && <div className="alert alert-info">{uploadStatus}</div>}

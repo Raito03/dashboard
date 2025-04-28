@@ -8,6 +8,7 @@ import { Sidebar } from '@/components/ui/sidebar';
 const inter = Inter({ subsets: ['latin'] });
 // const api_startpoint = 'https://lifeapp-api-vv1.vercel.app'
 const api_startpoint = 'http://152.42.239.141:5000'
+// const api_startpoint = 'http://127.0.0.1:5000'
 
 // Define types for our data
 type Subject = {
@@ -31,6 +32,11 @@ type Topic = {
 };
 
 type QuizQuestion = {
+  type: number;
+  question_type: number;
+  topic_id: any;
+  level_id: any;
+  subject_id: number;
   id: number;
   question_title: string;
   subject_title: string;
@@ -38,7 +44,7 @@ type QuizQuestion = {
   topic_title: string | null;
   status: string;
   index: string;
-  question_type?: string;
+  // question_type?: string;
   options: {
     title: string;
     is_answer: number;
@@ -87,6 +93,10 @@ export default function StudentRelatedQuiz() {
   });
 
   // Topic management states
+  // Modal-specific topics for Add Quiz form
+  const [modalTopics, setModalTopics] = useState<Topic[]>([]);
+  const [modalTopicsLoading, setModalTopicsLoading] = useState<boolean>(false);
+  
   const [showTopicAddModal, setShowTopicAddModal] = useState(false);
   const [showTopicEditModal, setShowTopicEditModal] = useState(false);
   const [showTopicDeleteModal, setShowTopicDeleteModal] = useState(false);
@@ -116,7 +126,18 @@ export default function StudentRelatedQuiz() {
       body: JSON.stringify({ status: statusFilter }),
     })
       .then((res) => res.json())
-      .then((data) => setSubjects(data))
+      .then(data => {
+        // 1) ensure it's an array
+        const arr = Array.isArray(data) ? data : (data.subjects ?? []);
+        // 2) parse the JSON‐strings into plain values
+        const normalized = arr.map((item: { title: string; heading: string; image: string; }) => ({
+          ...item,
+          title:   JSON.parse(item.title).en,
+          heading: JSON.parse(item.heading).en,
+          image:   JSON.parse(item.image).en,  // if you need it
+        }));
+        setSubjects(normalized);
+      })
       .catch((err) => console.error("Failed to fetch subjects:", err))
       .finally(() => setSubjectsLoading(false));
   }, [selectedStatus]);
@@ -196,17 +217,17 @@ export default function StudentRelatedQuiz() {
       if (!acc[curr.id]) {
         acc[curr.id] = {
           id: curr.id,
-          question_title: curr.question_title,
-          subject_title: curr.subject_title,
-          level_title: curr.level_title,
-          topic_title: curr.topic_title,
+          question_title: JSON.parse(curr.question_title).en,
+          subject_title: JSON.parse(curr.subject_title).en,
+          level_title: JSON.parse(curr.level_title).en,
+          topic_title: JSON.parse(curr.topic_title).en,
           status: curr.status,
           index: curr.index,
           options: []
         };
       }
       acc[curr.id].options.push({
-        title: curr.answer_option,
+        title: JSON.parse(curr.answer_option).en,
         is_answer: curr.is_answer
       });
       return acc;
@@ -217,12 +238,25 @@ export default function StudentRelatedQuiz() {
 
   const handleAddQuestion = async () => {
     const payload = {
-      ...newQuestion,
+      // Wrap the question title as JSON {"en": "..."}
+      question_title: JSON.stringify({ en: newQuestion.question_title }),
+    
+      // Copy over the other fields:
+      subject_id:   newQuestion.subject_id,
+      level_id:     newQuestion.level_id,
+      topic_id:     newQuestion.topic_id,
+      created_by:   1,
+      question_type: newQuestion.question_type,
+      type:         newQuestion.type,
+      status:       newQuestion.status,
+    
+      // Wrap each option title in JSON too:
       options: newQuestion.options.map((opt, idx) => ({
-        title: opt,
+        title:      JSON.stringify({ en: opt }),
         is_correct: idx === newQuestion.correct_index ? 1 : 0
       }))
     };
+
     await fetch(`${api_startpoint}/api/add_quiz_question`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -255,19 +289,42 @@ export default function StudentRelatedQuiz() {
   const handleUpdateQuiz = async () => {
     if (!quizToEdit) return;
     const payload = {
-      ...quizToEdit,
-      options: quizToEdit.options.map((opt, idx) => ({
-        title: opt.title,
-        is_correct: idx === quizToEdit.options.findIndex(o => o.is_answer === 1) ? 1 : 0
-      }))
+      question_title: quizToEdit.question_title,
+      subject_id:     quizToEdit.subject_id,
+      level_id:       quizToEdit.level_id,
+      topic_id:       quizToEdit.topic_id,
+      status:         quizToEdit.status,
+      question_type:  quizToEdit.question_type,
+      type:           quizToEdit.type,
+      options:        quizToEdit.options.map(opt => ({
+                         title: opt.title,
+                         is_correct: opt.is_answer
+                       }))
     };
-    await fetch(`${api_startpoint}/api/update_quiz_question/${quizToEdit.id}`, {
+    const newFilters = {
+      subject_id: String(payload.subject_id),
+      level_id:   String(payload.level_id),
+      status:     String(payload.status),
+      topic_id:   String(payload.topic_id),
+    };
+    const res = await fetch(`${api_startpoint}/api/update_quiz_question/${quizToEdit.id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
     });
-    setShowQuizEditModal(false);
-    fetchData();
+    if (res.ok) {
+      // 1) Close the modal
+      setShowQuizEditModal(false);
+    
+      // 2) Update your filter state so the updated question still matches
+      setSelectedSubject(String(newFilters.subject_id));
+      setSelectedLevel(String(newFilters.level_id));
+      setSelectedStatus(String(newFilters.status));
+      setSelectedTopic(String(newFilters.topic_id));
+    
+      // 3) Fetch with exactly those filters
+      fetchData(newFilters);
+    }
   };
 
   // Pagination calculations
@@ -348,6 +405,29 @@ export default function StudentRelatedQuiz() {
       .then(data => setTopics(Array.isArray(data) ? data : []));
   };
 
+  // Fetch topics specifically for the Add Quiz modal
+  useEffect(() => {
+    const { subject_id, level_id, status } = newQuestion;
+    if (subject_id && level_id && status) {
+      setModalTopicsLoading(true);
+      fetch(`${api_startpoint}/api/topics`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          la_subject_id: subject_id,
+          la_level_id: level_id,
+          status: status,
+        }),
+      })
+        .then(res => res.json())
+        .then(data => setModalTopics(Array.isArray(data) ? data : []))
+        .catch(err => console.error('Failed to fetch modal topics:', err))
+        .finally(() => setModalTopicsLoading(false));
+    } else {
+      setModalTopics([]);
+    }
+  }, [newQuestion.subject_id, newQuestion.level_id, newQuestion.status]);
+  
   return (
     <div className={`page bg-body ${inter.className} font-sans`}>
       <Sidebar />
@@ -414,7 +494,7 @@ export default function StudentRelatedQuiz() {
                             className={`p-2 border rounded ${selectedSubject === String(sub.id) ? 'bg-primary text-white' : 'bg-light text-dark'}`}
                             style={{ cursor: 'pointer' }}
                         >
-                            {JSON.parse(sub.title).en}
+                            {sub.title}
                         </div>
                         ))}
                     </div>
@@ -477,9 +557,9 @@ export default function StudentRelatedQuiz() {
                   <div key={q.id} className="card p-4">
                     <div className="d-flex justify-content-between align-items-center mb-2">
                       <div>
-                        <div className="fw-bold">{JSON.parse(q.question_title).en}</div>
+                        <div className="fw-bold">{q.question_title}</div>
                         <div className="text-muted small">
-                          Subject: {JSON.parse(q.subject_title).en} | Level: {JSON.parse(q.level_title).en} | Topic: {q.topic_title ? JSON.parse(q.topic_title).en : 'N/A'} | Status: {q.status} | Index: {q.index}
+                          Subject: {q.subject_title} | Level: {q.level_title} | Topic: {q.topic_title } | Status: {q.status} | Index: {q.index}
                         </div>
                       </div>
                       <div>
@@ -495,7 +575,7 @@ export default function StudentRelatedQuiz() {
                       {q.options.map((opt, idx) => (
                         <div key={idx} className="col-md-6">
                           <div className={`border rounded p-2 mb-2 ${opt.is_answer ? 'bg-success text-white' : 'bg-danger text-white'}`}>
-                            {JSON.parse(opt.title).en}
+                            {opt.title}
                           </div>
                         </div>
                       ))}
@@ -536,8 +616,10 @@ export default function StudentRelatedQuiz() {
                   <label className="form-label">Subject</label>
                   <select className="form-select" value={newQuestion.subject_id} onChange={(e) => setNewQuestion({ ...newQuestion, subject_id: e.target.value })}>
                     <option value=''>Select Subject</option>
-                    {subjects.map((sub: Subject) => (
-                      <option key={sub.id} value={sub.id}>{JSON.parse(sub.title).en}</option>
+                    {subjects.map(s => (
+                      <option key={s.id} value={s.id}>
+                        {s.title}
+                      </option>
                     ))}
                   </select>
                 </div>
@@ -552,13 +634,24 @@ export default function StudentRelatedQuiz() {
                 </div>
                 <div className="mb-2">
                   <label className="form-label">Topic/Set</label>
-                  <select className="form-select" value={newQuestion.topic_id} onChange={(e) => setNewQuestion({ ...newQuestion, topic_id: e.target.value })}>
-                    <option value=''>Select Topic</option>
-                    {topics.map((topic: Topic) => (
-                      <option key={topic.id} value={topic.id}>{JSON.parse(topic.title).en}</option>
-                    ))}
-                  </select>
+                  {modalTopicsLoading ? (
+                    <div>Loading topics…</div>
+                  ) : (
+                    <select
+                      className="form-select"
+                      value={newQuestion.topic_id}
+                      onChange={e => setNewQuestion({ ...newQuestion, topic_id: e.target.value })}
+                    >
+                      <option value=''>Select Topic</option>
+                      {modalTopics.map((t: Topic) => (
+                        <option key={t.id} value={t.id}>
+                          {JSON.parse(t.title).en}
+                        </option>
+                      ))}
+                    </select>
+                  )}
                 </div>
+
                 <div className="mb-2">
                   {newQuestion.options.map((opt, i) => (
                     <div key={i} className="mb-2">
