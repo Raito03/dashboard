@@ -21,6 +21,7 @@ export default function MissionPage() {
     const [selectedMissionAcceptance, setSelectedMissionAcceptance] = useState("")
     const [selectedAssignedBy, setSelectedAssignBy] = useState("");
     const [tableData, setTableData] = useState<any[]>([]);
+    const [totalPages, setTotalPages] = useState<number>(0);
     const [currentPage, setCurrentPage] = useState<number>(0);
     const rowsPerPage = 50;
     const [isTableLoading, setIsTableLoading] = useState(false);
@@ -30,7 +31,7 @@ export default function MissionPage() {
     // lightbox
     const [lightboxUrl, setLightboxUrl] = useState<string|null>(null)
     // Handler for search button
-    const handleSearch = async () => {
+    const handleSearch = async (pageIndex: number) => {
         const filters = {
             mission_acceptance: selectedMissionAcceptance,
             assigned_by: selectedAssignedBy,
@@ -38,6 +39,8 @@ export default function MissionPage() {
             to_date: selectedToDate,      // Include the To Date filter
             school_id: selectedSchoolID,  // new filter
             mobile_no: selectedMobileNo,  // new filter
+            page: currentPage + 1,
+            per_page: rowsPerPage
         };
 
         setIsTableLoading(true); // Set loading to true when search starts
@@ -48,9 +51,10 @@ export default function MissionPage() {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(filters)
             });
-            const data = await res.json();
+            const { data, pagination } = await res.json();
             setTableData(data);
-            setCurrentPage(0); // Reset to first page on new search
+            setTotalPages(pagination.total_pages);
+            setCurrentPage(pageIndex); // Reset to first page on new search
         } catch (error) {
             console.error("Search error:", error);
         } finally {
@@ -58,7 +62,7 @@ export default function MissionPage() {
         }
     };
     // Determine paginated data
-    const paginatedData = tableData.slice(currentPage * rowsPerPage, (currentPage + 1) * rowsPerPage);
+    // const paginatedData = tableData.slice(currentPage * rowsPerPage, (currentPage + 1) * rowsPerPage);
 
 
     const handleClear = () => {
@@ -78,6 +82,8 @@ export default function MissionPage() {
         setSelectedSchoolID("");
         setSelectedMobileNo("");
         setTableData([]);
+        setCurrentPage(0);
+        setTotalPages(0);
     };
 
     // Add this function in your schoolDashboard component before the return statement
@@ -146,7 +152,7 @@ export default function MissionPage() {
             if (!response.ok) throw new Error('Update failed');
             
             // Refresh the table data after successful update
-            handleSearch();
+            handleSearch(0);
             alert(`Mission ${action === 'approve' ? 'approved' : 'rejected'} successfully!`);
         } catch (error) {
             console.error('Error updating status:', error);
@@ -240,7 +246,7 @@ export default function MissionPage() {
                                     </div>
                                     {/* Action Buttons */}
                                     <div className="d-flex flex-wrap gap-2 mt-4">
-                                        <button className="btn btn-success d-inline-flex align-items-center" onClick={handleSearch}>
+                                        <button className="btn btn-success d-inline-flex align-items-center" onClick={() => handleSearch(0)}>
                                             <Search className="me-2" size={16} />
                                             Search
                                         </button>
@@ -273,7 +279,7 @@ export default function MissionPage() {
                             {/* Paginated Results Table */}
                             <div className="card shadow-sm border-0 mt-2">
                                 <div className="card-body overflow-x-scroll">
-                                    <h5 className="card-title mb-4">Results- {tableData.length} Students found</h5>
+                                    <h5 className="card-title mb-4">Results- {totalPages} Students found</h5>
                                     {isTableLoading ? (
                                             <div className="text-center p-5">
                                                 <div className="spinner-border text-purple" role="status" style={{ width: "3rem", height: "3rem" }}>
@@ -319,7 +325,7 @@ export default function MissionPage() {
                                                         </tr>
                                                     </thead>
                                                     <tbody>
-                                                        {paginatedData.map((row, index) => {
+                                                        {tableData.map((row, index) => {
                                                             let MissionTitle = '';
                                                             try {
                                                                 const parsedTitle = JSON.parse(row.Mission_Title);
@@ -395,20 +401,20 @@ export default function MissionPage() {
                                                 <div className="d-flex justify-content-between mt-3">
                                                     <button 
                                                         className="btn btn-secondary"
-                                                        onClick={() => setCurrentPage(prev => Math.max(prev - 1, 0))}
+                                                        onClick={() => handleSearch(currentPage - 1)}
                                                         disabled={currentPage === 0}
                                                     >
                                                         Previous
                                                     </button>
                                                     <div className="d-flex align-items-center">
                                                         <span className="mx-2">
-                                                            Page {currentPage + 1} of {Math.ceil(tableData.length / rowsPerPage) || 1}
+                                                            Page {currentPage + 1} of {totalPages || 1}
                                                         </span>
                                                     </div>
                                                     <button 
                                                         className="btn btn-secondary"
-                                                        onClick={() => setCurrentPage(prev => (prev + 1) * rowsPerPage < tableData.length ? prev + 1 : prev)}
-                                                        disabled={(currentPage + 1) * rowsPerPage >= tableData.length}
+                                                        onClick={() => handleSearch(currentPage + 1)}
+                                                        disabled={currentPage + 1 >= totalPages}
                                                     >
                                                         Next
                                                     </button>

@@ -2,6 +2,7 @@
 from binascii import Error
 import csv
 import io
+import math
 from flask import Flask, json, jsonify, request
 from flask_cors import CORS
 import pymysql.cursors
@@ -2486,6 +2487,9 @@ def mission_search():
     assigned_by = filters.get('assigned_by')
     from_date = filters.get('from_date')  # New filter: starting date
     to_date = filters.get('to_date')      # New filter: ending date
+    page     = int(filters.get('page', 1))
+    per_page = int(filters.get('per_page', 50))
+    offset   = (page - 1) * per_page
     connection = get_db_connection()
     # Build the base query with the CTE, including mission count aggregations
     sql = """
@@ -2564,22 +2568,44 @@ def mission_search():
         sql += " AND cte.mobile_no = %s"
         params.append(mobile_no)
 
-    sql += " ORDER BY cte.Requested_At DESC ;"
+    # sql += " ORDER BY cte.Requested_At DESC ;"
     
+    # First: get total count for pagination metadata
+    count_sql = f"SELECT COUNT(*) AS total FROM ({sql}) AS sub"
     try:
-        
-        with connection.cursor() as cursor:
-            cursor.execute(sql, tuple(params))
-            result = cursor.fetchall()
-            base_url = os.getenv('BASE_URL')
-            for r in result:
-                r['media_url'] = f"{base_url}/{r['media_path']}" if r.get('media_path') else None
-        
-        return jsonify(result)
+      connection = get_db_connection()
+      with connection.cursor() as cursor:
+        cursor.execute(count_sql, tuple(params))
+        total = cursor.fetchone()['total']
+
+      # Now fetch just the one page:
+      page_sql = sql + " ORDER BY cte.Requested_At DESC LIMIT %s OFFSET %s"
+      page_params = params + [per_page, offset]
+
+      with connection.cursor() as cursor:
+        cursor.execute(page_sql, tuple(page_params))
+        rows = cursor.fetchall()
+
+        # build media_url as before…
+        base_url = os.getenv('BASE_URL')
+        for r in rows:
+          r['media_url'] = f"{base_url}/{r['media_path']}" if r.get('media_path') else None
+
+      # return both the page of data _and_ pagination info
+      return jsonify({
+        'data': rows,
+        'pagination': {
+          'total': total,
+          'page': page,
+          'per_page': per_page,
+          'total_pages': math.ceil(total / per_page)
+        }
+      })
+
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+      return jsonify({'error': str(e)}), 500
     finally:
-        connection.close()
+      connection.close()
 
 @app.route('/api/update_mission_status', methods=['POST'])
 def update_mission_status():
