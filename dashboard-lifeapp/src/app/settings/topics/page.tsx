@@ -8,7 +8,7 @@ import { Sidebar } from '@/components/ui/sidebar';
 const inter = Inter({ subsets: ['latin'] });
 // const api_startpoint = 'https://lifeapp-api-vv1.vercel.app'
 const api_startpoint = 'http://152.42.239.141:5000'
-
+// const api_startpoint = 'http://127.0.0.1:5000'
 // Define types for our data
 type Subject = {
   id: number;
@@ -28,6 +28,10 @@ type Topic = {
   status: string; // "1" for active, "0" for inactive
   allow_for: string;
   type: string;
+  image:string;
+  media_id?:number;
+  media_path?: string;
+  media_url?: string;
 };
 
 export default function SettingsTopics() {
@@ -44,7 +48,12 @@ export default function SettingsTopics() {
   const [selectedTopic, setSelectedTopic] = useState<string>('');
 
   const [isLoading, setIsLoading] = useState<boolean>(false);
-  
+  const [isAddLoading, setIsAddLoading] =useState(false)
+  const [isEditLoading, setIsEditLoading] = useState(false)
+  const [isDeleteLoading, setIsDeleteLoading] = useState(false)
+  // lightbox
+  const [lightboxUrl, setLightboxUrl] = useState<string|null>(null)
+
   // Pagination state
   const [currentPage, setCurrentPage] = useState<number>(1);
   const itemsPerPage = 10;
@@ -62,6 +71,17 @@ export default function SettingsTopics() {
     status: '1',
     allow_for: '1',
     type: '2',
+    _mediaFile: null as File | null
+  });
+  // 1) New piece of state for the *form*, not the raw Topic JSON.
+  const [editForm, setEditForm] = useState({
+    title:        "",  // plain text
+    la_subject_id:"",
+    la_level_id:  "",
+    status:       "1",
+    allow_for:    "1",
+    type:         "2",
+    _mediaFile: null as File | null
   });
 
   // Fetch subjects and levels on mount
@@ -129,15 +149,23 @@ export default function SettingsTopics() {
   // Handlers for modals
   const handleAddTopic = async () => {
     try {
+      setIsAddLoading(true)
+      const form = new FormData();
+      form.append('title', newTopic.title);
+      form.append('la_subject_id', newTopic.la_subject_id);
+      form.append('la_level_id', newTopic.la_level_id);
+      form.append('status', newTopic.status);
+      form.append('allow_for', newTopic.allow_for);
+      form.append('type', newTopic.type);
+      if (newTopic._mediaFile) form.append('media', newTopic._mediaFile);
       const res = await fetch(`${api_startpoint}/api/add_topic`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(newTopic)
+        method:'POST',
+        body: form
       });
       const data = await res.json();
       if (data.success) {
         setShowTopicAddModal(false);
-        setNewTopic({ title: '', la_subject_id: '', la_level_id: '', status: '1', allow_for: '1', type: '2' });
+        setNewTopic({ title: '', la_subject_id: '', la_level_id: '', status: '1', allow_for: '1', type: '2', _mediaFile: null  });
         // Re-fetch topics with current filters
         fetch(`${api_startpoint}/api/topics`, {
           method: 'POST',
@@ -149,21 +177,47 @@ export default function SettingsTopics() {
       }
     } catch (error) {
       console.error("Error adding topic:", error);
+    } finally{
+      setIsAddLoading(false)
     }
   };
 
   const openEditModal = (topic: Topic) => {
     setTopicToEdit(topic);
+    try {
+      const parsed = JSON.parse(topic.title);
+      setEditForm({
+        title:        parsed.en || "",
+        la_subject_id: String(topic.la_subject_id),
+        la_level_id:   String(topic.la_level_id),
+        status:        topic.status,
+        allow_for:     topic.allow_for,
+        type:          topic.type,
+        _mediaFile:    null  //  default: no new file selected yet
+      });
+    } catch {
+      // fallback if parse fails
+      setEditForm(f => ({ ...f, title: topic.title }));
+    }
     setShowEditModal(true);
   };
 
   const handleUpdateTopic = async () => {
     if (!topicToEdit) return;
+    setIsEditLoading(true)
+    const form = new FormData();
+    form.append('title', JSON.stringify({ en: editForm.title }));
+    form.append('la_subject_id', editForm.la_subject_id);
+    form.append('la_level_id', editForm.la_level_id);
+    form.append('status', editForm.status);
+    form.append('allow_for', editForm.allow_for);
+    form.append('type', editForm.type);
+    if (editForm._mediaFile) form.append('media', editForm._mediaFile);
+    
     try {
       const res = await fetch(`${api_startpoint}/api/update_topic/${topicToEdit.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(topicToEdit)
+        method:'POST',  // our Flask is POST
+        body: form
       });
       const data = await res.json();
       if (data.success) {
@@ -180,6 +234,8 @@ export default function SettingsTopics() {
       }
     } catch (error) {
       console.error("Error updating topic:", error);
+    } finally {
+      setIsEditLoading(false)
     }
   };
 
@@ -190,6 +246,7 @@ export default function SettingsTopics() {
 
   const handleDeleteTopic = async () => {
     if (!topicToDelete) return;
+    setIsDeleteLoading(true)
     try {
       const res = await fetch(`${api_startpoint}/api/delete_topic/${topicToDelete.id}`, {
         method: 'DELETE',
@@ -209,6 +266,8 @@ export default function SettingsTopics() {
       }
     } catch (error) {
       console.error("Error deleting topic:", error);
+    } finally {
+      setIsDeleteLoading(false)
     }
   };
 
@@ -318,6 +377,7 @@ export default function SettingsTopics() {
                       <thead>
                         <tr>
                           <th>ID</th>
+                          <th>Image</th>
                           <th>Topic Title</th>
                           <th>Subject</th>
                           <th>Level</th>
@@ -332,6 +392,20 @@ export default function SettingsTopics() {
                           return (
                             <tr key={topic.id}>
                               <td>{topic.id}</td>
+                              <td>
+                                {topic.media_url?.match(/\.(jpe?g|png|gif)$/i)
+                                    ? <img
+                                        src={topic.media_url}
+                                        className="w-12 h-12 object-cover cursor-pointer"
+                                        onClick={()=>setLightboxUrl(topic.media_url!)}
+                                        />
+                                    : topic.media_url
+                                        ? <button
+                                            className="btn btn-link"
+                                            onClick={()=>window.open(topic.media_url,'_blank')}
+                                            >📄 File</button>
+                                        : '—'}
+                              </td>
                               <td>{JSON.parse(topic.title).en}</td>
                               <td>{subject ? JSON.parse(subject.title).en : 'N/A'}</td>
                               <td>{level ? JSON.parse(level.title).en : 'N/A'}</td>
@@ -387,72 +461,89 @@ export default function SettingsTopics() {
                 <button type="button" className="btn-close" onClick={() => setShowTopicAddModal(false)}></button>
                 </div>
                 <div className="modal-body">
-                <div className="mb-2">
-                    <label className="form-label">Topic Title</label>
-                    <input 
-                    type="text" 
-                    className="form-control" 
-                    value={newTopic.title} 
-                    onChange={(e) => setNewTopic({ ...newTopic, title: e.target.value })}
+                  <div className="mb-2">
+                      <label className="form-label">Topic Title</label>
+                      <input 
+                      type="text" 
+                      className="form-control" 
+                      value={newTopic.title} 
+                      onChange={(e) => setNewTopic({ ...newTopic, title: e.target.value })}
+                      />
+                  </div>
+                  <div className="mb-2">
+                      <label className="form-label">Subject</label>
+                      <select 
+                      className="form-select" 
+                      value={newTopic.la_subject_id || ""}
+                      onChange={(e) => setNewTopic({ ...newTopic, la_subject_id: e.target.value })}
+                      >
+                      <option value=''>Select Subject</option>
+                      {subjects.map((sub: Subject) => (
+                          <option key={sub.id} value={sub.id}>
+                          {JSON.parse(sub.title).en}
+                          </option>
+                      ))}
+                      </select>
+                  </div>
+                  <div className="mb-2">
+                      <label className="form-label">Level</label>
+                      <select 
+                      className="form-select" 
+                      value={newTopic.la_level_id || ""}
+                      onChange={(e) => setNewTopic({ ...newTopic, la_level_id: e.target.value })}
+                      >
+                      <option value=''>Select Level</option>
+                      {levels.map((lv: Level) => (
+                          <option key={lv.id} value={lv.id}>
+                          {JSON.parse(lv.title).en}
+                          </option>
+                      ))}
+                      </select>
+                  </div>
+                  <div className="mb-2">
+                      <label className="form-label">Status</label>
+                      <select 
+                      className="form-select" 
+                      value={newTopic.status}
+                      onChange={(e) => setNewTopic({ ...newTopic, status: e.target.value })}
+                      >
+                      <option value="1">Active</option>
+                      <option value="0">Inactive</option>
+                      </select>
+                  </div>
+                  {/* New Type Dropdown */}
+                  <div className="mb-2">
+                      <label className="form-label">Type</label>
+                      <select 
+                      className="form-select" 
+                      value={newTopic.type}
+                      onChange={(e) => setNewTopic({ ...newTopic, type: e.target.value })}
+                      >
+                      <option value="2">Quiz</option>
+                      <option value="3">Riddle</option>
+                      <option value="4">Puzzle</option>
+                      </select>
+                  </div>
+                  <div className="mb-2">
+                    <label className="form-label">Image</label>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="form-control"
+                      onChange={e => setNewTopic(prev => ({
+                        ...prev,
+                        _mediaFile: e.target.files?.[0] ?? null
+                      }))}
                     />
-                </div>
-                <div className="mb-2">
-                    <label className="form-label">Subject</label>
-                    <select 
-                    className="form-select" 
-                    value={newTopic.la_subject_id || ""}
-                    onChange={(e) => setNewTopic({ ...newTopic, la_subject_id: e.target.value })}
-                    >
-                    <option value=''>Select Subject</option>
-                    {subjects.map((sub: Subject) => (
-                        <option key={sub.id} value={sub.id}>
-                        {JSON.parse(sub.title).en}
-                        </option>
-                    ))}
-                    </select>
-                </div>
-                <div className="mb-2">
-                    <label className="form-label">Level</label>
-                    <select 
-                    className="form-select" 
-                    value={newTopic.la_level_id || ""}
-                    onChange={(e) => setNewTopic({ ...newTopic, la_level_id: e.target.value })}
-                    >
-                    <option value=''>Select Level</option>
-                    {levels.map((lv: Level) => (
-                        <option key={lv.id} value={lv.id}>
-                        {JSON.parse(lv.title).en}
-                        </option>
-                    ))}
-                    </select>
-                </div>
-                <div className="mb-2">
-                    <label className="form-label">Status</label>
-                    <select 
-                    className="form-select" 
-                    value={newTopic.status}
-                    onChange={(e) => setNewTopic({ ...newTopic, status: e.target.value })}
-                    >
-                    <option value="1">Active</option>
-                    <option value="0">Inactive</option>
-                    </select>
-                </div>
-                {/* New Type Dropdown */}
-                <div className="mb-2">
-                    <label className="form-label">Type</label>
-                    <select 
-                    className="form-select" 
-                    value={newTopic.type}
-                    onChange={(e) => setNewTopic({ ...newTopic, type: e.target.value })}
-                    >
-                    <option value="2">Quiz</option>
-                    <option value="3">Riddle</option>
-                    <option value="4">Puzzle</option>
-                    </select>
-                </div>
+                  </div>
                 </div>
                 <div className="modal-footer">
-                <button className="btn btn-primary" onClick={handleAddTopic}>Submit</button>
+                <button className="btn btn-primary" 
+                  onClick={handleAddTopic}
+                  disabled={isAddLoading}>
+                    {isAddLoading && <div className='animate-spin rounded-full w-4 h-4 mr-2 border-white border-t-4'></div>}
+                    {isAddLoading? 'Submitting..':'Submit'}
+                </button>
                 </div>
             </div>
             </div>
@@ -475,16 +566,16 @@ export default function SettingsTopics() {
                   <input
                     type="text"
                     className="form-control"
-                    value={topicToEdit.title || ""}
-                    onChange={(e) => setTopicToEdit({ ...topicToEdit!, title: e.target.value })}
+                    value={editForm.title}
+                    onChange={e => setEditForm(f => ({ ...f, title: e.target.value }))}
                   />
                 </div>
                 <div className="mb-2">
                   <label className="form-label">Subject</label>
                   <select
                     className="form-select"
-                    value={topicToEdit.la_subject_id || ""}
-                    onChange={(e) => setTopicToEdit({ ...topicToEdit!, la_subject_id: e.target.value })}
+                    value={editForm.la_subject_id}
+                    onChange={e => setEditForm(f => ({ ...f, la_subject_id: e.target.value }))}
                   >
                     <option value=''>Select Subject</option>
                     {subjects.map((sub: Subject) => (
@@ -498,8 +589,8 @@ export default function SettingsTopics() {
                   <label className="form-label">Level</label>
                   <select
                     className="form-select"
-                    value={topicToEdit.la_level_id || ""}
-                    onChange={(e) => setTopicToEdit({ ...topicToEdit!, la_level_id: e.target.value })}
+                    value={editForm.la_level_id}
+                    onChange={e => setEditForm(f => ({ ...f, la_level_id: e.target.value }))}
                   >
                     <option value=''>Select Level</option>
                     {levels.map((lv: Level) => (
@@ -513,16 +604,32 @@ export default function SettingsTopics() {
                   <label className="form-label">Status</label>
                   <select
                     className="form-select"
-                    value={topicToEdit.status || "1"}
-                    onChange={(e) => setTopicToEdit({ ...topicToEdit!, status: e.target.value })}
+                    value={editForm.status}
+                    onChange={e => setEditForm(f => ({ ...f, status: e.target.value }))}
                   >
                     <option value="1">Active</option>
                     <option value="0">Inactive</option>
                   </select>
                 </div>
+                <div className="mb-2">
+                  <label className="form-label">Image</label>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="form-control"
+                    onChange={e => setEditForm(prev => ({
+                      ...prev,
+                      _mediaFile: e.target.files?.[0] ?? null
+                    }))}
+                  />
+                </div>
               </div>
               <div className="modal-footer">
-                <button className="btn btn-primary" onClick={handleUpdateTopic}>Save Changes</button>
+                <button className="btn btn-primary" onClick={handleUpdateTopic}
+                  disabled={isEditLoading}
+                >
+                  {isEditLoading && <div className='animate-spin rounded-full w-4 h-4 mr-2 border-white border-t-4'></div>}
+                  {isEditLoading? 'Saving..':'Save Changes'}</button>
               </div>
             </div>
           </div>
@@ -545,9 +652,34 @@ export default function SettingsTopics() {
               </div>
               <div className="modal-footer">
                 <button className="btn btn-secondary" onClick={() => setShowDeleteModal(false)}>Cancel</button>
-                <button className="btn btn-danger" onClick={handleDeleteTopic}>Delete</button>
+                <button className="btn btn-danger" 
+                onClick={handleDeleteTopic}
+                disabled = {isDeleteLoading}
+                >
+                  {isDeleteLoading && <div className='animate-spin rounded-full w-4 h-4 border-white border-t-4 mr-2'></div>}
+                  {isDeleteLoading? 'Deleting..':'Delete'}</button>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Lightbox */}
+      {lightboxUrl && (
+        <div
+        className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+        onClick={()=>setLightboxUrl(null)}
+        >
+          <div className="relative">
+              <img
+              src={lightboxUrl}
+              alt="Preview"
+              className="max-w-[90vw] max-h-[90vh] rounded-lg shadow-lg"
+              />
+              <button
+              className="absolute top-2 right-2 text-white bg-gray-900 rounded-full p-1"
+              onClick={e=>{ e.stopPropagation(); setLightboxUrl(null) }}
+              >✕</button>
           </div>
         </div>
       )}

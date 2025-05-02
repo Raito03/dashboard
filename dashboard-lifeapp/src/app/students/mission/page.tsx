@@ -6,7 +6,7 @@ import React from 'react';
 import { Inter } from 'next/font/google';
 const inter = Inter({ subsets: ['latin'] });
 import { Sidebar } from '@/components/ui/sidebar';
-import { IconSearch, IconBell, IconSettings, IconDownload } from '@tabler/icons-react';
+import { IconSearch, IconBell, IconSettings, IconDownload, IconX } from '@tabler/icons-react';
 import { BarChart3, Download, Plus, Search, XCircle } from 'lucide-react';
 
 
@@ -27,6 +27,8 @@ export default function MissionPage() {
     // Add two new state variables for the school ID and mobile no filters
     const [selectedSchoolID, setSelectedSchoolID] = useState("");
     const [selectedMobileNo, setSelectedMobileNo] = useState("");
+    // lightbox
+    const [lightboxUrl, setLightboxUrl] = useState<string|null>(null)
     // Handler for search button
     const handleSearch = async () => {
         const filters = {
@@ -297,6 +299,7 @@ export default function MissionPage() {
                                                             <th>School ID</th>
                                                             <th>School Name</th>
                                                             <th>Mission Title</th>
+                                                            <th>Media</th>
                                                             <th>Assigned By</th>
                                                             <th>Status</th>
                                                             {selectedMissionAcceptance === "Requested" && <th>Action</th>}
@@ -333,6 +336,20 @@ export default function MissionPage() {
                                                                 <td>{row.School_ID}</td>
                                                                 <td>{row.School_Name}</td>
                                                                 <td>{MissionTitle}</td>
+                                                                <td>
+                                                                    {row.media_url?.match(/\.(jpe?g|png|gif)$/i)
+                                                                        ? <img
+                                                                            src={row.media_url}
+                                                                            className="w-12 h-12 object-cover cursor-pointer"
+                                                                            onClick={()=>setLightboxUrl(row.media_url!)}
+                                                                            />
+                                                                        : row.media_url
+                                                                            ? <button
+                                                                                className="btn btn-link"
+                                                                                onClick={()=>window.open(row.media_url,'_blank')}
+                                                                                >📄 File</button>
+                                                                            : '—'}
+                                                                </td>
                                                                 <td>{row.Assigned_By}</td>
                                                                 <td>{row.Status}</td>
                                                                 {selectedMissionAcceptance === "Requested" && (
@@ -399,6 +416,31 @@ export default function MissionPage() {
                                             </>
                                         )}
                                 </div>
+
+                                {/* Lightbox */}
+                                {lightboxUrl && (
+                                    <div
+                                        className="position-fixed start-0 end-0 top-0 bottom-0 bg-dark bg-opacity-75 d-flex align-items-center justify-content-center"
+                                        style={{ zIndex: 1050 }}
+                                        onClick={() => setLightboxUrl(null)}
+                                    >
+                                        <div className="position-relative">
+                                            <img
+                                                src={lightboxUrl}
+                                                alt="Preview"
+                                                className="img-fluid rounded max-w-full max-h-full"
+                                                style={{ maxWidth: '90vw', maxHeight: '90vh' }}
+                                            />
+                                            <button
+                                                className="position-absolute top-0 end-0 btn btn-sm btn-dark rounded-circle"
+                                                style={{ margin: '0.5rem' }}
+                                                onClick={e => { e.stopPropagation(); setLightboxUrl(null) }}
+                                            >
+                                                <IconX size={16} />
+                                            </button>
+                                        </div>
+                                    </div>
+                                )}
                             </div>
                         </div>
                     </div>

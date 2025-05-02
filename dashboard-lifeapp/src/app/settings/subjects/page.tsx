@@ -14,53 +14,70 @@ interface Slide {
     id: number;
     title: string;
     heading: string;
-    imageId: number;
     status: number;
+    media_url?: string;
 }
 
 interface RawSubject {
     id: number;
     title: string; // JSON string
     heading: string; // JSON string
-    image: string; // JSON string
+    media_url?: string;
     status: string;
 }
 
 // const api_startpoint = 'https://lifeapp-api-vv1.vercel.app'
 const api_startpoint = 'http://152.42.239.141:5000'
-
+// const api_startpoint = 'http://127.0.0.1:5000'
 export default function SettingsSubject() {
     const [totalSubjects, setTotalSubjects] = useState<Slide[]>([])
     const [loading, setLoading] = useState(true);
+    const [isAddLoading, setIsAddLoading] = useState(false);
+    const [isEditLoading, setIsEditLoading] = useState(false);
     async function fetchSubjectList() {
         try {
             setLoading(true);
             const res = await fetch(`${api_startpoint}/api/subjects_list`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({})
+                body: JSON.stringify({ status: 'all' }) // Explicitly send status
             });
             const data: RawSubject[] = await res.json();
     
             if (data && data.length > 0) {
                 const processedSubjects: Slide[] = data.map(subject => {
-                    const titleObj = JSON.parse(subject.title);
-                    const headingObj = JSON.parse(subject.heading);
-                    const imageObj = JSON.parse(subject.image);
-                    const statusObj = subject.status;
+                    // The backend is already parsing JSON, so these might be strings
+                    // but ensure we handle both cases correctly
+                    let title = subject.title;
+                    let heading = subject.heading;
+                    
+                    try {
+                        // If it's still a JSON string, parse it
+                        if (typeof subject.title === 'string' && subject.title.startsWith('{')) {
+                            const titleObj = JSON.parse(subject.title);
+                            title = titleObj.en;
+                        }
+                        
+                        if (typeof subject.heading === 'string' && subject.heading.startsWith('{')) {
+                            const headingObj = JSON.parse(subject.heading);
+                            heading = headingObj.en;
+                        }
+                    } catch (e) {
+                        console.error('Error parsing JSON:', e);
+                    }
                     
                     return {
                         id: subject.id,
-                        title: titleObj.en,
-                        heading: headingObj.en,
-                        imageId: parseInt(imageObj.en),
-                        status: parseInt(statusObj),
+                        title: title,
+                        heading: heading,
+                        media_url: subject.media_url,
+                        status: parseInt(subject.status),
                     };
                 });
     
                 setTotalSubjects(processedSubjects);
-                setLoading(false);
             }
+            setLoading(false);
         } catch (error) {
             console.error('Error fetching subject list:', error);
             setLoading(false);
@@ -100,7 +117,8 @@ export default function SettingsSubject() {
         id: 0,
         title: "",
         heading: "",
-        created_by: ""
+        created_by: "",
+        status: "1",           // default to “Active”
     };
     const [formValues, setFormValues] = useState(initialFormValues);
     const [imageFile, setImageFile] = useState<File | null>(null);
@@ -111,6 +129,8 @@ export default function SettingsSubject() {
 
     const [errorMessage, setErrorMessage] = useState('')
 
+    // lightbox
+    const [lightboxUrl, setLightboxUrl] = useState<string|null>(null)
 
     const handleClear = () => {
         setFormValues(initialFormValues);
@@ -142,12 +162,13 @@ export default function SettingsSubject() {
     // Handle form submission
     const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault();
-        
+        setIsAddLoading(true);
         const formData = new FormData();
-        formData.append('title', formValues.title);
-        formData.append('heading', formValues.heading);
+        // Create proper JSON objects for title and heading
+        formData.append('title', JSON.stringify({ en: formValues.title }));
+        formData.append('heading', JSON.stringify({ en: formValues.heading }));
         formData.append('created_by', formValues.created_by);
-        
+        formData.append('status',     formValues.status);
         if (imageFile) {
           formData.append('image', imageFile);
         }
@@ -155,98 +176,25 @@ export default function SettingsSubject() {
         try {
           const res = await fetch(`${api_startpoint}/api/subjects_new`, {
             method: 'POST',
-            body: formData, // No need for JSON headers, FormData handles it
+            body: formData, // FormData handles content-type
           });
       
           if (res.ok) {
             setShowModal(false);
-            setFormValues({ id: 0 ,title: '', heading: '', created_by: '' });
+            setFormValues({ id: 0, title: '', heading: '', created_by: '', status:'0' });
             setImageFile(null);
-            await fetchSubjectList(); // 🔥 Call fetchSubjectList here
+            await fetchSubjectList();
           } else {
             const errorData = await res.json();
             setErrorMessage(errorData.error || 'Error creating subject');
           }
         } catch (err) {
           setErrorMessage('Error connecting to API');
+        } finally {
+            setIsAddLoading(false);
         }
     };
       
-
-    // Modal component that slides in from the right
-    const AddSubjectModal = () => (
-        <div className="fixed top-0 right-0 h-full w-2/5 bg-white shadow-lg z-50 transform transition-transform duration-300"
-            style={{ transform: showModal ? 'translateX(0)' : 'translateX(100%)' }}>
-            <div className="p-4 border-b flex justify-between items-center">
-                <h2 className="text-xl font-semibold">Add New Subject</h2>
-                <button onClick={closeModal}>
-                    <svg xmlns="http://www.w3.org/2000/svg" className="icon icon-tabler icon-tabler-x" width="24" height="24" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor" fill="none" strokeLinecap="round" strokeLinejoin="round">
-                        <path stroke="none" d="M0 0h24v24H0z" fill="none"></path>
-                        <path d="M18 6L6 18"></path>
-                        <path d="M6 6l12 12"></path>
-                    </svg>
-                </button>
-            </div>
-            <div className="p-4">
-                {errorMessage && <p className="text-red-500">{errorMessage}</p>}
-                <form onSubmit={handleSubmit}>
-                    <div className="mb-4">
-                        <label className="block mb-1">Title</label>
-                        <input
-                            type="text"
-                            name="title"
-                            placeholder='Enter a title'
-                            value={formValues.title}
-                            onChange={handleChange}
-                            className="w-full border p-2"
-                            required
-                        />
-                    </div>
-                    <div className="mb-4">
-                        <label className="block mb-1">Heading</label>
-                        <input
-                            type="text"
-                            name="heading"
-                            placeholder='Enter a Heading'
-                            value={formValues.heading}
-                            onChange={handleChange}
-                            className="w-full border p-2"
-                            required
-                        />
-                    </div>
-                    <div className="mb-4">
-                        <label className="block mb-1">Created By</label>
-                        <select
-                            name="created_by"
-                            value={formValues.created_by}
-                            onChange={handleChange}
-                            className="w-full border p-2"
-                            required
-                        >
-                            <option value="">Select role</option>
-                            <option value="Admin">Admin</option>
-                            <option value="Mentor">Mentor</option>
-                            <option value="Teacher">Teacher</option>
-                        </select>
-                    </div>
-                    <div className="mb-4">
-                        <label className="block mb-1">Image ID</label>
-                        <input
-                            type="file"
-                            accept="image/*"
-                            onChange={handleFileChange}
-                            className="w-full border p-2"
-                            required
-                        />
-
-                    </div>
-                    <div className="flex justify-end">
-                        <button type="submit" className="btn btn-primary">Create Subject</button>
-                    </div>
-                </form>
-            </div>
-        </div>
-    );
 
 
 
@@ -261,6 +209,7 @@ export default function SettingsSubject() {
             title: subject.title,
             heading: subject.heading,
             created_by: '', // You may wish to pre-select role based on additional subject data
+            status: String(subject.status),
         });
         setImageFile(null);
         setShowEditModal(true);
@@ -269,13 +218,14 @@ export default function SettingsSubject() {
     const handleEditSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault();
         if (!selectedSubject) return;
-        
+        setIsEditLoading(true)
         const formData = new FormData();
-        formData.append("id", String(formValues.id)); // Convert number to string
-        formData.append("title", formValues.title);
-        formData.append("heading", formValues.heading);
-        formData.append("created_by", formValues.created_by);
-
+        formData.append("id", String(formValues.id));
+        // Create proper JSON objects for title and heading
+        formData.append('title', JSON.stringify({ en: formValues.title }));
+        formData.append('heading', JSON.stringify({ en: formValues.heading }));
+        formData.append('created_by', formValues.created_by);
+        formData.append('status',     formValues.status);
         if (imageFile) {
           formData.append('image', imageFile);
         }
@@ -289,7 +239,7 @@ export default function SettingsSubject() {
           if (res.ok) {
             setShowEditModal(false);
             setSelectedSubject(null);
-            setFormValues({ id:0, title: '', heading: '', created_by: '' });
+            setFormValues({ id: 0, title: '', heading: '', created_by: '', status:'0' });
             setImageFile(null);
             await fetchSubjectList();
           } else {
@@ -298,6 +248,8 @@ export default function SettingsSubject() {
           }
         } catch (err) {
           setErrorMessage('Error connecting to API');
+        } finally {
+            setIsEditLoading(false);
         }
     };
 
@@ -332,78 +284,6 @@ export default function SettingsSubject() {
         }
     };
 
-
-    // Edit Modal
-    const EditSubjectModal = () => (
-        <div className="fixed top-0 right-0 h-full w-2/5 bg-white shadow-lg z-50 transform transition-transform duration-300"
-            style={{ transform: showEditModal ? 'translateX(0)' : 'translateX(100%)' }}>
-            <div className="p-4 border-b flex justify-between items-center">
-                <h2 className="text-xl font-semibold">Edit Subject</h2>
-                <button onClick={closeModal}>
-                    <svg xmlns="http://www.w3.org/2000/svg" className="icon icon-tabler icon-tabler-x" width="24" height="24" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor" fill="none" strokeLinecap="round" strokeLinejoin="round">
-                        <path stroke="none" d="M0 0h24v24H0z" fill="none"></path>
-                        <path d="M18 6L6 18"></path>
-                        <path d="M6 6l12 12"></path>
-                    </svg>
-                </button>
-            </div>
-            <div className="p-4">
-                {errorMessage && <p className="text-red-500">{errorMessage}</p>}
-                <form onSubmit={handleEditSubmit}>
-                    <div className="mb-4">
-                        <label className="block mb-1">Title</label>
-                        <input
-                            type="text"
-                            name="title"
-                            value={formValues.title}
-                            onChange={handleChange}
-                            className="w-full border p-2"
-                            required
-                        />
-                    </div>
-                    <div className="mb-4">
-                        <label className="block mb-1">Heading</label>
-                        <input
-                            type="text"
-                            name="heading"
-                            value={formValues.heading}
-                            onChange={handleChange}
-                            className="w-full border p-2"
-                            required
-                        />
-                    </div>
-                    <div className="mb-4">
-                        <label className="block mb-1">Created By</label>
-                        <select
-                            name="created_by"
-                            value={formValues.created_by}
-                            onChange={handleChange}
-                            className="w-full border p-2"
-                            required
-                        >
-                            <option value="">Select role</option>
-                            <option value="Admin">Admin</option>
-                            <option value="Mentor">Mentor</option>
-                            <option value="Teacher">Teacher</option>
-                        </select>
-                    </div>
-                    <div className="mb-4">
-                        <label className="block mb-1">Image ID</label>
-                        <input
-                            type="file"
-                            accept="image/*"
-                            onChange={handleFileChange}
-                            className="w-full border p-2"
-                        />
-                    </div>
-                    <div className="flex justify-end gap-2">
-                        <button type="button" className="btn btn-secondary" onClick={() => { setShowEditModal(false); setSelectedSubject(null); }}>Cancel</button>
-                        <button type="submit" className="btn btn-primary">Update Subject</button>
-                    </div>
-                </form>
-            </div>
-        </div>
-    );
 
     // Delete Modal
     const DeleteSubjectModal = () => (
@@ -474,11 +354,18 @@ export default function SettingsSubject() {
                                         <tr key={subject.id} className="text-sm">
                                         <td>{subject.id}</td>
                                         <td>
-                                            <img
-                                            src={`https://picsum.photos/id/${subject.imageId}/80/50`}
-                                            alt={subject.title}
-                                            className="w-20 h-auto rounded"
-                                            />
+                                            {subject.media_url?.match(/\.(jpe?g|png|gif)$/i)
+                                                ? <img
+                                                    src={subject.media_url}
+                                                    className="w-12 h-12 object-cover cursor-pointer"
+                                                    onClick={()=>setLightboxUrl(subject.media_url!)}
+                                                    />
+                                                : subject.media_url
+                                                    ? <button
+                                                        className="btn btn-link"
+                                                        onClick={()=>window.open(subject.media_url,'_blank')}
+                                                        >📄 File</button>
+                                                    : '—'}
                                         </td>
                                         <td>{subject.title}</td>
                                         <td>{subject.heading}</td>
@@ -540,9 +427,201 @@ export default function SettingsSubject() {
                 </div>
             </div>
             {/* Modal Overlay */}
-            {showModal && <AddSubjectModal />}
-            {showEditModal && <EditSubjectModal />}
+            {showModal && 
+                <div className="fixed top-0 right-0 h-full w-2/5 bg-white shadow-lg z-50 transform transition-transform duration-300"
+                    style={{ transform: showModal ? 'translateX(0)' : 'translateX(100%)' }}>
+                    <div className="p-4 border-b flex justify-between items-center">
+                        <h2 className="text-xl font-semibold">Add New Subject</h2>
+                        <button onClick={closeModal}>
+                            <svg xmlns="http://www.w3.org/2000/svg" className="icon icon-tabler icon-tabler-x" width="24" height="24" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor" fill="none" strokeLinecap="round" strokeLinejoin="round">
+                                <path stroke="none" d="M0 0h24v24H0z" fill="none"></path>
+                                <path d="M18 6L6 18"></path>
+                                <path d="M6 6l12 12"></path>
+                            </svg>
+                        </button>
+                    </div>
+                    <div className="p-4">
+                        {errorMessage && <p className="text-red-500">{errorMessage}</p>}
+                        <form onSubmit={handleSubmit}>
+                            <div className="mb-4">
+                                <label className="block mb-1">Title</label>
+                                <input
+                                    type="text"
+                                    name="title"
+                                    placeholder='Enter a title'
+                                    value={formValues.title}
+                                    onChange={handleChange}
+                                    className="w-full border p-2"
+                                    required
+                                />
+                            </div>
+                            <div className="mb-4">
+                                <label className="block mb-1">Heading</label>
+                                <input
+                                    type="text"
+                                    name="heading"
+                                    placeholder='Enter a Heading'
+                                    value={formValues.heading}
+                                    onChange={handleChange}
+                                    className="w-full border p-2"
+                                    required
+                                />
+                            </div>
+                            <div className="mb-4">
+                                <label className="block mb-1">Created By</label>
+                                <select
+                                    name="created_by"
+                                    value={formValues.created_by}
+                                    onChange={handleChange}
+                                    className="w-full border p-2"
+                                    required
+                                >
+                                    <option value="">Select role</option>
+                                    <option value="Admin">Admin</option>
+                                    <option value="Mentor">Mentor</option>
+                                    <option value="Teacher">Teacher</option>
+                                </select>
+                            </div>
+                            <div className="mb-4">
+                                <label className="block mb-1">Status</label>
+                                <select
+                                    name="status"
+                                    value={formValues.status}
+                                    onChange={handleChange}
+                                    className="w-full border p-2"
+                                    required
+                                >
+                                    <option value="1">Active</option>
+                                    <option value="0">Inactive</option>
+                                </select>
+                            </div>
+
+                            <div className="mb-4">
+                                <label className="block mb-1">Image ID</label>
+                                <input
+                                    type="file"
+                                    accept="image/*"
+                                    onChange={handleFileChange}
+                                    className="w-full border p-2"
+                                    required
+                                />
+        
+                            </div>
+                            <div className="flex justify-end">
+                                <button type="submit" className="btn btn-primary" disabled={isAddLoading}>
+                                    {isAddLoading && <div className='animate-spin border-t-4 border-sky-500 rounded-full w-4 h-4 mr-2'></div>}
+                                    {isAddLoading? 'Creating':'Create Subject'}</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            }
+            {showEditModal && 
+                <div className="fixed top-0 right-0 h-full w-2/5 bg-white shadow-lg z-50 transform transition-transform duration-300"
+                    style={{ transform: showEditModal ? 'translateX(0)' : 'translateX(100%)' }}>
+                    <div className="p-4 border-b flex justify-between items-center">
+                        <h2 className="text-xl font-semibold">Edit Subject</h2>
+                        <button onClick={closeModal}>
+                            <svg xmlns="http://www.w3.org/2000/svg" className="icon icon-tabler icon-tabler-x" width="24" height="24" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor" fill="none" strokeLinecap="round" strokeLinejoin="round">
+                                <path stroke="none" d="M0 0h24v24H0z" fill="none"></path>
+                                <path d="M18 6L6 18"></path>
+                                <path d="M6 6l12 12"></path>
+                            </svg>
+                        </button>
+                    </div>
+                    <div className="p-4">
+                        {errorMessage && <p className="text-red-500">{errorMessage}</p>}
+                        <form onSubmit={handleEditSubmit}>
+                            <div className="mb-4">
+                                <label className="block mb-1">Title</label>
+                                <input
+                                    type="text"
+                                    name="title"
+                                    value={formValues.title}
+                                    onChange={handleChange}
+                                    className="w-full border p-2"
+                                    required
+                                />
+                            </div>
+                            <div className="mb-4">
+                                <label className="block mb-1">Heading</label>
+                                <input
+                                    type="text"
+                                    name="heading"
+                                    value={formValues.heading}
+                                    onChange={handleChange}
+                                    className="w-full border p-2"
+                                    required
+                                />
+                            </div>
+                            <div className="mb-4">
+                                <label className="block mb-1">Created By</label>
+                                <select
+                                    name="created_by"
+                                    value={formValues.created_by}
+                                    onChange={handleChange}
+                                    className="w-full border p-2"
+                                    required
+                                >
+                                    <option value="">Select role</option>
+                                    <option value="Admin">Admin</option>
+                                    <option value="Mentor">Mentor</option>
+                                    <option value="Teacher">Teacher</option>
+                                </select>
+                            </div>
+                            <div className="mb-4">
+                                <label className="block mb-1">Status</label>
+                                <select
+                                    name="status"
+                                    value={formValues.status}
+                                    onChange={handleChange}
+                                    className="w-full border p-2"
+                                    required
+                                >
+                                    <option value="1">Active</option>
+                                    <option value="0">Inactive</option>
+                                </select>
+                            </div>
+
+                            <div className="mb-4">
+                                <label className="block mb-1">Image ID</label>
+                                <input
+                                    type="file"
+                                    accept="image/*"
+                                    onChange={handleFileChange}
+                                    className="w-full border p-2"
+                                />
+                            </div>
+                            <div className="flex justify-end gap-2">
+                                <button type="button" className="btn btn-secondary" onClick={() => { setShowEditModal(false); setSelectedSubject(null); }}>Cancel</button>
+                                <button type="submit" className="btn btn-primary" disabled={isEditLoading}>
+                                    {isEditLoading && <div className='animate-spin border-t-4 border-sky-500 rounded-full w-4 h-4 mr-2'></div>}
+                                    {isEditLoading? 'Updating':'Update Subject'}</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            }
             {showDeleteModal && <DeleteSubjectModal />}
+            {/* Lightbox */}
+            {lightboxUrl && (
+                <div
+                className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+                onClick={()=>setLightboxUrl(null)}
+                >
+                <div className="relative">
+                    <img
+                    src={lightboxUrl}
+                    alt="Preview"
+                    className="max-w-[90vw] max-h-[90vh] rounded-lg shadow-lg"
+                    />
+                    <button
+                    className="absolute top-2 right-2 text-white bg-gray-900 rounded-full p-1"
+                    onClick={e=>{ e.stopPropagation(); setLightboxUrl(null) }}
+                    >✕</button>
+                </div>
+                </div>
+            )}
         </div>
     );
 }

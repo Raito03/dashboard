@@ -394,7 +394,94 @@ export default function StudentDashboard() {
         }
     }, [selectedState]);
     
+    // above your existing fetchCities...
+    const [addCities, setAddCities] = useState<string[]>([]);
+    const [isAddCitiesLoading, setIsAddCitiesLoading] = useState(false);
+    const fetchAddCities  = async (state: string) => {
+        if (!state) return;
+    
+        console.log("Fetching cities for state:", state);
+    
+        setIsAddCitiesLoading(true);
+        try {
+            const res = await fetch(`${api_startpoint}/api/city_list_teachers`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ state: state })
+            });
+    
+            if (!res.ok) {
+                throw new Error(`HTTP error! Status: ${res.status}`);
+            }
+    
+            const data = await res.json();
+    
+            console.log("Raw API Response:", data); // ✅ Check if cities are being received
+    
+            if (Array.isArray(data) && data.length > 0) {
+                const cityList: string[] = data.map(city => 
+                    typeof city === 'string' ? city.trim() : city.city ? city.city.trim() : ''
+                ).filter(city => city !== "");
+    
+                setAddCities(cityList);
+                sessionStorage.setItem(`cityList_${state}`, JSON.stringify(cityList));
+    
+                console.log(`✅ Loaded ${cityList.length} cities for ${state}`);
+            } else {
+                console.warn("⚠ No cities found for state:", state);
+                setAddCities([]); // Clear cities if none found
+            }
+        } catch (error) {
+            console.error("❌ Error fetching city list:", error);
+            setAddCities([]);
+        } finally {
+            setIsAddCitiesLoading(false);
+        }
+    };
 
+    const [editCities, setEditCities] = useState<string[]>([]);
+    const [isEditCitiesLoading, setIsEditCitiesLoading] = useState(false);
+    const fetchEditCities  = async (state: string) => {
+        if (!state) return;
+    
+        console.log("Fetching cities for state:", state);
+    
+        setIsEditCitiesLoading(true);
+        try {
+            const res = await fetch(`${api_startpoint}/api/city_list_teachers`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ state: state })
+            });
+    
+            if (!res.ok) {
+                throw new Error(`HTTP error! Status: ${res.status}`);
+            }
+    
+            const data = await res.json();
+    
+            console.log("Raw API Response:", data); // ✅ Check if cities are being received
+    
+            if (Array.isArray(data) && data.length > 0) {
+                const cityList: string[] = data.map(city => 
+                    typeof city === 'string' ? city.trim() : city.city ? city.city.trim() : ''
+                ).filter(city => city !== "");
+    
+                setEditCities(cityList);
+                sessionStorage.setItem(`cityList_${state}`, JSON.stringify(cityList));
+    
+                console.log(`✅ Loaded ${cityList.length} cities for ${state}`);
+            } else {
+                console.warn("⚠ No cities found for state:", state);
+                setEditCities([]); // Clear cities if none found
+            }
+        } catch (error) {
+            console.error("❌ Error fetching city list:", error);
+            setEditCities([]);
+        } finally {
+            setIsEditCitiesLoading(false);
+        }
+    };      
 
     // For city fetching - optimized but independent of state
     const [schools, setSchools] = useState<string[]>([]);
@@ -646,6 +733,42 @@ export default function StudentDashboard() {
         }
     };
 
+    useEffect(() => {
+        if (newStudent.state) {
+          // clear out any previously selected city in the modal:
+          setNewStudent(s => ({ ...s, city: '' }));
+          fetchAddCities(newStudent.state);
+        }
+    }, [newStudent.state]);
+
+    // inside your modal component:
+    const [schoolOptions, setSchoolOptions] = useState<
+    { id: string; name: string; code: string }[]
+    >([]);
+    const [isSchoolsAddLoading, setIsSchoolsAddLoading] = useState(false);
+
+    useEffect(() => {
+        // fetch only when modal opens
+        async function loadSchools() {
+            setIsSchoolsAddLoading(true);
+            try {
+                const res = await fetch(`${api_startpoint}/api/new_school_list`, {
+                method: 'GET'
+                });
+                const data = await res.json();
+                // expect data = [{ id, name, code }, …]
+                setSchoolOptions(data);
+            } catch (err) {
+                console.error(err);
+                setSchoolOptions([]);
+            } finally {
+                setIsSchoolsAddLoading(false);
+            }
+        }
+
+    if (isAddOpen) loadSchools();
+    }, [isAddOpen]);
+
 
     // ````````````````` EDIT MODAL ``````````````````````````````````````````
     const [isEditOpen, setIsEditOpen] = useState(false);
@@ -701,6 +824,43 @@ export default function StudentDashboard() {
     }
     };
 
+    useEffect(() => {
+        // Only fire when we actually have an editingStudent with a state
+        if (editingStudent?.state) {
+          // reset any previously-selected city
+          setEditingStudent((s: any) => ({ ...s, city: '' }));
+          // fetch the new list
+          fetchEditCities(editingStudent.state);
+        }
+    }, [editingStudent?.state]);
+      
+    // inside your modal component:
+    const [schoolEditOptions, setSchoolEditOptions] = useState<
+    { id: string; name: string; code: string }[]
+    >([]);
+    const [isSchoolsEditLoading, setIsSchoolsEditLoading] = useState(false);
+
+    useEffect(() => {
+        // fetch only when modal opens
+        async function loadSchools() {
+            setIsSchoolsEditLoading(true);
+            try {
+                const res = await fetch(`${api_startpoint}/api/new_school_list`, {
+                method: 'GET'
+                });
+                const data = await res.json();
+                // expect data = [{ id, name, code }, …]
+                setSchoolEditOptions(data);
+            } catch (err) {
+                console.error(err);
+                setSchoolEditOptions([]);
+            } finally {
+                setIsSchoolsEditLoading(false);
+            }
+        }
+
+    if (isEditOpen) loadSchools();
+    }, [isEditOpen]);
 
     // ````````````````` DELETE MODAL ``````````````````````````````````````````
     // Delete modal state
@@ -4203,7 +4363,7 @@ export default function StudentDashboard() {
                         </div>
 
 
-                         {/* ───── Add Student Modal ───── */}
+                        {/* ───── Add Student Modal ───── */}
                         {isAddOpen && (
                         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
                             <form
@@ -4262,6 +4422,7 @@ export default function StudentDashboard() {
                                         value={newStudent.dob}
                                         onChange={e => handleNewChange('dob', e.target.value)}
                                         className="w-full border p-2 rounded"
+                                        required
                                     />
                                 </div>
                                 
@@ -4298,44 +4459,55 @@ export default function StudentDashboard() {
                                 </div>
                                 <div>
                                 <label className="block text-sm mb-1">City</label>
-                                <SearchableDropdown
-                                    options={cities}
-                                    placeholder="Select City"
-                                    value={newStudent.city? [newStudent.city]:[]}
-                                    onChange={(vals) => handleNewChange('city', vals[0] || '')}
-                                    isLoading={isCitiesLoading}
-                                />
+                                    <SearchableDropdown
+                                        options={addCities}
+                                        placeholder="Select City"
+                                        value={newStudent.city ? [newStudent.city] : []}
+                                        onChange={vals => handleNewChange('city', vals[0] || '')}
+                                        isLoading={isAddCitiesLoading}
+                                    />
                                 </div>
                                 
                                 <div>
                                     <label className="block text-sm mb-1">School</label>
                                     <SearchableDropdown
-                                        options={schools}
+                                        options={schoolOptions.map(s => s.name)}
                                         placeholder="Select School"
                                         value={newStudent.school_name ? [newStudent.school_name] : []}
-                                        onChange={(vals) => {
-                                        handleNewChange('school_name', vals[0] || ''); // Take first selected school
-                                        handleNewChange('school_id', ''); // clear any manual ID
+                                        isLoading={isSchoolsAddLoading}
+                                        onChange={vals => {
+                                            const selectedName = vals[0] || '';
+                                            // find the full record:
+                                            const found = schoolOptions.find(s => s.name === selectedName);
+                                            setNewStudent(s => ({
+                                            ...s,
+                                            school_name: selectedName,
+                                            school_id:   found?.id   ?? '',
+                                            school_code: found?.code ?? ''
+                                            }));
                                         }}
-                                        isLoading={isSchoolsLoading}
-                                    />
+                                        />
+
                                 </div>
                             </div>
 
                             <div className="d-flex flex-row gap-4 w-[90%]">
                                 <input
                                 name="school_id"
+                                
                                 placeholder="School ID"
-                                value={newStudent.school_id}
-                                onChange={e => handleNewChange('school_id', e.target.value)}
+                                value={newStudent.school_id ?? ''}
+                                // onChange={e => handleNewChange('school_id', e.target.value)}
                                 className="w-full border p-2 rounded"
+                                disabled
                                 />
                                 <input
                                 name="school_code"
                                 placeholder="School Code"
-                                value={newStudent.school_code}
-                                onChange={e => handleNewChange('school_code', e.target.value)}
+                                value={newStudent.school_code ?? ''}
+                                // onChange={e => handleNewChange('school_code', e.target.value)}
                                 className="w-full border p-2 rounded"
+                                disabled
                                 />
                             </div>
 
@@ -4448,22 +4620,32 @@ export default function StudentDashboard() {
                                 <div>
                                 <label className="block text-sm mb-1">City</label>
                                 <SearchableDropdown
-                                    options={cities}
+                                    options={editCities}
                                     placeholder="Select City"
                                     value={editingStudent.city ? [editingStudent.city] : []}
                                     onChange={(vals) => handleEditChange('city', vals[0] || '')}
-                                    isLoading={isCitiesLoading}
+                                    isLoading={isEditCitiesLoading}
                                 />
                                 </div>
                                 <div>
                                 <label className="block text-sm mb-1">School</label>
-                                <SearchableDropdown
-                                    options={schools}
-                                    placeholder="Select School"
-                                    value={editingStudent.school_name ? [editingStudent.school_name] : []}
-                                    onChange={(vals) => handleEditChange('school_name', vals[0] || '')}
-                                    isLoading={isSchoolsLoading}
-                                />
+                                    <SearchableDropdown
+                                        options={schoolEditOptions.map(s => s.name)}
+                                        placeholder="Select School"
+                                        value={editingStudent.school_name ? [editingStudent.school_name] : []}
+                                        isLoading={isSchoolsEditLoading}
+                                        onChange={vals => {
+                                            const selectedName = vals[0] || '';
+                                            const found = schoolEditOptions.find(s => s.name === selectedName);
+                                            setEditingStudent((e: { school_id: any; school_code: any; }) => ({
+                                            ...e,
+                                            school_name: selectedName,
+                                            school_id:   found?.id   ?? e.school_id,
+                                            school_code: found?.code ?? e.school_code,
+                                            }));
+                                        }}
+                                    />
+
                                 </div>
                             </div>
 
@@ -4472,14 +4654,16 @@ export default function StudentDashboard() {
                                 <input
                                 placeholder="School ID"
                                 value={editingStudent.school_id ?? ''}
-                                onChange={e => handleEditChange('school_id', e.target.value)}
+                                // onChange={e => handleEditChange('school_id', e.target.value)}
                                 className="w-full border p-2 rounded"
+                                disabled
                                 />
                                 <input
                                 placeholder="School Code"
                                 value={editingStudent.school_code ?? ''}
-                                onChange={e => handleEditChange('school_code', e.target.value)}
+                                // onChange={e => handleEditChange('school_code', e.target.value)}
                                 className="w-full border p-2 rounded"
+                                disabled
                                 />
                             </div>
 

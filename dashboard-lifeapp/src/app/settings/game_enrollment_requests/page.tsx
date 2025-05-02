@@ -336,12 +336,13 @@ export default function SettingsGameEnrollmentRequests() {
                     />
                 </div>
                 <div className="mb-3">
-                    <label className="form-label">Approved At (optional)</label>
+                    <label className="form-label">Approved At</label>
                     <input
                     type="datetime-local"
                     className="form-control"
                     value={formData.approved_at}
                     onChange={(e) => setFormData({ ...formData, approved_at: e.target.value })}
+                    required
                     />
                 </div>
                 </div>
@@ -404,12 +405,13 @@ export default function SettingsGameEnrollmentRequests() {
                     />
                 </div>
                 <div className="mb-3">
-                    <label className="form-label">Approved At (optional)</label>
+                    <label className="form-label">Approved At</label>
                     <input
                     type="datetime-local"
                     className="form-control"
                     value={formData.approved_at}
                     onChange={(e) => setFormData({ ...formData, approved_at: e.target.value })}
+                    required
                     />
                 </div>
                 </div>

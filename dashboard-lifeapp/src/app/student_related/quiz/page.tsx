@@ -130,11 +130,11 @@ export default function StudentRelatedQuiz() {
         // 1) ensure it's an array
         const arr = Array.isArray(data) ? data : (data.subjects ?? []);
         // 2) parse the JSON‐strings into plain values
-        const normalized = arr.map((item: { title: string; heading: string; image: string; }) => ({
+        const normalized = arr.map((item: { title: string; heading: string; }) => ({
           ...item,
           title:   JSON.parse(item.title).en,
           heading: JSON.parse(item.heading).en,
-          image:   JSON.parse(item.image).en,  // if you need it
+          // image:   JSON.parse(item.image).en,  // if you need it
         }));
         setSubjects(normalized);
       })
@@ -205,7 +205,13 @@ export default function StudentRelatedQuiz() {
   }) => {
     setLoading(true);
     // If no payload was passed, default to your local state
-    const finalPayload = payload || filters;
+    const finalPayload = payload  ?? {
+      subject_id: selectedSubject,
+      level_id:   selectedLevel,
+      status:     selectedStatus,
+      topic_id:   selectedTopic,
+      type:       2,
+    };
   
     const res = await fetch(`${api_startpoint}/api/quiz_questions`, {
       method: 'POST',
@@ -220,7 +226,8 @@ export default function StudentRelatedQuiz() {
           question_title: JSON.parse(curr.question_title).en,
           subject_title: JSON.parse(curr.subject_title).en,
           level_title: JSON.parse(curr.level_title).en,
-          topic_title: JSON.parse(curr.topic_title).en,
+          topic_id:       curr.la_topic_id,
+          topic_title:    curr.topic_title ? JSON.parse(curr.topic_title).en : null,
           status: curr.status,
           index: curr.index,
           options: []
@@ -294,36 +301,52 @@ export default function StudentRelatedQuiz() {
       level_id:       quizToEdit.level_id,
       topic_id:       quizToEdit.topic_id,
       status:         quizToEdit.status,
-      question_type:  quizToEdit.question_type,
-      type:           quizToEdit.type,
+      question_type:  quizToEdit.question_type || 1,
+      type:           quizToEdit.type || 2,
       options:        quizToEdit.options.map(opt => ({
-                         title: opt.title,
-                         is_correct: opt.is_answer
-                       }))
+                        title: opt.title,
+                        is_correct: opt.is_answer === 1 ? 1 : 0
+                      }))
     };
+    // Store filter values we need to use after the update
     const newFilters = {
       subject_id: String(payload.subject_id),
       level_id:   String(payload.level_id),
       status:     String(payload.status),
       topic_id:   String(payload.topic_id),
+      type: 2,  // Add the type filter to match your initial query
     };
-    const res = await fetch(`${api_startpoint}/api/update_quiz_question/${quizToEdit.id}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    });
-    if (res.ok) {
-      // 1) Close the modal
-      setShowQuizEditModal(false);
-    
-      // 2) Update your filter state so the updated question still matches
-      setSelectedSubject(String(newFilters.subject_id));
-      setSelectedLevel(String(newFilters.level_id));
-      setSelectedStatus(String(newFilters.status));
-      setSelectedTopic(String(newFilters.topic_id));
-    
-      // 3) Fetch with exactly those filters
-      fetchData(newFilters);
+    try {
+      const res = await fetch(`${api_startpoint}/api/update_quiz_question/${quizToEdit.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      if (res.ok) {
+        // 1) Close the modal
+        setShowQuizEditModal(false);
+      
+        // 2) Update your filter state so the updated question still matches
+        setSelectedSubject(String(quizToEdit.subject_id));
+        setSelectedLevel(String(quizToEdit.level_id));
+          // quizToEdit.status is "Active" | "Inactive"
+          setSelectedStatus(
+            quizToEdit.status === "Active" ? "1" : "0"
+          );
+        // setSelectedStatus(String(quizToEdit.status));
+        setSelectedTopic(String(quizToEdit.topic_id));
+      
+        // 3) Fetch with exactly those filters
+        fetchData();
+      } else {
+        // Handle API error
+        const errorData = await res.json();
+        console.error("Failed to update question:", errorData);
+        alert("Failed to update question. See console for details.");
+      }
+    } catch (error) {
+      console.error("Error updating question:", error);
+      alert("An error occurred while updating the question.");
     }
   };
 
@@ -563,9 +586,9 @@ export default function StudentRelatedQuiz() {
                         </div>
                       </div>
                       <div>
-                        <button className="btn btn-secondary me-2" onClick={() => openEditQuizModal(q)}>
+                        {/* <button className="btn btn-secondary me-2" onClick={() => openEditQuizModal(q)}>
                           <IconEdit /> Edit
-                        </button>
+                        </button> */}
                         <button className="btn btn-danger" onClick={() => confirmDeleteQuestion(q.id)}>
                           <IconTrash /> Delete
                         </button>

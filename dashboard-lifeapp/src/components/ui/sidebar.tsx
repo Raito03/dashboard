@@ -10,7 +10,7 @@ import {
   ChevronRight,
   Terminal,
 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { IconBackpack, IconBallpenFilled, IconBooks, IconCalculator, IconFolder, IconPencil, IconSchool, IconSchoolBell, IconSettings } from "@tabler/icons-react";
 
 interface NavItemProps {
@@ -97,6 +97,7 @@ const NavItem = ({
     );
   };
 export function Sidebar() {
+  const pathname = usePathname();
   const [openSections, setOpenSections] = useState<{ [key: string]: boolean }>({
     students: false,
     teachers: false,
@@ -108,6 +109,42 @@ export function Sidebar() {
     student_related: false,
   });
 
+  // Determine which sections should be open based on current pathname
+  useEffect(() => {
+    const newOpenSections = { ...openSections };
+    
+    // Check path and open relevant sections
+    if (pathname.startsWith('/students')) {
+      newOpenSections.students = true;
+    }
+    if (pathname.startsWith('/teachers')) {
+      newOpenSections.teachers = true;
+      if (pathname.includes('/competencies') || 
+          pathname.includes('/concept-cartoon') || 
+          pathname.includes('/assessment') || 
+          pathname.includes('/worksheets') || 
+          pathname.includes('/lesson-plan')) {
+        newOpenSections.resources = true;
+        newOpenSections.resources_teachers = true;
+      }
+    }
+    if (pathname.startsWith('/mentors')) {
+      newOpenSections.mentors = true;
+    }
+    if (pathname.startsWith('/schools')) {
+      newOpenSections.schools = true;
+    }
+    if (pathname.startsWith('/settings')) {
+      newOpenSections.settings = true;
+    }
+    if (pathname.startsWith('/student_related')) {
+      newOpenSections.resources = true;
+      newOpenSections.student_related = true;
+    }
+
+    setOpenSections(newOpenSections);
+  }, [pathname]);
+  
   const toggleSection = (section: string) => {
     setOpenSections((prev) => ({
       ...prev,

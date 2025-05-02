@@ -1,12 +1,12 @@
 'use client'
 import '@tabler/core/dist/css/tabler.min.css';
 // import 'bootstrap/dist/css/bootstrap.min.css';
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import React from 'react';
 import { Inter } from 'next/font/google';
 const inter = Inter({ subsets: ['latin'] });
 import { Sidebar } from '@/components/ui/sidebar';
-import { IconSearch, IconBell, IconSettings } from '@tabler/icons-react';
+import { IconSearch, IconBell, IconSettings, IconTrash } from '@tabler/icons-react';
 import { IconEdit } from '@tabler/icons-react';
 import {
   Plus,
@@ -30,6 +30,10 @@ interface CartoonData {
     media_url?: string;
     status: string;
   }
+  interface Level {
+    id: number;
+    title: string;
+  }
 
 // const api_startpoint = 'https://lifeapp-api-vv1.vercel.app'
 const api_startpoint = 'http://152.42.239.141:5000'
@@ -38,9 +42,12 @@ export default function ConceptCartoons() {
     const [lightboxUrl, setLightboxUrl] = useState<string|null>(null);
     const [selectedFile, setSelectedFile] = useState<File | null>(null);
     const [tableData, setTableData] = useState<any[]>([]);
+    const [levels, setLevels] = useState<Level[]>([]);
     const [currentPage, setCurrentPage] = useState<number>(0);
     const rowsPerPage = 50;
     const [isTableLoading, setIsTableLoading] = useState(false);
+    const [isAddLoading, setIsAddLoading] = useState(false);
+    const [isEditLoading, setIsEditLoading] = useState(false);
     const paginatedData = tableData.slice(currentPage * rowsPerPage, (currentPage + 1) * rowsPerPage);
     const [selectedSubject, setSelectedSubject] = useState("");
     const [selectedStatus, setSelectedStatus] = useState("");
@@ -62,6 +69,29 @@ export default function ConceptCartoons() {
               title: "",
               status: "Drafted",
     });
+
+    // Helper to parse JSON titles (for levels)
+    const parseTitle = (jsonStr: string) => {
+        try { return JSON.parse(jsonStr).en; }
+        catch { return jsonStr; }
+    };
+
+    // Fetch levels from API
+    useEffect(() => {
+        (async () => {
+        try {
+            const res = await fetch(`${api_startpoint}/api/levels`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ page: 1 })
+            });
+            const data = await res.json();
+            setLevels(data);
+        } catch (err) {
+            console.error('Failed to fetch levels:', err);
+        }
+        })();
+    }, []);
 
     const handleClear = () => {
         setSelectedStatus("");
@@ -160,8 +190,9 @@ export default function ConceptCartoons() {
     // Handle saving the updated data
     const handleSaveChanges = async () => {
         if (!editingRow) return;
+        setIsEditLoading(true);
         // 1) Inspect the object
-        console.log("🤔 editingRow:", editingRow);
+        // console.log("🤔 editingRow:", editingRow);
 
         
         try {
@@ -199,11 +230,14 @@ export default function ConceptCartoons() {
         } catch (error) {
             console.error("Update error:", error);
             alert("Failed to update the concept cartoon. Please try again.");
+        } finally {
+            setIsEditLoading(false);
         }
     };
 
     // Handle adding a new cartoon
     const handleAddCartoon = async () => {
+        setIsAddLoading(true);
         try {
             const form = new FormData();
             form.append('la_subject_id', newCartoon.la_subject === 'Science' ? '1' : '2');
@@ -222,36 +256,34 @@ export default function ConceptCartoons() {
         } catch (error) {
             console.error("Add error:", error);
             alert("Failed to add the concept cartoon. Please try again.");
+        } finally {
+            setIsAddLoading(false);
         }
     };
     
+    const handleDelete = async (id: number) => {
+        if (!confirm('Really delete this cartoon?')) return
+        setIsTableLoading(true)
+        try {
+          const res = await fetch(`${api_startpoint}/api/delete_concept_cartoon/${id}`, {
+            method: 'DELETE'
+          })
+          if (!res.ok) throw new Error(await res.text())
+          // re-run your search to refresh data
+          await handleSearch()
+        } catch (err) {
+          console.error('Delete error:', err)
+          alert('Failed to delete')
+        } finally {
+          setIsTableLoading(false)
+        }
+    }
     return (
         <div className={`page bg-light ${inter.className} font-sans`}>
             <Sidebar />
 
             {/* Main Content */}
             <div className="page-wrapper" style={{ marginLeft: '250px' }}>
-                {/* Top Navigation */}
-                {/* <header className="navbar navbar-expand-md navbar-light bg-white shadow-sm border-bottom mb-3">
-                    <div className="container-fluid">
-                        <div className="d-flex align-items-center w-full">
-                        <span className='font-bold text-xl text-black '>LifeAppDashBoard</span>
-                        <div className='w-5/6 h-10'></div>
-                        <div className="d-flex gap-3 align-items-center">
-                            <a href="#" className="btn btn-light btn-icon">
-                            <IconSearch size={20} className="text-muted"/>
-                            </a>
-                            <a href="#" className="btn btn-light btn-icon position-relative">
-                            <IconBell size={20} className="text-muted"/>
-                            <span className="badge bg-danger position-absolute top-0 end-0">3</span>
-                            </a>
-                            <a href="#" className="btn btn-light btn-icon">
-                            <IconSettings size={20} className="text-muted"/>
-                            </a>
-                        </div>
-                        </div>
-                    </div>
-                </header> */}
                 <div className="page-body">
                     <div className='container-xl pt-0 pb-4'>
                         <div className='card shadow-sm border-0 mb-4'>
@@ -364,6 +396,12 @@ export default function ConceptCartoons() {
                                                             >
                                                                 <IconEdit size={16} />
                                                             </button>
+                                                            <button
+                                                                className="btn btn-sm btn-danger ml-2"
+                                                                onClick={() => handleDelete(row.id)}
+                                                            >
+                                                                <IconTrash size={16} />
+                                                            </button>
                                                         </td>
                                                     </tr>
                                                 ))}
@@ -420,7 +458,17 @@ export default function ConceptCartoons() {
                                     </div>
                                     <div className="mb-3">
                                         <label className="form-label">Level</label>
-                                        <input type="text" className="form-control" name="la_level_id" value={newCartoon.la_level_id} onChange={(e) => handleFormChange(e)} />
+                                        <select
+                                            className="form-select"
+                                            name="la_level_id"
+                                            value={newCartoon.la_level_id}
+                                            onChange={e => handleFormChange(e)}
+                                        >
+                                            <option value="">Select Level</option>
+                                            {levels.map(l => (
+                                            <option key={l.id} value={String(l.id)}>{parseTitle(l.title)}</option>
+                                            ))}
+                                        </select>
                                     </div>
                                     <div className="mb-3">
                                         <label className="form-label">Title</label>
@@ -440,7 +488,13 @@ export default function ConceptCartoons() {
                             </div>
                             <div className="modal-footer">
                                 <button type="button" className="btn btn-secondary" onClick={handleCloseAddModal}>Cancel</button>
-                                <button type="button" className="btn btn-primary" onClick={handleAddCartoon}>Add Cartoon</button>
+                                <button
+                                    className={`btn btn-primary flex items-center`}
+                                    onClick={handleAddCartoon}
+                                    disabled={isAddLoading}
+                                >   {isAddLoading && <div className='animate-spin border-t-2  border-white rounded-full w-4 h-4 mr-2'></div> }
+                                    {isAddLoading ? 'Adding...' : <><Plus className="me-2" size={16} />Add Cartoon</>}
+                                </button>
                             </div>
                         </div>
                     </div>
@@ -472,14 +526,17 @@ export default function ConceptCartoons() {
                                     </div>
                                     <div className="mb-3">
                                         <label htmlFor="la_level_id" className="form-label">Level</label>
-                                        <input
-                                            type="text"
-                                            className="form-control"
-                                            id="la_level_id"
+                                        <select
+                                            className="form-select"
                                             name="la_level_id"
                                             value={editingRow.la_level_id}
                                             onChange={e => handleFormChange(e, true)}
-                                        />
+                                        >
+                                            <option value="">Select Level</option>
+                                            {levels.map(l => (
+                                            <option key={l.id} value={String(l.id)}>{parseTitle(l.title)}</option>
+                                            ))}
+                                        </select>
                                     </div>
                                     <div className="mb-3">
                                         <label htmlFor="title" className="form-label">Title</label>
@@ -519,7 +576,13 @@ export default function ConceptCartoons() {
                             </div>
                             <div className="modal-footer">
                                 <button type="button" className="btn btn-secondary" onClick={handleCloseModal}>Cancel</button>
-                                <button type="button" className="btn btn-primary" onClick={handleSaveChanges}>Save Changes</button>
+                                <button
+                                    className={`btn btn-primary flex items-center`}
+                                    onClick={handleSaveChanges}
+                                    disabled={isEditLoading}
+                                >   {isEditLoading && <div className='animate-spin border-t-2  border-white rounded-full w-4 h-4 mr-2'></div> }
+                                    {isEditLoading ? 'Saving...' : <><IconEdit className="me-2" size={16} />Save Changes</>}
+                                </button>
                             </div>
                         </div>
                     </div>

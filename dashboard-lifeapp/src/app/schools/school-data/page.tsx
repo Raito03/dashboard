@@ -7,7 +7,7 @@ import { Inter } from 'next/font/google';
 const inter = Inter({ subsets: ['latin'] });
 import { Sidebar } from '@/components/ui/sidebar';
 import { IconSearch, IconBell, IconSettings, IconEdit, IconTrash } from '@tabler/icons-react';
-import { ChevronDown, Plus, Search, XCircle } from "lucide-react";
+import { ChevronDown, Download, Plus, Search, XCircle } from "lucide-react";
 import cluster from 'cluster';
 
 // const poppins = Poppins({
@@ -443,6 +443,20 @@ export default function SchoolData() {
     }
   };
 
+  // -------- CSV Template Download Setup --------
+  const csvTemplate =
+    "school_name,state_name,city_name,district_name,block_name,cluster_name,pin_code,school_code,app_visible,is_life_lab\n";
+  const downloadCsvTemplate = () => {
+    const blob = new Blob([csvTemplate], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', 'school_template.csv');
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
   // ------------------- Render -------------------
   return (
     <div className={`page bg-light ${inter.className} font-sans`}>
@@ -567,6 +581,10 @@ export default function SchoolData() {
                     </button>
                     <button className="btn btn-info d-inline-flex align-items-center text-white" onClick={() => setShowCsvModal(true)}>
                       <Plus className="me-2" size={16} /> Upload CSV
+                    </button>
+                    {/* Download Template Button */}
+                    <button className="btn btn-secondary d-inline-flex align-items-center ms-2" onClick={downloadCsvTemplate}>
+                      <Download className="me-2" size={16} /> Download CSV Template
                     </button>
                   </div>
                 </div>

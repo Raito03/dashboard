@@ -10,7 +10,7 @@ import { IconEdit, IconTrash } from '@tabler/icons-react';
 
 // const api_startpoint = 'https://lifeapp-api-vv1.vercel.app'
 const api_startpoint = 'http://152.42.239.141:5000'
-
+// const api_startpoint = 'http://127.0.0.1:5000'
 interface Language {
     id: number;
     title: string;
@@ -50,24 +50,58 @@ export default function SettingsLanguages() {
 
     async function handleAddLanguage(e: React.FormEvent) {
         e.preventDefault();
-        if (!slug.trim()) return;
-
+        
+        // Validate form inputs
+        if (!title.trim()) {
+            alert("Please enter a title");
+            return;
+        }
+        
+        if (!slug.trim()) {
+            alert("Please enter a slug");
+            return;
+        }
+        
+        // Show loading state
+        setLoading(true);
+        
         try {
+            console.log("Sending language data:", { title: title.trim(), slug: slug.trim().toLowerCase(), status });
+            
             const response = await fetch(`${api_startpoint}/api/languages_new`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ title: title.trim(),slug: slug.trim().toLowerCase(), status: status})
+                body: JSON.stringify({ 
+                    title: title.trim(),
+                    slug: slug.trim().toLowerCase(), 
+                    status: status
+                })
             });
+            
             const result = await response.json();
+            
+            // Check if the request was successful
             if (response.ok) {
+                // Success case
                 setShowAddModal(false);
                 setSlug('');
+                setTitle('');
+                setStatus(0);
                 fetchLanguages(); // Refresh list
+                
+                // Show success message
+                alert("Language added successfully!");
             } else {
-                alert(result.error);
+                // Error case with message from server
+                console.error("Server error:", result);
+                alert(`Error: ${result.error || "Unknown error occurred"}`);
             }
         } catch (error) {
+            // Network or other errors
             console.error('Error adding language:', error);
+            alert(`Network error: ${error instanceof Error ? error.message : "Unknown error"}`);
+        } finally {
+            setLoading(false);
         }
     }
 
@@ -212,11 +246,11 @@ export default function SettingsLanguages() {
                                     <select
                                         name="status"
                                         value={status}
-                                        onChange={()=>setStatus}
+                                        onChange={e => setStatus(Number(e.target.value))}
                                         className="w-full border border-gray-300 rounded-md p-2"
                                         required
                                     >
-                                        <option value={undefined}>Select role</option>
+                                        <option value="">Select status</option>
                                         <option value= {1}>Active</option>
                                         <option value={0}>Inactive</option>
                                         
@@ -267,7 +301,7 @@ export default function SettingsLanguages() {
                                         onChange={(e) => setSelectedLanguage({ ...selectedLanguage, status: Number(e.target.value) })}
                                         required
                                     >
-                                        <option value={undefined}>Select role</option>
+                                        <option value="">Select status</option>
                                         <option value= {1}>Active</option>
                                         <option value={0}>Inactive</option>
                                     </select>

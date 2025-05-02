@@ -22,9 +22,11 @@ interface Coupon {
     link: string;
     details: string;
     index: number;
-    coupon_media_id: number;
+    media_id: number;
     created_at: string;
     updated_at: string;
+    media_path?:string;
+    media_url?: string;
 }
 
 export default function SettingsCoupons() {
@@ -41,44 +43,58 @@ export default function SettingsCoupons() {
     const [showDeleteModal, setShowDeleteModal] = useState(false);
     const [selectedCoupon, setSelectedCoupon] = useState<Coupon | null>(null);
     const [deleteId, setDeleteId] = useState<number | null>(null);
-    
+    // lightbox
+    const [lightboxUrl, setLightboxUrl] = useState<string|null>(null)
     // Form states
-    const [formData, setFormData] = useState({
+    const [formData, setFormData] = useState<{
+        title: string;
+        category_id: string;
+        coin: string;
+        link: string;
+        details: string;
+        index: string;
+        mediaFile: File | null;     // ← hold the File here
+    }>({
         title: '',
         category_id: '',
         coin: '',
         link: '',
         details: '',
         index: '',
-        coupon_media_id: ''
+        mediaFile: null
     });
+      
 
     useEffect(() => {
         fetchCoupons();
     }, [startDate, endDate]);
 
     const [loading, setLoading] = useState(false);
+    const [isAddLoading, setIsAddLoading]=useState(false)
+    const [isEditLoading, setIsEditLoading] =useState(false)
+    const [isDeleteLoading, setIsDeleteLoading] = useState(false)
 
     const fetchCoupons = async () => {
         setLoading(true);
         try {
-        const params = new URLSearchParams();
-        if (startDate) params.append('start_date', startDate);
-        if (endDate) params.append('end_date', endDate);
-        
-        const response = await fetch(`${api_startpoint}/api/coupons?${params}`);
-        const data = await response.json();
-        setCoupons(data.data);
+            const params = new URLSearchParams();
+            if (startDate) params.append('start_date', startDate);
+            if (endDate) params.append('end_date', endDate);
+            
+            const response = await fetch(`${api_startpoint}/api/coupons?${params}`);
+            const data = await response.json();
+            setCoupons(data.data);
+            setTotalCount(data.count); // Update total count from API
         } catch (error) {
-        console.error('Error fetching coupons:', error);
+            console.error('Error fetching coupons:', error);
         } finally {
-        setLoading(false);
+            setLoading(false);
         }
     };
 
 
 
-      // Clear filters and reset data
+    // Clear filters and reset data
     // Update the clear filters function
     const clearFilters = () => {
         setStartDate('');
@@ -96,22 +112,28 @@ export default function SettingsCoupons() {
     const openEditModal = (coupon: Coupon) => {
         setSelectedCoupon(coupon);
         setFormData({
-        title: coupon.title,
-        category_id: String(coupon.category_id),
-        coin: coupon.coin,
-        link: coupon.link,
-        details: coupon.details,
-        index: String(coupon.index),
-        coupon_media_id: String(coupon.coupon_media_id)
+            title: coupon.title,
+            category_id: String(coupon.category_id),
+            coin: coupon.coin,
+            link: coupon.link,
+            details: coupon.details,
+            index: String(coupon.index),
+            mediaFile: null // Initialize as null for existing records
         });
         setShowEditModal(true);
     };
-
     const handleDelete = async () => {
-        if (deleteId) {
-          await fetch(`${api_startpoint}/api/coupons/${deleteId}`, { method: 'DELETE' });
-          setShowDeleteModal(false);
-          fetchCoupons();
+        try {
+            setIsDeleteLoading(true)
+            if (deleteId) {
+            await fetch(`${api_startpoint}/api/coupons/${deleteId}`, { method: 'DELETE' });
+            setShowDeleteModal(false);
+            fetchCoupons();
+            }
+        } catch (error) {
+            console.error("Error deleting coupon:", error);
+        } finally {
+            setIsDeleteLoading(false)
         }
     }
 
@@ -123,79 +145,99 @@ export default function SettingsCoupons() {
         : `${api_startpoint}/api/coupons`;
         
         const method = showEditModal ? 'PUT' : 'POST';
-        
-        const response = await fetch(url, {
-        method,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData)
-        });
-        
-        if (response.ok) {
-        setShowAddModal(false);
-        setShowEditModal(false);
-        fetchCoupons();
+        if (method === 'POST') {
+            setIsAddLoading(true);
+        } else {
+            setIsEditLoading(true);
         }
+        const form = new FormData();
+        form.append('title',       formData.title);
+        form.append('category_id', formData.category_id);
+        form.append('coin',        formData.coin);
+        form.append('link',        formData.link);
+        form.append('details',     formData.details);
+        form.append('index',       formData.index);
+        if (formData.mediaFile instanceof File) {
+            form.append('media', formData.mediaFile);
+        }
+        try {
+            const response = await fetch(url, {
+            method,
+            body: form
+            });
+            
+            if (response.ok) {
+            setShowAddModal(false);
+            setShowEditModal(false);
+            fetchCoupons();
+            }
+        } catch (error) {
+            console.error("Error updating/submitting coupon:", error); 
+        } finally {
+            setIsAddLoading(false); setIsEditLoading(false) ;
+        }
+
     };
 
     // Pagination
     // Pagination calculations
-  const indexOfLastItem = currentPage * itemsPerPage;
-  const indexOfFirstItem = indexOfLastItem - itemsPerPage;
-  const currentItems = coupons.slice(indexOfFirstItem, indexOfLastItem);
-  const totalPages = Math.ceil(coupons.length / itemsPerPage);
+    const indexOfLastItem = currentPage * itemsPerPage;
+    const indexOfFirstItem = indexOfLastItem - itemsPerPage;
+    const currentItems = coupons.slice(indexOfFirstItem, indexOfLastItem);
+    const totalPages = Math.ceil(coupons.length / itemsPerPage);
 
-  const PaginationControls = () => (
-    <div className="d-flex justify-content-between align-items-center mt-3">
-      <div className="text-muted">
-        Showing {indexOfFirstItem + 1} to {Math.min(indexOfLastItem, coupons.length)} of {coupons.length} entries
-      </div>
-      
-      <div className="d-flex gap-2 align-items-center">
-        <select
-          className="form-select form-select-sm"
-          value={itemsPerPage}
-          onChange={(e) => {
-            setItemsPerPage(Number(e.target.value));
-            setCurrentPage(1);
-          }}
-        >
-          {[10, 25, 50, 100].map(size => (
-            <option key={size} value={size}>{size} per page</option>
-          ))}
-        </select>
+    const PaginationControls = () => (
+        <div className="d-flex justify-content-between align-items-center mt-3">
+            <div className="text-muted">
+                Showing {indexOfFirstItem + 1} to {Math.min(indexOfLastItem, coupons.length)} of {coupons.length} entries
+            </div>
+        
+            <div className="d-flex gap-2 align-items-center">
+                <select
+                className="form-select form-select-sm"
+                value={itemsPerPage}
+                onChange={(e) => {
+                    setItemsPerPage(Number(e.target.value));
+                    setCurrentPage(1);
+                }}
+                >
+                {[10, 25, 50, 100].map(size => (
+                    <option key={size} value={size}>{size} per page</option>
+                ))}
+                </select>
 
-        <button
-          className="btn btn-outline-secondary"
-          onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-          disabled={currentPage === 1}
-        >
-          Previous
-        </button>
-        <div className="w-1/3 p-0">
-          <span className="p-0 d-flex">
-            Page {currentPage} of {totalPages}
-          </span>
-        </div>   
+                <button
+                className="btn btn-outline-secondary"
+                onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                disabled={currentPage === 1}
+                >
+                Previous
+                </button>
+                <div className="w-1/3 p-0">
+                <span className="p-0 d-flex">
+                    Page {currentPage} of {totalPages}
+                </span>
+                </div>   
 
-        <button
-          className="btn btn-outline-secondary"
-          onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
-          disabled={currentPage >= totalPages}
-        >
-          Next
-        </button>
-      </div>
-    </div>
-  );
+                <button
+                className="btn btn-outline-secondary"
+                onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                disabled={currentPage >= totalPages}
+                >
+                Next
+                </button>
+            </div>
+        </div>
+    );
 
-  // Format date function
-    const formatDate = (dateString: string): string => {
-        if (!dateString) return '';
+    // Format date function
+    const formatDateTime = (dateString: string): string => {
+        if (!dateString) return '—';
         try {
             const date = new Date(dateString);
-            return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+            return `${date.toLocaleDateString()} ${date.toLocaleTimeString()}`;
         } catch (e) {
-            return '';
+            return '—';
         }
     };
     return (
@@ -251,7 +293,7 @@ export default function SettingsCoupons() {
                                             link: '',
                                             details: '',
                                             index: '',
-                                            coupon_media_id: ''
+                                            mediaFile: null
                                             });
                                         }}
                                         >
@@ -273,7 +315,10 @@ export default function SettingsCoupons() {
                                     <table className="table table-vcenter table-hover">
                                     <thead>
                                         <tr>
+                                        <th>Image</th>
                                         <th>Title</th>
+                                        <th>Link</th>
+                                        <th>Category ID</th>
                                         <th>Coin</th>
                                         <th>Created At</th>
                                         <th>Actions</th>
@@ -282,17 +327,25 @@ export default function SettingsCoupons() {
                                     <tbody>
                                         {currentItems.map(coupon => (
                                         <tr key={coupon.id}>
+                                            <td>
+                                                {coupon.media_url?.match(/\.(jpe?g|png|gif)$/i)
+                                                    ? <img
+                                                        src={coupon.media_url}
+                                                        className="w-12 h-12 object-cover cursor-pointer"
+                                                        onClick={()=>setLightboxUrl(coupon.media_url!)}
+                                                        />
+                                                    : coupon.media_url
+                                                        ? <button
+                                                            className="btn btn-link"
+                                                            onClick={()=>window.open(coupon.media_url,'_blank')}
+                                                            >📄 File</button>
+                                                        : '—'}
+                                            </td>
                                             <td>{coupon.title}</td>
+                                            <td>{coupon.link}</td>
+                                            <td>{coupon.category_id}</td>
                                             <td>{coupon.coin}</td>
-                                            <td>{new Date(coupon.created_at).toLocaleString('en-GB', {
-                                                    day: '2-digit',
-                                                    month: '2-digit',
-                                                    year: '2-digit',
-                                                    hour: '2-digit',
-                                                    minute: '2-digit',
-                                                    second: '2-digit',
-                                                    hour12: false
-                                                })}{formatDate(coupon.created_at)}
+                                            <td>{formatDateTime(coupon.created_at)}
                                             </td>
                                             <td>
                                             <button
@@ -307,7 +360,7 @@ export default function SettingsCoupons() {
                                                     link: coupon.link,
                                                     details: coupon.details,
                                                     index: String(coupon.index),
-                                                    coupon_media_id: String(coupon.coupon_media_id)
+                                                    mediaFile: null
                                                 });
                                                 }}
                                             >
@@ -412,10 +465,15 @@ export default function SettingsCoupons() {
                                 <div className="col-md-6">
                                 <label className="form-label">Media ID</label>
                                 <input
-                                    type="number"
+                                    type="file"
+                                    accept="image/*"
                                     className="form-control"
-                                    value={formData.coupon_media_id}
-                                    onChange={(e) => setFormData({...formData, coupon_media_id: e.target.value})}
+                                    onChange={e =>
+                                    setFormData(f => ({
+                                        ...f,
+                                        mediaFile: e.target.files?.[0] ?? null
+                                    }))
+                                    }
                                     required
                                 />
                                 </div>
@@ -439,8 +497,11 @@ export default function SettingsCoupons() {
                             >
                                 Cancel
                             </button>
-                            <button type="submit" className="btn btn-primary">
-                                Create Coupon
+                            <button type="submit" className="btn btn-primary"
+                                disabled={isAddLoading}
+                            >
+                                {isAddLoading && <div className='animate-spin rounded-full w-4 h-4 border-white border-t-4 mr-2'></div>}
+                                {isAddLoading ? 'Creating..':'Create Coupon'}
                             </button>
                             </div>
                         </form>
@@ -525,14 +586,29 @@ export default function SettingsCoupons() {
                                 </div>
 
                                 <div className="col-md-6">
-                                <label className="form-label">Media ID</label>
-                                <input
-                                    type="number"
-                                    className="form-control"
-                                    value={formData.coupon_media_id}
-                                    onChange={(e) => setFormData({...formData, coupon_media_id: e.target.value})}
-                                    required
-                                />
+                                    <label className="form-label">Media</label>
+                                    <input
+                                        type="file"
+                                        accept="image/*"
+                                        className="form-control"
+                                        onChange={e =>
+                                            setFormData(f => ({
+                                                ...f,
+                                                mediaFile: e.target.files?.[0] ?? null
+                                            }))
+                                        }
+                                    />
+                                    <small className="text-muted">Leave empty to keep existing image</small>
+                                    {selectedCoupon?.media_url && (
+                                        <div className="mt-2">
+                                            <img 
+                                                src={selectedCoupon.media_url} 
+                                                alt="Current media" 
+                                                className="w-12 h-12 object-cover"
+                                            />
+                                            <span className="ml-2">Current image</span>
+                                        </div>
+                                    )}
                                 </div>
 
                                 <div className="col-12">
@@ -554,8 +630,11 @@ export default function SettingsCoupons() {
                             >
                                 Cancel
                             </button>
-                            <button type="submit" className="btn btn-primary">
-                                Save Changes
+                            <button type="submit" className="btn btn-primary"
+                                disabled={isEditLoading}
+                            >
+                                {isEditLoading && <div className='animate-spin rounded-full border-white border-t-4 w-4 h-4 mr-2'></div>}
+                                {isEditLoading ? 'Saving..':'Save Changes'}
                             </button>
                             </div>
                         </form>
@@ -564,45 +643,74 @@ export default function SettingsCoupons() {
                     </div>
                 </>
                 )}
-                    {/* Delete Confirmation Modal */}
-                    {showDeleteModal && (
-                    <div className="modal-backdrop fade show"></div>
-                    )}
-                    <div className={`modal fade ${showDeleteModal ? 'show d-block' : ''}`}>
-                    <div className="modal-dialog modal-dialog-centered">
-                        <div className="modal-content">
-                        <div className="modal-header">
-                            <h5 className="modal-title">Delete Coupon</h5>
-                            <button
-                            type="button"
-                            className="btn-close"
-                            onClick={() => setShowDeleteModal(false)}
-                            >
-                            {/* <IconX size={16} /> */}
-                            </button>
-                        </div>
-                        <div className="modal-body">
-                            Are you sure you want to delete this coupon? This action cannot be undone.
-                        </div>
-                        <div className="modal-footer">
-                            <button
-                            type="button"
-                            className="btn btn-secondary"
-                            onClick={() => setShowDeleteModal(false)}
-                            >
-                            Cancel
-                            </button>
-                            <button
-                            type="button"
-                            className="btn btn-danger"
-                            onClick={handleDelete}
-                            >
-                            Delete
-                            </button>
-                        </div>
-                        </div>
+
+                {/* Delete Confirmation Modal */}
+                {showDeleteModal && (
+                <div className="modal-backdrop fade show"></div>
+                )}
+                <div className={`modal fade ${showDeleteModal ? 'show d-block' : ''}`}>
+                <div className="modal-dialog modal-dialog-centered">
+                    <div className="modal-content">
+                    <div className="modal-header">
+                        <h5 className="modal-title">Delete Coupon</h5>
+                        <button
+                        type="button"
+                        className="btn-close"
+                        onClick={() => setShowDeleteModal(false)}
+                        >
+                        {/* <IconX size={16} /> */}
+                        </button>
+                    </div>
+                    <div className="modal-body">
+                        Are you sure you want to delete this coupon? This action cannot be undone.
+                    </div>
+                    <div className="modal-footer">
+                        <button
+                        type="button"
+                        className="btn btn-secondary"
+                        onClick={() => setShowDeleteModal(false)}
+                        >
+                        Cancel
+                        </button>
+                        <button
+                        type="button"
+                        className="btn btn-danger"
+                        onClick={handleDelete}
+                        disabled={isDeleteLoading}
+                        >
+                            {isDeleteLoading && <div className='animate-spin rounded-full mr-2 w-4 h-4 border-white border-t-4'></div>}
+                        {isDeleteLoading? 'Deleting..':'Delete'}
+                        </button>
                     </div>
                     </div>
+                </div>
+                </div>
+
+                
+                {/* Lightbox */}
+                {lightboxUrl && (
+                    <div
+                        className="position-fixed start-0 end-0 top-0 bottom-0 bg-dark bg-opacity-75 d-flex align-items-center justify-content-center"
+                        style={{ zIndex: 1050 }}
+                        onClick={() => setLightboxUrl(null)}
+                    >
+                        <div className="position-relative">
+                            <img
+                                src={lightboxUrl}
+                                alt="Preview"
+                                className="img-fluid rounded max-w-full max-h-full"
+                                style={{ maxWidth: '90vw', maxHeight: '90vh' }}
+                            />
+                            <button
+                                className="position-absolute top-0 end-0 btn btn-sm btn-dark rounded-circle"
+                                style={{ margin: '0.5rem' }}
+                                onClick={e => { e.stopPropagation(); setLightboxUrl(null) }}
+                            >
+                                <IconX size={16} />
+                            </button>
+                        </div>
+                    </div>
+                )}
             </div>
         </div>
     );

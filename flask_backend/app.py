@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 from pathlib import Path
 app = Flask(__name__)
 # Configure CORS to allow requests from http://localhost:3000 with credentials
-CORS(app, resources={r"/*": {"origins": "http://localhost:3000"}}, supports_credentials=True)
+CORS(app, resources={r"/*": {"origins":"http://localhost:3000"}}, supports_credentials=True)
 
 import os
 from dotenv import load_dotenv
@@ -1861,7 +1861,7 @@ def get_state_list():
         
         with connection.cursor() as cursor:
             sql = """
-                select distinct(state) from lifeapp.schools where state != 'null' and state != '2';
+                select distinct(state) from lifeapp.users where state != 'null' and state != '2';
             """
             cursor.execute(sql)
             result = cursor.fetchall()
@@ -1904,6 +1904,24 @@ def get_school_list():
         with connection.cursor() as cursor:
             sql = """
                 select distinct(name) from lifeapp.schools;
+            """
+            cursor.execute(sql)
+            result = cursor.fetchall()
+            
+            # print("Query Result:", result)  # Debugging statement
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        connection.close()
+
+@app.route('/api/new_school_list', methods=['GET'])
+def get_new_school_list():
+    try:
+        connection = get_db_connection()
+        with connection.cursor() as cursor:
+            sql = """
+                select distinct(name), id, code from lifeapp.schools;
             """
             cursor.execute(sql)
             result = cursor.fetchall()
@@ -2042,7 +2060,7 @@ def search():
         sql += " AND u.created_at <= %s"
         params.append(to_date)
 
-    sql += " ) SELECT * FROM cte ORDER BY registered_at;"
+    sql += " ) SELECT * FROM cte ORDER BY registered_at DESC;"
     
     try:
         connection = get_db_connection()
@@ -2500,7 +2518,9 @@ def mission_search():
                     u.address,
                     u.earn_coins,
                     u.heart_coins,
-                    u.brain_coins
+                    u.brain_coins,
+                    mc.media_id,
+                    mia.path as media_path
                 FROM lifeapp.la_mission_completes mc
                 LEFT JOIN lifeapp.users u ON mc.user_id = u.id
                 INNER JOIN lifeapp.la_missions m 
@@ -2508,6 +2528,7 @@ def mission_search():
                 LEFT JOIN lifeapp.la_mission_assigns ma ON m.id = ma.la_mission_id
                 LEFT JOIN lifeapp.users t ON ma.teacher_id = t.id
                 LEFT JOIN lifeapp.schools s ON u.school_id = s.id
+                LEFT JOIN lifeapp.media mia on mia.id = mc.media_id
             )
             SELECT * FROM cte
             WHERE 1=1
@@ -2550,6 +2571,10 @@ def mission_search():
         with connection.cursor() as cursor:
             cursor.execute(sql, tuple(params))
             result = cursor.fetchall()
+            base_url = os.getenv('BASE_URL')
+            for r in result:
+                r['media_url'] = f"{base_url}/{r['media_path']}" if r.get('media_path') else None
+        
         return jsonify(result)
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -3037,6 +3062,7 @@ def fetch_teacher_dashboard():
     if board and board.strip():
         sql += " AND lab.id = %s"
         params.append(board)
+    sql += " ORDER by u.id DESC"
     try:
         connection = get_db_connection()
         with connection.cursor() as cursor:
@@ -3140,9 +3166,11 @@ def add_teacher():
         "state": "SomeState",
         "city": "SomeCity",
         "school_id": "1234",
+        "school_code" : "3467",
         "teacher_subject": "1",       # subject id (as string or number)
         "teacher_grade": "3",         # grade number (as string, will be converted)
-        "teacher_section": "A"        # section identifier
+        "teacher_section": "3"        # section id
+        "teacher_board" : "2"         # board id
     }
     Inserts a new teacher record (with u.type = 5) in lifeapp.users using
     the current datetime for created_at and updated_at, and if teacher_subject, teacher_grade,
@@ -3156,12 +3184,13 @@ def add_teacher():
         state = data.get("state")
         city = data.get("city")
         school_id = data.get("school_id")
+        school_code = data.get('school_code')
         
         # New fields for teacher_grade details:
         teacher_subject = data.get("teacher_subject")
         teacher_grade = data.get("teacher_grade")
         teacher_section = data.get("teacher_section")
-        
+        teacher_board = data.get('teacher_board')
         # Basic validation
         if not name or not mobile_no or not school_id:
             return jsonify({"error": "Name, mobile_no, and school_id are required"}), 400
@@ -3175,10 +3204,10 @@ def add_teacher():
                 # Insert teacher record into lifeapp.users (u.type = 5 for teachers)
                 sql = """
                 INSERT INTO lifeapp.users
-                (name, email, mobile_no, state, city, school_id, type, created_at, updated_at)
-                VALUES (%s, %s, %s, %s, %s, %s, 5, %s, %s)
+                (name, email, mobile_no, state, city, school_id, school_code, type, la_section_id, la_grade_id, la_board_id, created_at, updated_at)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, 5, %s,%s, %s, NOW(), NOW())
                 """
-                params = (name, email, mobile_no, state, city, school_id, datetime_str, datetime_str)
+                params = (name, email, mobile_no, state, city, school_id, school_code, teacher_section, teacher_grade, teacher_board)
                 cursor.execute(sql, params)
                 teacher_id = cursor.lastrowid
 
@@ -3215,9 +3244,11 @@ def update_teacher():
       "state": "NewState",
       "city": "NewCity",
       "school_id": "1234",
+      "school_code" : "3467",
       "teacher_subject": "1",      # subject id
       "teacher_grade": "3",        # grade (will be converted to int)
-      "teacher_section": "A"       # section identifier
+      "teacher_section": "3"        # section id
+       "teacher_board" : "2"         # board id
     }
     
     Updates the teacher (users.type = 5) record and then
@@ -3236,10 +3267,13 @@ def update_teacher():
         state = data.get("state")
         city = data.get("city")
         school_id = data.get("school_id")
+        school_code = data.get('school_code')
+
         teacher_subject = data.get("teacher_subject")
         teacher_grade = data.get("teacher_grade")
         teacher_section = data.get("teacher_section")
-        
+        teacher_board = data.get('teacher_board')
+
         # Use current datetime for updates
         datetime_str = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         
@@ -3249,10 +3283,10 @@ def update_teacher():
                 # Update the teacher record in users
                 sql = """
                 UPDATE lifeapp.users
-                SET name = %s, email = %s, mobile_no = %s, state = %s, city = %s, school_id = %s, updated_at = %s
+                SET name = %s, email = %s, mobile_no = %s, state = %s, city = %s, school_id = %s, school_code = %s, la_section_id =%s , la_grade_id = %s, la_board_id = %s,  updated_at = %s
                 WHERE id = %s AND type = 5
                 """
-                params = (name, email, mobile_no, state, city, school_id, datetime_str, teacher_id)
+                params = (name, email, mobile_no, state, city, school_id, school_code, teacher_section, teacher_grade, teacher_board, datetime_str, teacher_id)
                 cursor.execute(sql, params)
                 
                 # Update the la_teacher_grades record if grade-related fields are provided.
@@ -3349,6 +3383,7 @@ def fetch_teacher_concept_cartoons():
     # Start with base SQL without WHERE clause
     sql = """
             SELECT
+                h.id,
                 CASE WHEN h.la_subject_id = 1 THEN 'Science'
                     WHEN h.la_subject_id = 2 THEN 'Maths' END AS la_subject,
                 h.la_level_id,
@@ -3391,32 +3426,49 @@ def update_concept_cartoon():
     form = request.form
     file = request.files.get('media')
     media_id = None
+
+    # If there’s a new file, upload it first
     if file and file.filename:
         media = upload_media(file)
         media_id = media['id']
 
-    sql = '''
-        UPDATE lifeapp.la_concept_cartoons
-        SET la_subject_id = %s,
-            la_level_id   = %s,
-            title         = %s,
-            status        = %s%s,
-            updated_at    = NOW()
-        WHERE id = %s
-    '''.format(
-        ", document = %s" if media_id else ""
-    )
-
-    params = [
-        form.get('la_subject_id'),
-        form.get('la_level_id'),
-        form.get('title'),
-        int(form.get('status'))
-    ]
-    params.append(form.get('id'))
+    # Build SQL & params in the right order
     if media_id:
-        params.append(media_id)
-    
+        sql = """
+            UPDATE lifeapp.la_concept_cartoons
+            SET la_subject_id = %s,
+                la_level_id   = %s,
+                title         = %s,
+                status        = %s,
+                document      = %s,
+                updated_at    = NOW()
+            WHERE id = %s
+        """
+        params = [
+            form.get('la_subject_id'),
+            form.get('la_level_id'),
+            form.get('title'),
+            int(form.get('status')),
+            media_id,
+            int(form.get('id'))
+        ]
+    else:
+        sql = """
+            UPDATE lifeapp.la_concept_cartoons
+            SET la_subject_id = %s,
+                la_level_id   = %s,
+                title         = %s,
+                status        = %s,
+                updated_at    = NOW()
+            WHERE id = %s
+        """
+        params = [
+            form.get('la_subject_id'),
+            form.get('la_level_id'),
+            form.get('title'),
+            int(form.get('status')),
+            int(form.get('id'))
+        ]
 
     try:
         conn = get_db_connection()
@@ -3424,8 +3476,10 @@ def update_concept_cartoon():
             cursor.execute(sql, tuple(params))
         conn.commit()
         return jsonify({'message': 'Concept cartoon updated successfully'}), 200
+
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
     finally:
         conn.close()
 
@@ -3463,18 +3517,67 @@ def add_concept_cartoon():
     finally:
         conn.close()
 
+@app.route('/api/delete_concept_cartoon/<int:id>', methods=['DELETE'])
+def delete_concept_cartoon(id):
+    try:
+        conn = get_db_connection()
+
+        # Optionally: fetch and delete the media row & S3 object
+        with conn.cursor(pymysql.cursors.DictCursor) as cursor:
+            cursor.execute("""
+                SELECT document AS media_id, m.path AS media_path
+                FROM lifeapp.la_concept_cartoons c
+                LEFT JOIN lifeapp.media m ON c.document = m.id
+                WHERE c.id = %s
+            """, (id,))
+            existing = cursor.fetchone()
+
+        # 1) Delete the cartoon
+        with conn.cursor() as cursor:
+            cursor.execute("DELETE FROM lifeapp.la_concept_cartoons WHERE id = %s", (id,))
+
+        # 2) Delete media record + S3 object if present
+        if existing and existing['media_id']:
+            with conn.cursor() as cursor:
+                cursor.execute("DELETE FROM lifeapp.media WHERE id = %s", (existing['media_id'],))
+            conn.commit()
+
+            if existing['media_path']:
+                s3 = boto3.client(
+                    's3',
+                    region_name=DO_SPACES_REGION,
+                    endpoint_url=DO_SPACES_ENDPOINT,
+                    aws_access_key_id=DO_SPACES_KEY,
+                    aws_secret_access_key=DO_SPACES_SECRET
+                )
+                try:
+                    s3.delete_object(Bucket=DO_SPACES_BUCKET, Key=existing['media_path'])
+                except Exception:
+                    pass
+
+        conn.commit()
+        return jsonify({'message': 'Concept cartoon deleted'}), 200
+
+    except Exception as e:
+        conn.rollback()
+        return jsonify({'error': str(e)}), 500
+
+    finally:
+        conn.close()
+
 ###################################################################################
 ###################################################################################
 ################# TEACHER / CONCEPT CARTOON HEADER APIs ###########################
 ###################################################################################
 ###################################################################################
 
+# ─── LIST ─────────────────────────────────────────────
 @app.route('/api/concept-cartoon-headers', methods=['GET'])
 def list_concept_cartoon_headers():
     conn = get_db_connection()
     try:
         with conn.cursor(pymysql.cursors.DictCursor) as cursor:
-            sql = """
+            cursor.execute("""
                 SELECT
                   h.id,
                   h.heading,
@@ -3484,19 +3587,17 @@ def list_concept_cartoon_headers():
                   h.button_two_text,
                   h.button_two_link,
                   h.media_id,
-                  m.path     AS media_path
+                  m.path    AS media_path,
+                  h.created_at,
+                  h.updated_at
                 FROM lifeapp.la_concept_cartoon_headers h
                 LEFT JOIN lifeapp.media m ON m.id = h.media_id
                 ORDER BY h.id DESC
-            """
-            cursor.execute(sql)
+            """)
             rows = cursor.fetchall()
-
-        base_url = os.getenv('BASE_URL', '')
+        BASE_URL = os.getenv('BASE_URL')
         for r in rows:
-            r['media_url'] = (
-                f"{base_url}/{r['media_path']}" if r.get('media_path') else None
-            )
+            r['media_url'] = f"{BASE_URL}/{r['media_path']}" if r.get('media_path') else None
         return jsonify(rows), 200
 
     except Exception as e:
@@ -3504,8 +3605,9 @@ def list_concept_cartoon_headers():
     finally:
         conn.close()
 
+# ─── CREATE ────────────────────────────────────────────
 @app.route('/api/concept-cartoon-headers', methods=['POST'])
-def create_concept_cartoon_headers():
+def create_concept_cartoon_header():
     conn = get_db_connection()
     try:
         form = request.form
@@ -3515,35 +3617,154 @@ def create_concept_cartoon_headers():
             media = upload_media(file)
             media_id = media['id']
 
+        with conn.cursor() as cursor:
+            cursor.execute("""
+                INSERT INTO lifeapp.la_concept_cartoon_headers
+                  (heading, description,
+                   button_one_text, button_one_link,
+                   button_two_text, button_two_link,
+                   media_id,
+                   created_at, updated_at)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, NOW(), NOW())
+            """, (
+                form.get('heading'),
+                form.get('description'),
+                form.get('button_one_text'),
+                form.get('button_one_link'),
+                form.get('button_two_text'),
+                form.get('button_two_link'),
+                media_id
+            ))
+            conn.commit()
+            new_id = cursor.lastrowid
+
+        return jsonify({'id': new_id}), 201
+
+    except Exception as e:
+        conn.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        conn.close()
+
+# ─── UPDATE ────────────────────────────────────────────
+@app.route('/api/concept-cartoon-headers/<int:header_id>', methods=['PUT'])
+def update_concept_cartoon_header(header_id):
+    conn = get_db_connection()
+    try:
+        form = request.form
+        file = request.files.get('media')
+        new_media_id = None
+
+        # fetch existing media info
+        with conn.cursor(pymysql.cursors.DictCursor) as cursor:
+            cursor.execute("""
+                SELECT media_id, m.path AS media_path
+                FROM lifeapp.la_concept_cartoon_headers h
+                LEFT JOIN lifeapp.media m ON m.id = h.media_id
+                WHERE h.id = %s
+            """, (header_id,))
+            existing = cursor.fetchone()
+
+        # if new media, delete old then upload
+        if file and file.filename:
+            s3 = boto3.client(
+                's3',
+                region_name=DO_SPACES_REGION,
+                endpoint_url=DO_SPACES_ENDPOINT,
+                aws_access_key_id=DO_SPACES_KEY,
+                aws_secret_access_key=DO_SPACES_SECRET
+            )
+            # delete old S3
+            if existing and existing['media_path']:
+                try:
+                    s3.delete_object(Bucket=DO_SPACES_BUCKET, Key=existing['media_path'])
+                except: pass
+            # delete old DB
+            if existing and existing['media_id']:
+                with conn.cursor() as c:
+                    c.execute("DELETE FROM media WHERE id = %s", (existing['media_id'],))
+                    conn.commit()
+            # upload new
+            media = upload_media(file)
+            new_media_id = media['id']
+
+        # build update SQL
         sql = """
-            INSERT INTO lifeapp.la_concept_cartoon_headers
-              (heading, description,
-               button_one_text, button_one_link,
-               button_two_text, button_two_link,
-               media_id,
-               created_at, updated_at)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, NOW(), NOW())
+            UPDATE lifeapp.la_concept_cartoon_headers
+            SET heading=%s, description=%s,
+                button_one_text=%s, button_one_link=%s,
+                button_two_text=%s, button_two_link=%s,
+                updated_at=NOW()
         """
-        params = (
+        params = [
             form.get('heading'),
             form.get('description'),
             form.get('button_one_text'),
             form.get('button_one_link'),
             form.get('button_two_text'),
             form.get('button_two_link'),
-            media_id
-        )
+        ]
+        if new_media_id is not None:
+            sql += ", media_id=%s"
+            params.append(new_media_id)
+        sql += " WHERE id=%s"
+        params.append(header_id)
+
         with conn.cursor() as cursor:
             cursor.execute(sql, params)
             conn.commit()
-            new_id = cursor.lastrowid
-        return jsonify({'id': new_id}), 201
+
+        return jsonify({'message': 'Header updated'}), 200
 
     except Exception as e:
+        conn.rollback()
         return jsonify({'error': str(e)}), 500
     finally:
         conn.close()
 
+# ─── DELETE ────────────────────────────────────────────
+@app.route('/api/concept-cartoon-headers/<int:header_id>', methods=['DELETE'])
+def delete_concept_cartoon_header(header_id):
+    conn = get_db_connection()
+    try:
+        # fetch existing media info
+        with conn.cursor(pymysql.cursors.DictCursor) as cursor:
+            cursor.execute("""
+                SELECT media_id, m.path AS media_path
+                FROM lifeapp.la_concept_cartoon_headers h
+                LEFT JOIN lifeapp.media m ON m.id = h.media_id
+                WHERE h.id = %s
+            """, (header_id,))
+            existing = cursor.fetchone()
+
+        # delete header
+        with conn.cursor() as cursor:
+            cursor.execute("DELETE FROM lifeapp.la_concept_cartoon_headers WHERE id = %s", (header_id,))
+
+        # delete media record + S3 object
+        if existing and existing['media_id']:
+            with conn.cursor() as cursor:
+                cursor.execute("DELETE FROM media WHERE id = %s", (existing['media_id'],))
+            if existing['media_path']:
+                s3 = boto3.client(
+                    's3',
+                    region_name=DO_SPACES_REGION,
+                    endpoint_url=DO_SPACES_ENDPOINT,
+                    aws_access_key_id=DO_SPACES_KEY,
+                    aws_secret_access_key=DO_SPACES_SECRET
+                )
+                try:
+                    s3.delete_object(Bucket=DO_SPACES_BUCKET, Key=existing['media_path'])
+                except: pass
+
+        conn.commit()
+        return jsonify({'message': 'Header and media deleted'}), 200
+
+    except Exception as e:
+        conn.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        conn.close()
 
 ###################################################################################
 ###################################################################################
@@ -3575,20 +3796,32 @@ def fetch_lesson_plan_language():
 
 @app.route('/api/update_lesson_plan_language', methods=['POST'])
 def update_lesson_plan_language():
-    data = request.get_json()
-    status_value = 1 if data["status"] == "Publish" else 0
-    
-    sql = "UPDATE lifeapp.la_lession_plan_languages SET name = %s, status = %s, updated_at = NOW() WHERE id = %s"
+    data = request.get_json() or {}
     try:
-        connection = get_db_connection()
-        with connection.cursor() as cursor:
-            cursor.execute(sql, (data["title"], status_value, data["id"]))
-        connection.commit()
-        return jsonify({'message': 'Updated successfully'})
+        # assume the front end now sends status as 1 or 0
+        status_value = int(data.get("status", 0))
+    except ValueError:
+        # fallback if it's still a string
+        status_value = 1 if data.get("status") == "Publish" else 0
+
+    sql = """
+        UPDATE lifeapp.la_lession_plan_languages
+        SET name = %s,
+            status = %s,
+            updated_at = NOW()
+        WHERE id = %s
+    """
+    params = (data.get("title"), status_value, data.get("id"))
+    try:
+        conn = get_db_connection()
+        with conn.cursor() as cursor:
+            cursor.execute(sql, params)
+        conn.commit()
+        return jsonify({'message': 'Updated successfully'}), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500
     finally:
-        connection.close()
+        conn.close()
 
 @app.route('/api/add_lesson_plan_language', methods=['POST'])
 def add_lesson_plan_language():
@@ -3602,6 +3835,19 @@ def add_lesson_plan_language():
             cursor.execute(sql, (data["title"], status_value))
         connection.commit()
         return jsonify({'message': 'Added successfully'})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        connection.close()
+
+@app.route('/api/delete_lesson_plan_language/<int:id>', methods=['DELETE'])
+def delete_lesson_plan_language(id):
+    try:
+        connection = get_db_connection()
+        with connection.cursor() as cursor:
+            cursor.execute("DELETE FROM lifeapp.la_lession_plan_languages WHERE id = %s", (id,))
+        connection.commit()
+        return jsonify({'message': 'Deleted successfully'}), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500
     finally:
@@ -3638,25 +3884,29 @@ def fetch_lesson_plans_search():
     title = filters.get('title')
 
     sql = """
-    SELECT 
-        lalp.id,
-        lall.name AS language,
-        CASE
-            WHEN lalp.type = 1 THEN 'Life Lab - Demo Models'
-            WHEN lalp.type = 2 THEN 'Jigyasa - Self DIY Activities'
-            WHEN lalp.type = 3 THEN 'Pragya - DIY Activities With Life Lab KITS'
-            WHEN lalp.type = 4 THEN 'Life Lab - Activities Lesson Plans'
-            ELSE 'Default type (None Mentioned)'
-        END AS type,
-        lalp.title AS title,
-        CASE
-            WHEN lalp.status = 1 THEN 'Published'
-            ELSE 'Drafted'
-        END AS status
-    FROM lifeapp.la_lession_plans lalp
-    INNER JOIN lifeapp.la_lession_plan_languages lall 
-        ON lall.id = lalp.la_lession_plan_language_id
-    """
+        SELECT 
+            lalp.id,
+            lall.name AS language,
+            CASE
+                WHEN lalp.type = 1 THEN 'Life Lab - Demo Models'
+                WHEN lalp.type = 2 THEN 'Jigyasa - Self DIY Activities'
+                WHEN lalp.type = 3 THEN 'Pragya - DIY Activities With Life Lab KITS'
+                WHEN lalp.type = 4 THEN 'Life Lab - Activities Lesson Plans'
+                ELSE 'Default type (None Mentioned)'
+            END AS type,
+            lalp.title AS title,
+            CASE
+                WHEN lalp.status = 1 THEN 'Published'
+                ELSE 'Drafted'
+            END AS status,
+            lalp.document AS media_id,
+            m.path          AS media_path
+        FROM lifeapp.la_lession_plans lalp
+        INNER JOIN lifeapp.la_lession_plan_languages lall 
+            ON lall.id = lalp.la_lession_plan_language_id
+        LEFT JOIN lifeapp.media m 
+            on m.id = lalp.document
+        """
 
     # Build WHERE clause if filters are provided
     where_clauses = []
@@ -3684,7 +3934,10 @@ def fetch_lesson_plans_search():
         with connection.cursor() as cursor:
             cursor.execute(sql, tuple(params))
             result = cursor.fetchall()
-        return jsonify(result if result else [])
+        base_url = os.getenv('BASE_URL')
+        for r in result:
+            r['media_url'] = f"{base_url}/{r['media_path']}" if r.get('media_path') else None
+        return jsonify(result if result else []), 200
     except Exception as e:
         print("Error in fetch_lesson_plans_search:", str(e))
         return jsonify({'error': str(e)}), 500
@@ -3693,62 +3946,132 @@ def fetch_lesson_plans_search():
 
 @app.route('/api/update_lesson_plan', methods=['POST'])
 def update_lesson_plan():
-    data = request.get_json()
-    lesson_plan_id = data.get('id')
-    la_lesson_plan_language_id = data.get('la_lesson_plan_language_id')
-    title = data.get('title')
-    document = data.get('document')
-    plan_type = data.get('type')   # numeric TINYINT (0..4)
-    status = data.get('status')    # numeric TINYINT (0 or 1)
-
-    if not lesson_plan_id:
-        return jsonify({'error': 'Lesson Plan ID is required'}), 400
+    form = request.form
+    file = request.files.get('media')
+    media_id = None
+    if file and file.filename:
+        media = upload_media(file)
+        media_id = media['id']
 
     try:
-        connection = get_db_connection()
-        with connection.cursor() as cursor:
-            sql = """
-                UPDATE lifeapp.la_lession_plans
-                SET la_lession_plan_language_id = %s,
-                    title = %s,
-                    document = %s,
-                    `type` = %s,
-                    status = %s,
-                    updated_at = NOW()
-                WHERE id = %s
-            """
-            cursor.execute(sql, (la_lesson_plan_language_id, title, document, plan_type, status, lesson_plan_id))
-        connection.commit()
-        return jsonify({'message': 'Lesson Plan updated successfully'})
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        lp_id      = int(form['id'])
+        language_id= int(form['language_id'])
+        plan_type  = int(form['type'])
+        status_val = int(form['status'])
+    except:
+        return jsonify({'error':'Missing or invalid IDs'}),400
+
+    # build query dynamically if new media provided
+    if media_id:
+        sql = """
+          UPDATE lifeapp.la_lession_plans
+          SET la_lession_plan_language_id=%s,
+              title=%s,
+              document=%s,
+              `type`=%s,
+              status=%s,
+              updated_at=NOW()
+          WHERE id=%s
+        """
+        params = (language_id, form.get('title'), media_id, plan_type, status_val, lp_id)
+    else:
+        sql = """
+          UPDATE lifeapp.la_lession_plans
+          SET la_lession_plan_language_id=%s,
+              title=%s,
+              `type`=%s,
+              status=%s,
+              updated_at=NOW()
+          WHERE id=%s
+        """
+        params = (language_id, form.get('title'), plan_type, status_val, lp_id)
+
+    try:
+        conn = get_db_connection()
+        with conn.cursor() as cur:
+            cur.execute(sql, params)
+        conn.commit()
+        return jsonify({'message':'Lesson Plan updated'}),200
     finally:
-        connection.close()
+        conn.close()
 
 @app.route('/api/add_lesson_plan', methods=['POST'])
 def add_lesson_plan():
-    data = request.get_json()
-    la_lesson_plan_language_id = data.get('la_lesson_plan_language_id')
-    title = data.get('title')
-    document = data.get('document')
-    plan_type = data.get('type')   # numeric TINYINT
-    status = data.get('status')    # numeric TINYINT
+    form = request.form
+    file = request.files.get('media')
+    media_id = None
+    if file and file.filename:
+        media = upload_media(file)
+        media_id = media['id']
 
     try:
-        connection = get_db_connection()
-        with connection.cursor() as cursor:
-            sql = """
-                INSERT INTO lifeapp.la_lession_plans 
-                (la_lession_plan_language_id, title, document, `type`, status, created_at, updated_at)
-                VALUES (%s, %s, %s, %s, %s, NOW(), NOW())
-            """
-            cursor.execute(sql, (la_lesson_plan_language_id, title, document, plan_type, status))
-        connection.commit()
-        return jsonify({'message': 'Lesson Plan added successfully'})
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        language_id = int(form['language_id'])
+        plan_type   = int(form['type'])
+        status_val  = int(form['status'])
+    except:
+        return jsonify({'error':'Invalid form data'}), 400
+
+    sql = """
+      INSERT INTO lifeapp.la_lession_plans
+        (la_lession_plan_language_id, title, document, `type`, status, created_at, updated_at)
+      VALUES (%s, %s, %s, %s, %s, NOW(), NOW())
+    """
+    params = (
+      language_id,
+      form.get('title','').strip(),
+      media_id,
+      plan_type,
+      status_val
+    )
+    try:
+        conn = get_db_connection()
+        with conn.cursor() as cur:
+            cur.execute(sql, params)
+            new_id = cur.lastrowid
+        conn.commit()
+        return jsonify({'id': new_id}), 201
     finally:
-        connection.close()
+        conn.close()
+
+@app.route('/api/delete_lesson_plan/<int:lp_id>', methods=['DELETE'])
+def delete_lesson_plan(lp_id):
+    try:
+        conn = get_db_connection()
+        # fetch media record
+        with conn.cursor(pymysql.cursors.DictCursor) as cur:
+            cur.execute("""
+              SELECT document AS media_id, m.path AS media_path
+              FROM lifeapp.la_lession_plans lp
+              LEFT JOIN lifeapp.media m ON lp.document=m.id
+              WHERE lp.id=%s
+            """, (lp_id,))
+            row = cur.fetchone()
+
+        # delete lesson plan
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM lifeapp.la_lession_plans WHERE id=%s", (lp_id,))
+
+        # delete media record + S3 object
+        if row and row['media_id']:
+            with conn.cursor() as cur:
+                cur.execute("DELETE FROM lifeapp.media WHERE id=%s", (row['media_id'],))
+            conn.commit()
+            s3 = boto3.client(
+              's3',
+              region_name=DO_SPACES_REGION,
+              endpoint_url=DO_SPACES_ENDPOINT,
+              aws_access_key_id=DO_SPACES_KEY,
+              aws_secret_access_key=DO_SPACES_SECRET
+            )
+            try:
+                s3.delete_object(Bucket=DO_SPACES_BUCKET, Key=row['media_path'])
+            except:
+                pass
+
+        conn.commit()
+        return jsonify({'message':'Deleted successfully'}),200
+    finally:
+        conn.close()
 
 ###################################################################################
 ###################################################################################
@@ -3759,169 +4082,210 @@ def add_lesson_plan():
 # 1) SEARCH / FILTER Worksheets
 @app.route('/api/work_sheets_search', methods=['POST'])
 def fetch_work_sheets_search():
-    """
-    Expects JSON filters, e.g.:
-    {
-      "subject": "Science" or "Maths" or "",
-      "grade": 1..12 or "" (string),
-      "status": "Published" or "Drafted" or "",
-      "title": "some partial text" or ""
-    }
-    """
     filters = request.get_json() or {}
-    subject = filters.get('subject', '').strip()
-    grade = filters.get('grade', '').strip()
-    status = filters.get('status', '').strip()
-    title = filters.get('title', '').strip()
+    subject_filter = filters.get('subject', '').strip()
+    grade_filter   = filters.get('grade',   '').strip()
+    status_filter  = filters.get('status',  '').strip()
+    title_filter   = filters.get('title',   '').strip()
 
     sql = """
         SELECT
             w.id,
-            CASE WHEN w.la_subject_id = 1 THEN 'Science' ELSE 'Maths' END AS subject,
-            w.la_grade_id AS grade,
+            s.title        AS subject_title,
+            w.la_grade_id  AS grade,
             w.title,
-            w.document,
+            w.document     AS media_id,
+            m.path         AS media_path,
             CASE WHEN w.status = 1 THEN 'Published' ELSE 'Drafted' END AS status
         FROM lifeapp.la_work_sheets w
+        INNER JOIN lifeapp.la_subjects s
+            ON w.la_subject_id = s.id
+        LEFT JOIN lifeapp.media m
+            ON w.document = m.id
         WHERE 1=1
     """
     params = []
 
-    # Subject filter
-    if subject:
-        if subject == "Science":
-            sql += " AND w.la_subject_id = 1"
-        elif subject == "Maths":
-            sql += " AND w.la_subject_id = 2"
+    # subject dropdown now holds the subject ID
+    if subject_filter:
+        sql += " AND w.la_subject_id = %s"
+        params.append(int(subject_filter))
 
-    # Grade filter
-    if grade:
-        # ensure it's an integer, if provided
+    if grade_filter:
         try:
-            grade_val = int(grade)
+            params.append(int(grade_filter))
             sql += " AND w.la_grade_id = %s"
-            params.append(grade_val)
         except ValueError:
-            pass  # if it's not an integer, ignore
+            pass
 
-    # Status filter
-    if status:
+    if status_filter:
         sql += " AND w.status = %s"
-        status_val = 1 if status == "Published" else 0
-        params.append(status_val)
+        params.append(1 if status_filter == 'Published' else 0)
 
-    # Title filter
-    if title:
+    if title_filter:
         sql += " AND w.title LIKE %s"
-        params.append(f"%{title}%")
+        params.append(f"%{title_filter}%")
 
-    # Sort by newest updated
     sql += " ORDER BY w.updated_at DESC;"
 
     try:
-        connection = get_db_connection()
-        with connection.cursor() as cursor:
+        conn = get_db_connection()
+        with conn.cursor(pymysql.cursors.DictCursor) as cursor:
             cursor.execute(sql, tuple(params))
-            result = cursor.fetchall()
-        return jsonify(result if result else [])
+            rows = cursor.fetchall()
+
+        base = os.getenv('BASE_URL', '')
+        for r in rows:
+            r['document_url'] = r['media_path'] and f"{base}/{r['media_path']}" or None
+
+        return jsonify(rows), 200
+
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
     finally:
-        connection.close()
+        conn.close()
 
 # 2) ADD a new Worksheet
 @app.route('/api/add_work_sheet', methods=['POST'])
 def add_work_sheet():
-    """
-    Expects JSON body like:
-    {
-      "subject": "Science" or "Maths",
-      "grade": 1..12,
-      "title": "...",
-      "document": "...",
-      "status": "Published" or "Drafted"
-    }
-    """
-    data = request.get_json() or {}
-    subject = data.get('subject')
-    grade = data.get('grade')
-    title = data.get('title', '')
-    document = data.get('document', '')
-    status_str = data.get('status', 'Drafted')
+    form = request.form
+    file = request.files.get('media')
+    media_id = None
+    if file and file.filename:
+        media = upload_media(file)
+        media_id = media['id']
 
-    # Convert subject to la_subject_id
-    la_subject_id = 1 if subject == "Science" else 2
-
-    # Convert status to 1 or 0
-    status_val = 1 if status_str == "Published" else 0
+    # Use the subject ID directly from the form instead of hardcoding
+    try:
+        la_subject_id = int(form.get('subject'))
+    except:
+        return jsonify({'error':'Invalid subject ID'}), 400
 
     try:
-        connection = get_db_connection()
-        with connection.cursor() as cursor:
-            sql = """
-                INSERT INTO lifeapp.la_work_sheets 
-                (la_subject_id, la_grade_id, title, document, status, created_at, updated_at)
-                VALUES (%s, %s, %s, %s, %s, NOW(), NOW())
-            """
-            cursor.execute(sql, (la_subject_id, grade, title, document, status_val))
-        connection.commit()
-        return jsonify({'message': 'Worksheet added successfully'})
+        la_grade_id = int(form.get('grade'))
+    except:
+        return jsonify({'error':'Invalid grade'}), 400
+        
+    title = form.get('title','').strip()
+    status_val = 1 if form.get('status')=='Published' else 0
+
+    sql = """
+      INSERT INTO lifeapp.la_work_sheets
+        (la_subject_id, la_grade_id, title, document, status, created_at, updated_at)
+      VALUES (%s, %s, %s, %s, %s, NOW(), NOW())
+    """
+    params = (la_subject_id, la_grade_id, title, media_id, status_val)
+    try:
+        conn = get_db_connection()
+        with conn.cursor() as cursor:
+            cursor.execute(sql, params)
+            new_id = cursor.lastrowid
+        conn.commit()
+        return jsonify({'id': new_id}), 201
     except Exception as e:
         return jsonify({'error': str(e)}), 500
     finally:
-        connection.close()
+        conn.close()
 
 # 3) UPDATE an existing Worksheet
 @app.route('/api/update_work_sheet', methods=['POST'])
 def update_work_sheet():
-    """
-    Expects JSON body like:
-    {
-      "id": <worksheet_id>,
-      "subject": "Science" or "Maths",
-      "grade": 1..12,
-      "title": "...",
-      "document": "...",
-      "status": "Published" or "Drafted"
-    }
-    """
-    data = request.get_json() or {}
-    worksheet_id = data.get('id')
-    subject = data.get('subject')
-    grade = data.get('grade')
-    title = data.get('title', '')
-    document = data.get('document', '')
-    status_str = data.get('status', 'Drafted')
-
-    if not worksheet_id:
-        return jsonify({'error': 'Worksheet ID is required'}), 400
-
-    # Convert subject to la_subject_id
-    la_subject_id = 1 if subject == "Science" else 2
-
-    # Convert status to 1 or 0
-    status_val = 1 if status_str == "Published" else 0
+    form = request.form
+    file = request.files.get('media')
+    media_id = None
+    if file and file.filename:
+        media = upload_media(file)
+        media_id = media['id']
 
     try:
-        connection = get_db_connection()
-        with connection.cursor() as cursor:
-            sql = """
-                UPDATE lifeapp.la_work_sheets
-                SET la_subject_id = %s,
-                    la_grade_id = %s,
-                    title = %s,
-                    document = %s,
-                    status = %s,
-                    updated_at = NOW()
-                WHERE id = %s
-            """
-            cursor.execute(sql, (la_subject_id, grade, title, document, status_val, worksheet_id))
-        connection.commit()
-        return jsonify({'message': 'Worksheet updated successfully'})
+        ws_id = int(form.get('id'))
+    except:
+        return jsonify({'error':'Missing or invalid ID'}), 400
+
+    # Use the subject ID directly from the form instead of hardcoding
+    try:
+        la_subject_id = int(form.get('subject'))
+    except:
+        return jsonify({'error':'Invalid subject ID'}), 400
+        
+    try:
+        la_grade_id = int(form.get('grade'))
+    except:
+        return jsonify({'error':'Invalid grade'}), 400
+        
+    title = form.get('title','').strip()
+    status_val = 1 if form.get('status')=='Published' else 0
+
+    if media_id:
+        sql = """
+          UPDATE lifeapp.la_work_sheets
+          SET la_subject_id=%s, la_grade_id=%s, title=%s, document=%s, status=%s, updated_at=NOW()
+          WHERE id=%s
+        """
+        params = (la_subject_id, la_grade_id, title, media_id, status_val, ws_id)
+    else:
+        sql = """
+          UPDATE lifeapp.la_work_sheets
+          SET la_subject_id=%s, la_grade_id=%s, title=%s, status=%s, updated_at=NOW()
+          WHERE id=%s
+        """
+        params = (la_subject_id, la_grade_id, title, status_val, ws_id)
+
+    try:
+        conn = get_db_connection()
+        with conn.cursor() as cursor:
+            cursor.execute(sql, params)
+        conn.commit()
+        return jsonify({'message':'Worksheet updated'}), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500
     finally:
-        connection.close()
+        conn.close()
+
+# 4) DELETE an existing Worksheet
+@app.route('/api/delete_work_sheet/<int:ws_id>', methods=['DELETE'])
+def delete_work_sheet(ws_id):
+    try:
+        conn = get_db_connection()
+        # fetch media info
+        with conn.cursor(pymysql.cursors.DictCursor) as cur:
+            cur.execute("""
+              SELECT w.document AS media_id, m.path AS media_path
+              FROM lifeapp.la_work_sheets w
+              LEFT JOIN lifeapp.media m ON w.document = m.id
+              WHERE w.id=%s
+            """, (ws_id,))
+            row = cur.fetchone()
+
+        # delete worksheet
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM lifeapp.la_work_sheets WHERE id=%s", (ws_id,))
+
+        # delete media record + S3 object
+        if row and row['media_id']:
+            with conn.cursor() as cur:
+                cur.execute("DELETE FROM lifeapp.media WHERE id=%s", (row['media_id'],))
+            conn.commit()
+            s3 = boto3.client(
+                's3',
+                region_name=DO_SPACES_REGION,
+                endpoint_url=DO_SPACES_ENDPOINT,
+                aws_access_key_id=DO_SPACES_KEY,
+                aws_secret_access_key=DO_SPACES_SECRET
+            )
+            try:
+                s3.delete_object(Bucket=DO_SPACES_BUCKET, Key=row['media_path'])
+            except:
+                pass
+
+        conn.commit()
+        return jsonify({'message':'Worksheet deleted'}),200
+    except Exception as e:
+        conn.rollback()
+        return jsonify({'error': str(e)}),500
+    finally:
+        conn.close()
 
 ###################################################################################
 ###################################################################################
@@ -3931,18 +4295,8 @@ def update_work_sheet():
 
 @app.route('/api/assessments_search', methods=['POST'])
 def assessments_search():
-    """
-    Expects JSON filters (all optional), for example:
-    {
-      "subject": "Science" or "Maths" or "",
-      "grade": "1" to "12" or "",
-      "title": "partial text" or "",
-      "status": "Published" or "Drafted" or ""
-    }
-    Returns the list of assessments from lifeapp.la_assessments.
-    """
     filters = request.get_json() or {}
-    subject = filters.get('subject', '').strip()
+    subject_id = filters.get('subject_id', '').strip()
     grade = filters.get('grade', '').strip()
     title = filters.get('title', '').strip()
     status = filters.get('status', '').strip()
@@ -3953,136 +4307,229 @@ def assessments_search():
             CASE WHEN a.la_subject_id = 1 THEN 'Science' ELSE 'Maths' END AS subject,
             a.la_grade_id AS grade,
             a.title,
-            a.document,
+            a.document AS media_id,
+            m.path        AS media_path,
             CASE WHEN a.status = 1 THEN 'Published' ELSE 'Drafted' END AS status
         FROM lifeapp.la_assessments a
+        LEFT JOIN lifeapp.media m ON a.document = m.id
         WHERE 1=1
     """
     params = []
 
-    # Filter by subject
-    if subject:
-        if subject == "Science":
-            sql += " AND a.la_subject_id = 1"
-        elif subject == "Maths":
-            sql += " AND a.la_subject_id = 2"
-    # Filter by grade (if provided and is integer)
-    if grade:
+    if subject_id:
         try:
-            grade_val = int(grade)
-            sql += " AND a.la_grade_id = %s"
-            params.append(grade_val)
+            params.append(int(subject_id))
+            sql += " AND a.la_subject_id = %s"
         except ValueError:
             pass
-    # Filter by title (partial match)
+
+    if grade:
+        try:
+            params.append(int(grade))
+            sql += " AND a.la_grade_id = %s"
+        except ValueError:
+            pass
+
     if title:
-        sql += " AND a.title LIKE %s"
         params.append(f"%{title}%")
-    # Filter by status
+        sql += " AND a.title LIKE %s"
+
     if status:
-        status_val = 1 if status == "Published" else 0
         sql += " AND a.status = %s"
-        params.append(status_val)
+        params.append(1 if status == "Published" else 0)
 
     sql += " ORDER BY a.updated_at DESC;"
 
     try:
-        connection = get_db_connection()
-        with connection.cursor() as cursor:
+        conn = get_db_connection()
+        with conn.cursor(pymysql.cursors.DictCursor) as cursor:
             cursor.execute(sql, tuple(params))
-            result = cursor.fetchall()
-        return jsonify(result if result else [])
+            rows = cursor.fetchall()
+
+        # build full media_url
+        BASE_URL = os.getenv('BASE_URL')
+        for r in rows:
+            r['document_url'] = (
+                f"{BASE_URL}/{r['media_path']}" if r.get('media_path') else None
+            )
+        return jsonify(rows), 200
+
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
     finally:
-        connection.close()
+        conn.close()
 
 @app.route('/api/add_assessment', methods=['POST'])
 def add_assessment():
     """
-    Expects JSON body like:
-    {
-      "subject": "Science" or "Maths",
-      "grade": 1..12,
-      "title": "...",
-      "document": "...",
-      "status": "Published" or "Drafted"
-    }
+    Expects multipart/form-data:
+      - subject: "Science" or "Maths"
+      - grade: integer
+      - title: string
+      - media: file upload (optional)
+      - status: "Published" or "Drafted"
     """
-    data = request.get_json() or {}
-    subject = data.get('subject')
-    grade = data.get('grade')
-    title = data.get('title', '')
-    document = data.get('document', '')
-    status_str = data.get('status', 'Drafted')
+    form = request.form
+    file = request.files.get('media')
+    media_id = None
 
-    # Map subject and status
-    la_subject_id = 1 if subject == "Science" else 2
-    status_val = 1 if status_str == "Published" else 0
+    # 1) If a file was uploaded, push to S3 and media table
+    if file and file.filename:
+        media = upload_media(file)
+        media_id = media['id']
+
+    # 2) Map inputs to IDs/values
+    try:
+        la_subject_id = int(form.get('subject_id', '0'))
+    except ValueError:
+        return jsonify({'error': 'Invalid subject ID'}), 400
+    
+    try:
+        la_grade_id = int(form.get('grade', '0'))
+    except ValueError:
+        return jsonify({'error': 'Invalid grade'}), 400
+
+    title = form.get('title', '').strip()
+    status_str = form.get('status', 'Drafted')
+    status_val = 1 if status_str == 'Published' else 0
+
+    # 3) Insert into DB
+    sql = """
+        INSERT INTO lifeapp.la_assessments
+          (la_subject_id, la_grade_id, title, document, status, created_at, updated_at)
+        VALUES (%s, %s, %s, %s, %s, NOW(), NOW())
+    """
+    params = (la_subject_id, la_grade_id, title, media_id, status_val)
 
     try:
-        connection = get_db_connection()
-        with connection.cursor() as cursor:
-            sql = """
-                INSERT INTO lifeapp.la_assessments 
-                (la_subject_id, la_grade_id, title, document, status, created_at, updated_at)
-                VALUES (%s, %s, %s, %s, %s, NOW(), NOW())
-            """
-            cursor.execute(sql, (la_subject_id, grade, title, document, status_val))
-        connection.commit()
-        return jsonify({'message': 'Assessment added successfully'})
+        conn = get_db_connection()
+        with conn.cursor() as cursor:
+            cursor.execute(sql, params)
+            new_id = cursor.lastrowid
+        conn.commit()
+
+        # 4) Return the new record’s ID
+        return jsonify({'id': new_id}), 201
+
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
     finally:
-        connection.close()
+        conn.close()
 
 @app.route('/api/update_assessment', methods=['POST'])
 def update_assessment():
-    """
-    Expects JSON body like:
-    {
-      "id": <assessment_id>,
-      "subject": "Science" or "Maths",
-      "grade": 1..12,
-      "title": "...",
-      "document": "...",
-      "status": "Published" or "Drafted"
-    }
-    """
-    data = request.get_json() or {}
-    assessment_id = data.get('id')
-    subject = data.get('subject')
-    grade = data.get('grade')
-    title = data.get('title', '')
-    document = data.get('document', '')
-    status_str = data.get('status', 'Drafted')
+    form = request.form
+    file = request.files.get('media')
+    media_id = None
 
-    if not assessment_id:
-        return jsonify({'error': 'Assessment ID is required'}), 400
+    if file and file.filename:
+        media = upload_media(file)
+        media_id = media['id']
 
-    la_subject_id = 1 if subject == "Science" else 2
-    status_val = 1 if status_str == "Published" else 0
+    # required
+    try:
+        assessment_id = int(form.get('id'))
+    except (TypeError, ValueError):
+        return jsonify({'error': 'Invalid or missing assessment ID'}), 400
 
     try:
-        connection = get_db_connection()
-        with connection.cursor() as cursor:
-            sql = """
-                UPDATE lifeapp.la_assessments
-                SET la_subject_id = %s,
-                    la_grade_id = %s,
-                    title = %s,
-                    document = %s,
-                    status = %s,
-                    updated_at = NOW()
-                WHERE id = %s
-            """
-            cursor.execute(sql, (la_subject_id, grade, title, document, status_val, assessment_id))
-        connection.commit()
-        return jsonify({'message': 'Assessment updated successfully'})
+        la_subject_id = int(form.get('subject_id', '0'))
+    except ValueError:
+        return jsonify({'error': 'Invalid subject ID'}), 400
+    
+    try:
+        la_grade_id = int(form.get('grade', 0))
+    except ValueError:
+        return jsonify({'error': 'Invalid grade'}), 400
+    title = form.get('title', '').strip()
+    status_val = 1 if form.get('status') == 'Published' else 0
+
+    # build SQL
+    if media_id:
+        sql = """
+            UPDATE lifeapp.la_assessments
+            SET la_subject_id = %s,
+                la_grade_id   = %s,
+                title         = %s,
+                document      = %s,
+                status        = %s,
+                updated_at    = NOW()
+            WHERE id = %s
+        """
+        params = (la_subject_id, la_grade_id, title, media_id, status_val, assessment_id)
+    else:
+        sql = """
+            UPDATE lifeapp.la_assessments
+            SET la_subject_id = %s,
+                la_grade_id   = %s,
+                title         = %s,
+                status        = %s,
+                updated_at    = NOW()
+            WHERE id = %s
+        """
+        params = (la_subject_id, la_grade_id, title, status_val, assessment_id)
+
+    try:
+        conn = get_db_connection()
+        with conn.cursor() as cursor:
+            cursor.execute(sql, params)
+        conn.commit()
+        return jsonify({'message': 'Assessment updated successfully'}), 200
+
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
     finally:
-        connection.close()
+        conn.close()
+
+@app.route('/api/delete_assessment/<int:assessment_id>', methods=['DELETE'])
+def delete_assessment(assessment_id):
+    try:
+        conn = get_db_connection()
+        # 1) Fetch the media ID & path so we can delete the S3 file too
+        with conn.cursor(pymysql.cursors.DictCursor) as cursor:
+            cursor.execute("""
+                SELECT a.document AS media_id, m.path AS media_path
+                FROM lifeapp.la_assessments a
+                LEFT JOIN lifeapp.media m ON a.document = m.id
+                WHERE a.id = %s
+            """, (assessment_id,))
+            row = cursor.fetchone()
+
+        # 2) Delete the assessment row
+        with conn.cursor() as cursor:
+            cursor.execute("DELETE FROM lifeapp.la_assessments WHERE id = %s", (assessment_id,))
+
+        # 3) If there was linked media, delete both DB row and S3 object
+        if row and row['media_id']:
+            with conn.cursor() as cursor:
+                cursor.execute("DELETE FROM lifeapp.media WHERE id = %s", (row['media_id'],))
+            conn.commit()
+
+            # Delete from your S3/DigitalOcean Space
+            s3 = boto3.client(
+                's3',
+                region_name=DO_SPACES_REGION,
+                endpoint_url=DO_SPACES_ENDPOINT,
+                aws_access_key_id=DO_SPACES_KEY,
+                aws_secret_access_key=DO_SPACES_SECRET
+            )
+            try:
+                s3.delete_object(Bucket=DO_SPACES_BUCKET, Key=row['media_path'])
+            except Exception as e:
+                app.logger.warning(f"Failed to delete S3 object {row['media_path']}: {e}")
+
+        conn.commit()
+        return jsonify({'message': 'Assessment and media deleted successfully'}), 200
+
+    except Exception as e:
+        conn.rollback()
+        return jsonify({'error': str(e)}), 500
+
+    finally:
+        conn.close()
 
 ###################################################################################
 ###################################################################################
@@ -4202,17 +4649,56 @@ def create_competency():
 # Update an existing competency (Edit)
 @app.route('/admin/competencies/<int:competency_id>', methods=['PUT', 'POST'])
 def update_competency(competency_id):
+    connection = None
     try:
-        # data = request.get_json() or {}
         form = request.form
         document_file = request.files.get('document')
         connection = get_db_connection()
+        
         with connection.cursor() as cursor:
+            # Fetch existing document info
+            cursor.execute("""
+                SELECT m.id as media_id, m.path 
+                FROM lifeapp.la_competencies c
+                LEFT JOIN lifeapp.media m ON c.document = m.id
+                WHERE c.id = %s
+            """, (competency_id,))
+            existing = cursor.fetchone()
+            existing_media_id = existing['media_id'] if existing else None
+            existing_s3_key = existing['path'] if existing else None
+
+            new_doc_id = None
+            if document_file and document_file.filename:
+                # Initialize S3 client
+                s3 = boto3.client(
+                    's3',
+                    region_name=DO_SPACES_REGION,
+                    endpoint_url=DO_SPACES_ENDPOINT,
+                    aws_access_key_id=DO_SPACES_KEY,
+                    aws_secret_access_key=DO_SPACES_SECRET
+                )
+
+                # Delete old media if exists
+                if existing_media_id:
+                    # Delete from S3
+                    if existing_s3_key:
+                        try:
+                            s3.delete_object(Bucket=DO_SPACES_BUCKET, Key=existing_s3_key)
+                        except Exception as s3_error:
+                            print(f"Error deleting S3 object: {s3_error}")
+
+                    # Delete from database
+                    cursor.execute("DELETE FROM lifeapp.media WHERE id = %s", (existing_media_id,))
+
+                # Upload new document
+                media = upload_media(document_file)
+                new_doc_id = media['id']
+
+            # Build the update query
             update_sql = """
                 UPDATE lifeapp.la_competencies 
                 SET title = %s, la_subject_id = %s, la_level_id = %s, 
                     status = %s, updated_at = NOW()
-                WHERE id = %s
             """
             params = [
                 form.get('name'),
@@ -4221,21 +4707,25 @@ def update_competency(competency_id):
                 form.get('status')
             ]
 
-            if document_file and document_file.filename:
-                media = upload_media(document_file)
+            if new_doc_id is not None:
                 update_sql += ", document = %s"
-                params.append(media['id'])
+                params.append(new_doc_id)
 
             update_sql += " WHERE id = %s"
             params.append(competency_id)
 
             cursor.execute(update_sql, params)
             connection.commit()
+            
         return jsonify({'message': 'Competency updated successfully'}), 200
+
     except Exception as e:
+        if connection:
+            connection.rollback()
         return jsonify({'error': str(e)}), 500
     finally:
-        connection.close()
+        if connection:
+            connection.close()
 
 # Delete a competency
 @app.route('/admin/competencies/<int:competency_id>', methods=['DELETE'])
@@ -4243,15 +4733,25 @@ def delete_competency(competency_id):
     try:
         connection = get_db_connection()
         with connection.cursor() as cursor:
-            sql = "DELETE FROM lifeapp.la_competencies WHERE id = %s"
-            cursor.execute(sql, (competency_id,))
+            # Get the document ID from the competency
+            cursor.execute("SELECT document FROM lifeapp.la_competencies WHERE id = %s", (competency_id,))
+            result = cursor.fetchone()
+            document_id = result['document'] if result else None
+
+            # Delete the competency
+            cursor.execute("DELETE FROM lifeapp.la_competencies WHERE id = %s", (competency_id,))
+
+            # Delete associated media if exists
+            if document_id:
+                cursor.execute("DELETE FROM lifeapp.media WHERE id = %s", (document_id,))
+
             connection.commit()
-        return jsonify({'message': 'Competency deleted successfully'}), 200
+        return jsonify({'message': 'Competency and associated media deleted successfully'}), 200
     except Exception as e:
+        connection.rollback()
         return jsonify({'error': str(e)}), 500
     finally:
         connection.close()
-
 
 ###################################################################################
 ###################################################################################
@@ -4710,6 +5210,7 @@ def get_mentors():
                 params.append(mentor_code_filter)
             if conditions:
                 sql += " AND " + " AND ".join(conditions)
+            sql += " order by id desc"
             cursor.execute(sql, tuple(params))
             result = cursor.fetchall()
         return jsonify(result)
@@ -4720,75 +5221,124 @@ def get_mentors():
 
 @app.route('/api/add_mentor', methods=['POST'])
 def add_mentor():
-    """Add a new mentor to the database."""
+    data = request.get_json() or {}
+
+    # Required fields
+    name      = data.get('name')
+    mobile_no = data.get('mobile_no')
+    pin       = data.get('pin')
+
+    if not all([name, mobile_no, pin]):
+        return jsonify({"error": "name, mobile_no and pin are required"}), 400
+
+    # Optional fields
+    email = data.get('email') or None
+    state = data.get('state') or None
+    city  = data.get('city') or None
+
+    # Convert gender to int or None
+    gender_raw = data.get('gender')
     try:
-        data = request.get_json()
-        datetime_str = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        connection = get_db_connection()
-        with connection.cursor() as cursor:
+        gender = int(gender_raw) if gender_raw is not None and gender_raw != "" else None
+    except ValueError:
+        return jsonify({"error": f"Invalid gender value: {gender_raw}"}), 400
+
+    # DOB can stay as string or None
+    dob = data.get('dob') or None
+
+    conn = get_db_connection()
+    try:
+        with conn.cursor() as cursor:
             sql = """
-                INSERT INTO lifeapp.users 
-                (name, email, mobile_no, pin, board_name, school_code, user_rank, created_by, la_grade_id, la_board_id, 
-                 la_section_id, device_token, device, updated_at, created_at, remember_token, otp, image_path, 
-                 profile_image, brain_coins, heart_coins, earn_coins, password, address, state, city, grade, 
-                 gender, dob, `type`, username, guardian_name, school_id)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 
-                        %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            INSERT INTO lifeapp.users
+              (name, email, mobile_no, pin,
+               state, city, gender, dob,
+               `type`, created_at, updated_at)
+            VALUES
+              (%s,    %s,    %s,        %s,
+               %s,     %s,     %s,     %s,
+               4,       NOW(),   NOW())
             """
             cursor.execute(sql, (
-                data['name'], data['email'], data['mobile_no'], data['pin'], None, None,
-                None, None, None, None, None,
-                None, None, datetime_str, datetime_str, None,
-                None, None, None, None, None, 
-                None, None, None, data['state'], data['city'], None, 
-                data['gender'], data['dob'], 4, None, None, None
+                name, email, mobile_no, pin,
+                state, city, gender, dob
             ))
-            connection.commit()
-        return jsonify({'message': 'Mentor added successfully'}), 201
+        conn.commit()
+        return jsonify({"message": "Mentor added successfully"}), 201
+
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return jsonify({"error": str(e)}), 500
+
     finally:
-        connection.close()
+        conn.close()       
 
 @app.route('/api/update_mentor', methods=['POST'])
 def do_update_mentor():
-    """Update an existing mentor in the database."""
+    data = request.get_json() or {}
+    mentor_id = data.get('id')
+    if not mentor_id:
+        return jsonify({'error': 'Mentor ID is required.'}), 400
+
+    # Pull out all fields
+    name      = data.get('name')      or None
+    email     = data.get('email')     or None
+    mobile_no = data.get('mobile_no') or None
+    pin       = data.get('pin')       or None
+    state     = data.get('state')     or None
+    city      = data.get('city')      or None
+
+    # Convert gender to int or None
+    gender_raw = data.get('gender')
     try:
-        data = request.get_json()
-        datetime_str = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        connection = get_db_connection()
-        with connection.cursor() as cursor:
+        gender = int(gender_raw) if gender_raw not in (None, '') else None
+    except ValueError:
+        return jsonify({'error': f'Invalid gender value: {gender_raw}'}), 400
+
+    # DOB as string or None
+    dob = data.get('dob') or None
+
+    # Timestamp for updated_at
+    updated_at = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+
+    conn = get_db_connection()
+    try:
+        with conn.cursor() as cursor:
             sql = """
                 UPDATE lifeapp.users
-                SET name = %s,
-                    email = %s,
-                    mobile_no = %s,
-                    pin = %s,
-                    state = %s,
-                    city = %s,
-                    gender = %s,
-                    dob = %s,
-                    updated_at = %s
-                WHERE id = %s AND `type` = 4
+                   SET name      = %s,
+                       email     = %s,
+                       mobile_no = %s,
+                       pin       = %s,
+                       state     = %s,
+                       city      = %s,
+                       gender    = %s,
+                       dob       = %s,
+                       updated_at= %s
+                 WHERE id = %s
+                   AND `type` = 4
             """
-            cursor.execute(sql, (
-                data['name'],
-                data['email'],
-                data['mobile_no'],
-                data['pin'],
-                data['state'],
-                data['city'],
-                data['gender'],
-                data['dob'],
-                datetime_str,
-                data['id']
-            ))
-            connection.commit()
+            params = (
+                name,
+                email,
+                mobile_no,
+                pin,
+                state,
+                city,
+                gender,
+                dob,
+                updated_at,
+                mentor_id
+            )
+            cursor.execute(sql, params)
+            conn.commit()
+
         return jsonify({'message': 'Mentor updated successfully'}), 200
+
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
     finally:
-        connection.close()
+        conn.close()
 
 @app.route('/api/delete_mentor', methods=['POST'])
 def do_delete_mentor():
@@ -4816,61 +5366,77 @@ def do_delete_mentor():
 def upload_mentors_csv():
     if 'csv' not in request.files:
         return jsonify({"error": "No file uploaded"}), 400
-        
+
     file = request.files['csv']
     if file.filename == '':
         return jsonify({"error": "No selected file"}), 400
-        
-    if not file.filename.endswith('.csv'):
+    if not file.filename.lower().endswith('.csv'):
         return jsonify({"error": "File must be a CSV"}), 400
 
     try:
         stream = io.StringIO(file.stream.read().decode("UTF8"), newline=None)
-        csv_reader = csv.DictReader(stream)
-        
-        connection = get_db_connection()
-        with connection.cursor() as cursor:
+        reader = csv.DictReader(stream)
+        required = ['name', 'email', 'mobile_no', 'pin']
+
+        conn = get_db_connection()
+        count = 0
+        with conn.cursor() as cursor:
             sql = """
-                INSERT INTO lifeapp.users 
-                (name, email, mobile_no, pin, state, city, gender, dob, type, 
-                 created_at, updated_at)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 4, NOW(), NOW())
+                INSERT INTO lifeapp.users
+                  (name, email, mobile_no, pin,
+                   state, city, gender, dob,
+                   `type`, created_at, updated_at)
+                VALUES (%s, %s, %s, %s,
+                        %s, %s, %s, %s,
+                        4, NOW(), NOW())
             """
-            
-            count = 0
-            for row in csv_reader:
-                # Validate required fields
-                required = ['name', 'email', 'mobile_no', 'pin']
-                if not all(row.get(field) for field in required):
+
+            normalized_rows = []
+            for raw in reader:
+                # strip anything after a space in the header
+                norm = { k.split(' ')[0].strip(): v for k, v in raw.items() }
+                normalized_rows.append(norm)
+            for row in normalized_rows:
+                # skip rows missing required fields
+                if not all(row.get(f) for f in required):
                     continue
-                
-                # Convert empty values to None
+
+                # clean & convert
+                name      = row['name']
+                email     = row.get('email') or None
+                mobile_no = row['mobile_no']
+                pin       = row['pin']
+
                 state = row.get('state') or None
-                city = row.get('city') or None
-                gender = row.get('gender') or 'Male'  # default to Male
+                city  = row.get('city') or None
+
+                # gender: turn "0"/"1" into int, blank→None
+                raw = row.get('gender') 
+                raw = 0 if raw.lower() == 'male' else 1
+                try:
+                    gender = int(raw) if raw not in (None, '') else None
+                except ValueError:
+                    return jsonify({"error": f"Invalid gender value: {raw}"}), 400
+
                 dob = row.get('dob') or None
 
                 cursor.execute(sql, (
-                    row['name'],
-                    row['email'],
-                    row['mobile_no'],
-                    row['pin'],
-                    state,
-                    city,
-                    gender,
-                    dob
+                    name, email, mobile_no, pin,
+                    state, city, gender, dob
                 ))
                 count += 1
-            
-            connection.commit()
-            return jsonify({"message": f"Successfully uploaded {count} mentors"}), 201
-            
+
+            conn.commit()
+        return jsonify({"message": f"Successfully uploaded {count} mentors"}), 201
+
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
     finally:
-        if 'connection' in locals():
-            connection.close()
-            
+        if 'conn' in locals():
+            conn.close()
+
+
 ###################################################################################
 ###################################################################################
 ######################## MENTORS/SESSIONS APIs ###################################
@@ -5021,66 +5587,66 @@ def get_mentor_dashboard_table():
     finally:
         connection.close()
 
-@app.route('/api/update_mentor', methods=['POST'])
-def update_mentor():
-    filters = request.get_json()
-    mentor_id = filters.get('id')
+# @app.route('/api/update_mentor', methods=['POST'])
+# def update_mentor():
+#     filters = request.get_json()
+#     mentor_id = filters.get('id')
 
-    if not mentor_id:
-        return jsonify({'error': 'Mentor ID is required'}), 400
+#     if not mentor_id:
+#         return jsonify({'error': 'Mentor ID is required'}), 400
 
-    # Extracting fields to update
-    name = filters.get('name')
-    email = filters.get('email')
-    mobile_no = filters.get('mobile_no')
-    city = filters.get('city')
-    state = filters.get('state')
-    pin = filters.get('pin')
-    updated_at = datetime.now().strftime('%Y-%m-%d %H:%M:%S')  # Get current timestamp
+#     # Extracting fields to update
+#     name = filters.get('name')
+#     email = filters.get('email')
+#     mobile_no = filters.get('mobile_no')
+#     city = filters.get('city')
+#     state = filters.get('state')
+#     pin = filters.get('pin')
+#     updated_at = datetime.now().strftime('%Y-%m-%d %H:%M:%S')  # Get current timestamp
 
-    try:
-        connection = get_db_connection()
-        cursor = connection.cursor()
+#     try:
+#         connection = get_db_connection()
+#         cursor = connection.cursor()
 
-        query = """
-            UPDATE lifeapp.users
-            SET name = %s, email = %s, mobile_no = %s, city = %s, state = %s, pin = %s, updated_at = %s
-            WHERE id = %s
-        """
-        values = (name, email, mobile_no, city, state, pin, updated_at, mentor_id)
+#         query = """
+#             UPDATE lifeapp.users
+#             SET name = %s, email = %s, mobile_no = %s, city = %s, state = %s, pin = %s, updated_at = %s
+#             WHERE id = %s
+#         """
+#         values = (name, email, mobile_no, city, state, pin, updated_at, mentor_id)
         
-        cursor.execute(query, values)
-        connection.commit()
-        cursor.close()
-        connection.close()
+#         cursor.execute(query, values)
+#         connection.commit()
+#         cursor.close()
+#         connection.close()
         
-        return jsonify({'success': True, 'message': 'Mentor updated successfully'}), 200
-    except Error as e:
-        print("Error updating mentor:", e)
-        return jsonify({'error': 'Internal server error', 'details': str(e)}), 500
+#         return jsonify({'success': True, 'message': 'Mentor updated successfully'}), 200
+#     except Error as e:
+#         print("Error updating mentor:", e)
+#         return jsonify({'error': 'Internal server error', 'details': str(e)}), 500
 
-@app.route('/api/delete_mentor', methods=['DELETE'])
-def delete_mentor():
-    filters = request.get_json()
-    mentor_id = filters.get('id')
+# @app.route('/api/delete_mentor', methods=['DELETE'])
+# def delete_mentor():
+#     filters = request.get_json()
+#     mentor_id = filters.get('id')
 
-    if not mentor_id:
-        return jsonify({'error': 'Mentor ID is required'}), 400
+#     if not mentor_id:
+#         return jsonify({'error': 'Mentor ID is required'}), 400
 
-    try:
-        connection = get_db_connection()
-        cursor = connection.cursor()
+#     try:
+#         connection = get_db_connection()
+#         cursor = connection.cursor()
 
-        query = "DELETE FROM lifeapp.users WHERE id = %s"
-        cursor.execute(query, (mentor_id,))
-        connection.commit()
-        cursor.close()
-        connection.close()
+#         query = "DELETE FROM lifeapp.users WHERE id = %s"
+#         cursor.execute(query, (mentor_id,))
+#         connection.commit()
+#         cursor.close()
+#         connection.close()
         
-        return jsonify({'success': True, 'message': 'Mentor deleted successfully'}), 200
-    except Error as e:
-        print("Error deleting mentor:", e)
-        return jsonify({'error': 'Internal server error', 'details': str(e)}), 500
+#         return jsonify({'success': True, 'message': 'Mentor deleted successfully'}), 200
+#     except Error as e:
+#         print("Error deleting mentor:", e)
+#         return jsonify({'error': 'Internal server error', 'details': str(e)}), 500
 
 
 
@@ -5661,13 +6227,26 @@ def update_quiz_question(question_id):
 
     # optional
     topic     = data.get('topic_id', 1)
-    status    = 1 if data.get('status') == 'Active' else 0  # ✅ FIXED HERE
+
+    # Fix for status: handle both string formats
+    status_val = data.get('status')
+    if status_val == 'Active':
+        status = 1
+    elif status_val == 'Inactive':
+        status = 0
+    else:
+        # Handle numeric strings like "1" or "0"
+        status = int(status_val) if status_val is not None else 1
+
     q_type    = int(data.get('question_type', 1))
     game_type = int(data.get('type', 2))
     now       = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
-    # wrap plain text into JSON strings
-    question_json = json.dumps({"en": qt_raw})
+    # Check if question_title is already a JSON string
+    if isinstance(qt_raw, str) and (qt_raw.startswith('{') or not qt_raw):
+        question_json = qt_raw if qt_raw else json.dumps({"en": ""})
+    else:
+        question_json = json.dumps({"en": qt_raw})
 
     conn = get_db_connection()
     try:
@@ -5703,14 +6282,30 @@ def update_quiz_question(question_id):
             # 3) re-insert options, wrapping each title
             answer_option_id = None
             for opt in options:
-                opt_json = json.dumps({"en": opt.get('title', '')})
+                # Handle option title
+                opt_title = opt.get('title', '')
+                
+                # Check if it's already a JSON string
+                if isinstance(opt_title, str) and (opt_title.startswith('{') or not opt_title):
+                    opt_json = opt_title if opt_title else json.dumps({"en": ""})
+                else:
+                    opt_json = json.dumps({"en": opt_title})
+                
                 cursor.execute("""
                     INSERT INTO lifeapp.la_question_options
                       (question_id, title, created_at, updated_at)
                     VALUES (%s, %s, %s, %s)
                 """, (question_id, opt_json, now, now))
                 oid = cursor.lastrowid
-                if opt.get('is_correct'):
+                
+                # Check if this is the correct answer
+                is_correct = False
+                if 'is_correct' in opt and opt['is_correct']:
+                    is_correct = True
+                elif 'is_answer' in opt and opt['is_answer'] == 1:
+                    is_correct = True
+                    
+                if is_correct:
                     answer_option_id = oid
 
             # 4) link correct answer
@@ -5761,6 +6356,149 @@ def delete_quiz_question(question_id):
     finally:
         connection.close()
 
+
+@app.route('/api/updated_today', methods=['POST'])
+def get_questions_updated_today():
+    """
+    Returns a list of question IDs that were updated today.
+    Optional filters: subject_id, level_id, topic_id, type
+    """
+    data = request.get_json() or {}
+    subject_id = data.get('subject_id')
+    level_id   = data.get('level_id')
+    topic_id   = data.get('topic_id')
+    game_type  = data.get('type')
+
+    today = datetime.now().strftime('%Y-%m-%d')
+
+    conn = get_db_connection()
+    try:
+        with conn.cursor() as cursor:
+            query = """
+                SELECT id, title, updated_at
+                FROM lifeapp.la_questions
+                WHERE DATE(updated_at) = %s
+            """
+            filters = [today]
+
+            if subject_id:
+                query += " AND la_subject_id = %s"
+                filters.append(subject_id)
+            if level_id:
+                query += " AND la_level_id = %s"
+                filters.append(level_id)
+            if topic_id:
+                query += " AND la_topic_id = %s"
+                filters.append(topic_id)
+            if game_type:
+                query += " AND `type` = %s"
+                filters.append(game_type)
+
+            cursor.execute(query, filters)
+            rows = cursor.fetchall()
+            return jsonify(rows), 200
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    finally:
+        conn.close()
+
+@app.route('/api/options_updated_today', methods=['POST'])
+def get_options_updated_today():
+    """
+    Returns list of question options that were updated today.
+    Optional filters: question_id, subject_id, level_id, topic_id, type
+    """
+    data = request.get_json() or {}
+    question_id = data.get('question_id')
+    subject_id  = data.get('subject_id')
+    level_id    = data.get('level_id')
+    topic_id    = data.get('topic_id')
+    game_type   = data.get('type')
+
+    today = datetime.now().strftime('%Y-%m-%d')
+
+    conn = get_db_connection()
+    try:
+        with conn.cursor() as cursor:
+            query = """
+                SELECT laqo.id, laqo.title, laqo.updated_at,
+                       laqo.question_id, laq.title AS question_title
+                FROM lifeapp.la_question_options laqo
+                JOIN lifeapp.la_questions laq ON laqo.question_id = laq.id
+                WHERE DATE(laqo.updated_at) = %s
+            """
+            filters = [today]
+
+            if question_id:
+                query += " AND laqo.question_id = %s"
+                filters.append(question_id)
+            if subject_id:
+                query += " AND laq.la_subject_id = %s"
+                filters.append(subject_id)
+            if level_id:
+                query += " AND laq.la_level_id = %s"
+                filters.append(level_id)
+            if topic_id:
+                query += " AND laq.la_topic_id = %s"
+                filters.append(topic_id)
+            if game_type:
+                query += " AND laq.type = %s"
+                filters.append(game_type)
+
+            cursor.execute(query, filters)
+            rows = cursor.fetchall()
+            return jsonify(rows), 200
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        conn.close()
+
+@app.route('/api/delete_today_questions', methods=['DELETE'])
+def delete_today_questions_and_options():
+    """
+    Deletes all questions and their options that were created or updated today.
+    """
+    today = datetime.now().strftime('%Y-%m-%d')
+    conn = get_db_connection()
+    
+    try:
+        with conn.cursor() as cursor:
+            # 1. Get all question IDs updated or created today
+            cursor.execute("""
+                SELECT id FROM lifeapp.la_questions
+                WHERE DATE(created_at) = %s OR DATE(updated_at) = %s
+            """, (today, today))
+            question_ids = [row['id'] for row in cursor.fetchall()]
+
+            if not question_ids:
+                return jsonify({"message": "No questions found for today"}), 200
+
+            # 2. Delete their options
+            cursor.execute("""
+                DELETE FROM lifeapp.la_question_options
+                WHERE question_id IN %s
+            """, (tuple(question_ids),))
+
+            # 3. Delete the questions
+            cursor.execute("""
+                DELETE FROM lifeapp.la_questions
+                WHERE id IN %s
+            """, (tuple(question_ids),))
+
+            conn.commit()
+            return jsonify({
+                "success": True,
+                "message": f"Deleted {len(question_ids)} question(s) and their options"
+            }), 200
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+    finally:
+        conn.close()
+
 ###################################################################################
 ###################################################################################
 ######################## SETTINGS/SUBJECTS APIs ###################################
@@ -5794,7 +6532,16 @@ def get_subjects():
 
         connection = get_db_connection()
         with connection.cursor() as cursor:
-            sql = "SELECT id, title, heading, image, status FROM lifeapp.la_subjects WHERE 1=1"
+            sql = """
+                SELECT s.id, s.title, s.heading, 
+                JSON_EXTRACT(s.image, '$.en') AS media_id, 
+                m.path AS media_path,
+                s.status 
+                FROM lifeapp.la_subjects s 
+                LEFT JOIN lifeapp.media m
+                    on m.id = JSON_EXTRACT(s.image, '$.en')
+                WHERE 1=1
+            """
             filters = []
             if status != "all":
                 sql += " AND status = %s"
@@ -5802,6 +6549,10 @@ def get_subjects():
             sql += " ORDER BY id;"
             cursor.execute(sql, filters)
             subjects = cursor.fetchall()
+            base_url = os.getenv('BASE_URL')
+            for r in subjects:
+                r['media_url'] = f"{base_url}/{r['media_path']}" if r.get('media_path') else None
+        
         return jsonify(subjects)
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -5810,65 +6561,211 @@ def get_subjects():
 
 @app.route('/api/subjects_new', methods=['POST'])
 def create_subject():
-    """Create a new subject."""
-    try:
-        filters = request.get_json or {}
-        title = filters.get('title')
-        heading = filters.get('heading')
-        created_by  = filters.get('created_by')
-        imageId = filters.get('imageId')
+    """
+    Expects multipart/form-data:
+      - title: valid JSON string, e.g. '{"en":"Science"}'
+      - heading: valid JSON string
+      - created_by: integer user ID
+      - image: file upload (optional)
+    """
+    form = request.form
+    file = request.files.get('image')
+    image_id = None
 
-        if created_by == 'Admin':
-            created_no = 1
-        elif created_by == 'Mentor':
-            created_no  = 4
-        elif created_by == 'Teacher':
-            created_no  = 5
-        connection = get_db_connection()
-        with connection.cursor() as cursor:
-            sql = """
-                INSERT INTO lifeapp.la_subjects (title, heading, created_by, image)
-                VALUES (%s, %s, %s, %s, %s)
-            """
-            cursor.execute(sql, (title, heading, created_no, imageId))
-            connection.commit()
-        return jsonify({'message': 'Subject Created'}), 201
+    # 1) If an image file was uploaded, store it and record its media ID
+    if file and file.filename:
+        media = upload_media(file)
+        image_id = media['id']
+
+    title      = form.get('title', '').strip()
+    heading    = form.get('heading', '').strip()
+    created_by = form.get('created_by')
+    status = form.get('status',0)
+
+    # Validate required fields
+    if not title or not created_by:
+        return jsonify({'error': 'title and created_by are required'}), 400
+
+    # Validate that title and heading are proper JSON
+    try:
+        # Ensure they're valid JSON
+        json.loads(title)
+        json.loads(heading)
+    except json.JSONDecodeError:
+        return jsonify({'error': 'title and heading must be valid JSON objects'}), 400
+    
+    # Map created_by from role name to user ID if needed
+    # This example assumes you have a simple mapping, but you might need
+    # to look up actual IDs from a users table
+    role_to_id = {"Admin": 1, "Mentor": 4, "Teacher": 5}
+    user_id = role_to_id.get(created_by, 1)  # Default to 1 if not found
+
+    try:
+        created_by = int(user_id)
+    except ValueError:
+        return jsonify({'error': 'created_by must be an integer'}), 400
+
+    sql = """
+        INSERT INTO lifeapp.la_subjects
+          (created_by, title, heading, image, status, `index`, created_at, updated_at)
+        VALUES
+          (%s,
+           %s,         -- title JSON
+           %s,         -- heading JSON
+           JSON_OBJECT('en', %s),  -- image as JSON {"en": media_id}
+           %s,          -- default active
+           1,          -- default index
+           NOW(),
+           NOW()
+          )
+    """
+    params = (
+        created_by,
+        title,
+        heading,
+        image_id,
+        status
+    )
+
+    try:
+        conn = get_db_connection()
+        with conn.cursor() as cur:
+            cur.execute(sql, params)
+        conn.commit()
+        return jsonify({'message': 'Subject created successfully'}), 201
     except Exception as e:
         return jsonify({'error': str(e)}), 500
     finally:
-        connection.close()
+        conn.close()
 
 @app.route('/api/subjects/<int:subject_id>', methods=['PUT'])
 def update_subject(subject_id):
-    """Update a subject."""
-    try:
-        filters = request.get_json or {}
-        title = filters.get('title')
-        heading = filters.get('heading')
-        created_by  = filters.get('created_by')
-        subject_id = filters.get('id')
-        imageId = filters.get('imageId')
-        if created_by == 'Admin':
-            created_no = 1
-        elif created_by == 'Mentor':
-            created_no  = 4
-        elif created_by == 'Teacher':
-            created_no  = 5
+    """
+    Expects multipart/form-data:
+      - title: valid JSON string
+      - heading: valid JSON string
+      - created_by: integer user ID (foreign key)
+      - image: file upload (optional)
+    """
+    form = request.form
+    file = request.files.get('image')
+    new_image_id = None
 
-        connection = get_db_connection()
-        with connection.cursor() as cursor:
-            sql = """
-                UPDATE lifeapp.la_subjects
-                SET title = %s, heading = %s, image = %s
-                WHERE id = %s
-            """
-            cursor.execute(sql, (title, heading, created_no, imageId, subject_id))
-            connection.commit()
-        return jsonify({'message': 'Subject Updated'}), 200
+    if file and file.filename:
+        media = upload_media(file)
+        new_image_id = media['id']
+
+    title      = form.get('title', '').strip()
+    heading    = form.get('heading', '').strip()
+    created_by = form.get('created_by')
+    status = form.get('status',0)
+
+    if not title or not created_by:
+        return jsonify({'error': 'title and created_by are required'}), 400
+
+    # ————————————————————————————————————————————
+    # Map role‐name → user ID (same as in create_subject)
+    role_to_id = {"Admin": 1, "Mentor": 4, "Teacher": 5}
+    if created_by in role_to_id:
+        created_by = role_to_id[created_by]
+    else:
+        # if it wasn’t one of the roles, try to parse it as an integer
+        try:
+            created_by = int(created_by)
+        except (ValueError, TypeError):
+            return jsonify({'error': 'created_by must be an integer or valid role name'}), 400
+    # ————————————————————————————————————————————
+
+    try:
+        created_by = int(created_by)
+    except ValueError:
+        return jsonify({'error': 'created_by must be an integer'}), 400
+
+    # Build an UPDATE that only replaces image if a new file was provided
+    sql = """
+        UPDATE lifeapp.la_subjects
+        SET
+          created_by = %s,
+          title      = %s,
+          heading    = %s,
+          status     = %s
+    """
+    params = [
+        created_by,
+        title,
+        heading,
+        status,
+    ]
+
+    if new_image_id is not None:
+        sql += ", image = JSON_OBJECT('en', %s)"
+        params.append(new_image_id)
+
+    sql += ", updated_at = NOW() WHERE id = %s"
+    params.append(subject_id)
+
+    try:
+        conn = get_db_connection()
+        with conn.cursor() as cur:
+            cur.execute(sql, params)
+        conn.commit()
+        return jsonify({'message': 'Subject updated successfully'}), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500
     finally:
-        connection.close()
+        conn.close()
+
+@app.route('/api/subjects/<int:subject_id>', methods=['DELETE'])
+def delete_subject(subject_id):
+    try:
+        conn = get_db_connection()
+        # 1) Fetch the media ID (from JSON) and S3 key
+        with conn.cursor(pymysql.cursors.DictCursor) as cur:
+            cur.execute("""
+                SELECT 
+                  JSON_UNQUOTE(JSON_EXTRACT(s.image, '$.en')) AS media_id,
+                  m.path AS media_path
+                FROM lifeapp.la_subjects s
+                LEFT JOIN lifeapp.media m 
+                  ON m.id = JSON_UNQUOTE(JSON_EXTRACT(s.image, '$.en'))
+                WHERE s.id = %s
+            """, (subject_id,))
+            row = cur.fetchone()
+
+        # 2) Delete the subject row
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM lifeapp.la_subjects WHERE id = %s", (subject_id,))
+
+        # 3) If there was an image, delete its media record & S3 file
+        if row and row.get('media_id'):
+            media_id = int(row['media_id'])
+            s3_key   = row.get('media_path')
+            # remove media DB entry
+            with conn.cursor() as cur:
+                cur.execute("DELETE FROM lifeapp.media WHERE id = %s", (media_id,))
+            conn.commit()
+            # remove from S3/Spaces
+            s3 = boto3.client(
+                's3',
+                region_name=DO_SPACES_REGION,
+                endpoint_url=DO_SPACES_ENDPOINT,
+                aws_access_key_id=DO_SPACES_KEY,
+                aws_secret_access_key=DO_SPACES_SECRET
+            )
+            try:
+                s3.delete_object(Bucket=DO_SPACES_BUCKET, Key=s3_key)
+            except Exception:
+                pass
+
+        conn.commit()
+        return jsonify({'message': 'Subject and its media deleted successfully'}), 200
+
+    except Exception as e:
+        conn.rollback()
+        return jsonify({'error': str(e)}), 500
+
+    finally:
+        conn.close()
 
 @app.route('/api/subjects/<int:subject_id>/status', methods=['PATCH'])
 def change_subject_status(subject_id):
@@ -5942,31 +6839,60 @@ def create_level():
         quiz_time= data.get('quiz_time')
         riddle_points= data.get('riddle_points')
         riddle_time= data.get('riddle_time')
-        status= data.get('status')
+        status = data.get('status', 1)
         datetime_str = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        params = [json.dumps(title_data), json.dumps(description_data),jigyasa_points,mission_points,
-                    pragya_points,puzzle_points, puzzle_time,quiz_points,quiz_time, riddle_points,riddle_time,status, datetime_str]
-        connection = get_db_connection()
-        with connection.cursor() as cursor:
-            sql = """
-                INSERT INTO la_levels (title, description,jigyasa_points,mission_points,
-                    pragya_points,puzzle_points, puzzle_time,quiz_points,quiz_time, riddle_points,riddle_time,status, created_by)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-            """
+        sql = """
+            INSERT INTO lifeapp.la_levels
+              (title, description,
+               jigyasa_points, mission_points, pragya_points,
+               puzzle_points, puzzle_time,
+               quiz_points, quiz_time,
+               riddle_points, riddle_time,
+               status,
+               created_at)
+            VALUES
+              (%s,      %s,
+               %s,      %s,      %s,
+               %s,      %s,
+               %s,      %s,
+               %s,      %s,
+              %s,
+               NOW()
+              )
+        """
+        params = [
+            json.dumps(title_data),
+            json.dumps(description_data),
+            jigyasa_points,
+            mission_points,
+            pragya_points,
+            puzzle_points,
+            puzzle_time,
+            quiz_points,
+            quiz_time,
+            riddle_points,
+           riddle_time,
+            status
+        ]
+
+        conn = get_db_connection()
+        with conn.cursor() as cursor:
             cursor.execute(sql, params)
-            connection.commit()
-        return jsonify({'message': 'Level Created'}), 201
+            conn.commit()
+            return jsonify({'message': 'Level Created'}), 201
     except Exception as e:
         return jsonify({'error': str(e)}), 500
     finally:
-        connection.close()
+        conn.close()
 
 @app.route('/api/levels_update', methods=['POST'])
-def update_level(level_id):
+def update_level():
     """Update a level."""
     try:
         data = request.get_json() or {}
-        id = data.get('id')
+        level_id = data.get('id')
+        if not level_id:
+            return jsonify({'error': 'Missing level ID'}), 400
         title_data = data.get('title', {})
         description_data = data.get('description', {})
         jigyasa_points= data.get('jigyasa_points')
@@ -5978,24 +6904,45 @@ def update_level(level_id):
         quiz_time= data.get('quiz_time')
         riddle_points= data.get('riddle_points')
         riddle_time= data.get('riddle_time')
-        status= data.get('status')
+        status= data.get('status',1)
         datetime_str = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
-        params = [json.dumps(title_data), json.dumps(description_data),jigyasa_points,mission_points,
-                    pragya_points,puzzle_points, puzzle_time,quiz_points,quiz_time, riddle_points,riddle_time,status, datetime_str, id]
-        
+        sql = """
+            UPDATE lifeapp.la_levels
+            SET
+                title           = %s,
+                description     = %s,
+                jigyasa_points  = %s,
+                mission_points  = %s,
+                pragya_points   = %s,
+                puzzle_points   = %s,
+               puzzle_time     = %s,
+                quiz_points     = %s,
+                quiz_time       = %s,
+                riddle_points   = %s,
+                riddle_time     = %s,
+                status          = %s,
+                updated_at      = NOW()
+            WHERE id = %s
+        """
+        params = [
+            json.dumps(title_data),
+            json.dumps(description_data),
+            jigyasa_points,
+            mission_points,
+            pragya_points,
+            puzzle_points,
+            puzzle_time,
+            quiz_points,
+            quiz_time,
+           riddle_points,
+            riddle_time,
+            status,
+            level_id
+        ]
+
         connection = get_db_connection()
         with connection.cursor() as cursor:
-            sql = """
-                UPDATE lifeapp.la_levels
-                SET 
-                    title = %s, description = %s,
-                    jigyasa_points = %s, mission_points = %s,  pragya_points =%s,
-                    puzzle_points = %s, puzzle_time = %s, quiz_points = %s,
-                    quiz_time = %s, riddle_points = %s, riddle_time = %s,
-                    status = %s, updated_at = %s
-                WHERE id = %s
-            """
             cursor.execute(sql, params)
             connection.commit()
         return jsonify({'message': 'Level Updated'}), 200
@@ -6055,31 +7002,76 @@ def get_languages():
 
 @app.route('/api/languages_new', methods=['POST'])
 def create_language():
-    """Create a new language."""
+    """Create a new language with improved error handling."""
     try:
+        # Get request data and validate
         data = request.get_json() or {}
-        title = data.get('title', '')
+        print(f"Received data: {data}")  # Debugging
+        
+        title = data.get('title', '').strip()
         slug = data.get('slug', '').strip().lower()
-        status = data.get('status')
+        status = data.get('status', 1)
+        
+        # Validate inputs
         if not slug:
             return jsonify({'error': 'Slug is required'}), 400
-
-        connection = get_db_connection()
-        with connection.cursor() as cursor:
-            # Check if slug already exists
-            cursor.execute("SELECT COUNT(*) FROM lifeapp.languages WHERE slug = %s", (slug,))
-            exists = cursor.fetchone()
-            if exists and exists[0] > 0:
-                return jsonify({'error': 'Slug already exists'}), 400
-
-            sql = "INSERT INTO lifeapp.languages (slug, title, status) VALUES (%s, %s, %s)"
-            cursor.execute(sql, (slug, title, status))  # 1 for Active status
-            connection.commit()
-        return jsonify({'message': 'Language Created'}), 201
+        
+        if not title:
+            return jsonify({'error': 'Title is required'}), 400
+            
+        try:
+            status = int(status)
+            if status not in [0, 1]:
+                return jsonify({'error': 'Status must be 0 or 1'}), 400
+        except (TypeError, ValueError):
+            return jsonify({'error': 'Invalid status value'}), 400
+        
+        # Connect to database    
+        conn = get_db_connection()
+        if not conn:
+            return jsonify({'error': 'Database connection failed'}), 500
+            
+        try:
+            with conn.cursor() as cursor:
+                # Check for duplicate slug
+                cursor.execute(
+                    "SELECT COUNT(*) FROM lifeapp.languages WHERE slug = %s",
+                    (slug,)
+                )
+                count = cursor.fetchone()[0]
+                if count > 0:
+                    return jsonify({'error': 'Slug already exists'}), 400
+                
+                # Insert new language
+                print(f"Inserting: slug={slug}, title={title}, status={status}")  # Debugging
+                cursor.execute(
+                    "INSERT INTO lifeapp.languages (slug, title, status, created_at, updated_at) "
+                    "VALUES (%s, %s, %s, NOW(), NOW())",
+                    (slug, title, status)
+                )
+                conn.commit()
+                
+                # Get the ID of the newly created language
+                cursor.execute("SELECT LAST_INSERT_ID()")
+                new_id = cursor.fetchone()[0]
+                
+            return jsonify({
+                'message': 'Language Created Successfully',
+                'language_id': new_id
+            }), 201
+            
+        except Exception as e:
+            conn.rollback()
+            print(f"Database error: {str(e)}")  # Debugging
+            return jsonify({'error': f'Database error: {str(e)}'}), 500
+            
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        print(f"Unexpected error: {str(e)}")  # Debugging
+        return jsonify({'error': f'Server error: {str(e)}'}), 500
+        
     finally:
-        connection.close()
+        if 'conn' in locals() and conn:
+            conn.close()
 
 @app.route('/api/languages_update', methods=['POST'])
 def update_language():
@@ -6088,7 +7080,12 @@ def update_language():
         data = request.get_json() or {}
         language_id = data.get('id')
         title = data.get('title', '').strip()
-        status = data.get('status').strip()
+        status      = data.get('status')
+        try:
+            status = int(status)
+        except (TypeError, ValueError):
+            return jsonify({'error': 'Invalid status value'}), 400
+
         slug = data.get('slug', '').strip().lower()
 
         if not language_id or not slug:
@@ -6102,7 +7099,15 @@ def update_language():
             if exists and exists[0] > 0:
                 return jsonify({'error': 'Slug already exists'}), 400
 
-            sql = "UPDATE lifeapp.languages SET slug = %s, title = %s, status = %s WHERE id = %s"
+            sql = """
+                        UPDATE lifeapp.languages
+                        SET
+                            slug       = %s,
+                            title      = %s,
+                            status     = %s,
+                            updated_at = NOW()
+                        WHERE id = %s
+                """
             cursor.execute(sql, (slug, title, status, language_id))
             connection.commit()
         return jsonify({'message': 'Language Updated'}), 200
@@ -6177,11 +7182,17 @@ def create_section():
         status = data.get('status')
         name = data.get('name')
         datetime_str = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        
         if not name:
             return jsonify({'error': 'Name is required'}), 400
+            
         connection = get_db_connection()
         with connection.cursor() as cursor:
-            cursor.execute("INSERT INTO lifeapp.la_sections (name, status, created_at, updated_at) VALUES (%s, %s)", (name,status, datetime_str, datetime_str))
+            # Fixed SQL statement with correct number of placeholders
+            cursor.execute(
+                "INSERT INTO lifeapp.la_sections (name, status, created_at, updated_at) VALUES (%s, %s, %s, %s)", 
+                (name, status, datetime_str, datetime_str)
+            )
             connection.commit()
         return jsonify({'message': 'Section created successfully'})
     except Exception as e:
@@ -6190,19 +7201,26 @@ def create_section():
         connection.close()
 
 @app.route('/api/sections_update', methods=['POST'])
-def update_section(section_id):
+def update_section():
     """Update section details."""
     try:
         data = request.get_json() or {}
+        section_id = data.get('id')  # Getting id from request body
         name = data.get('name')
-        section_id = data.get('id')
         status = data.get('status')
         datetime_str = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        
         if not name:
             return jsonify({'error': 'Name is required'}), 400
+        if not section_id:
+            return jsonify({'error': 'Section ID is required'}), 400
+            
         connection = get_db_connection()
         with connection.cursor() as cursor:
-            cursor.execute("UPDATE lifeapp.la_sections SET name = %s, status = %s, updated_at = %s WHERE id = %s", (name,status, datetime_str, section_id))
+            cursor.execute(
+                "UPDATE lifeapp.la_sections SET name = %s, status = %s, updated_at = %s WHERE id = %s", 
+                (name, status, datetime_str, section_id)
+            )
             connection.commit()
         return jsonify({'message': 'Section updated successfully'})
     except Exception as e:
@@ -6268,23 +7286,39 @@ def get_topics():
     try:
         with connection.cursor() as cursor:
             sql = """
-                SELECT * 
-                FROM lifeapp.la_topics 
+                SELECT 
+                    t.id,
+                    t.title,
+                    t.status,
+                    -- t.created_at,
+                    -- t.updated_at,
+                    t.image,
+                    t.allow_for,
+                    t.type,
+                    t.la_subject_id,
+                    t.la_level_id,
+                    m.id as media_id,
+                    m.path as media_path
+                from lifeapp.la_topics t left join lifeapp.media m on m.id = JSON_EXTRACT(t.image,'$.en')
                 WHERE 1=1
             """
             filters = []
             if la_subject_id:
-                sql += " AND la_subject_id = %s"
+                sql += " AND t.la_subject_id = %s"
                 filters.append(la_subject_id)
             if la_level_id:
-                sql += " AND la_level_id = %s"
+                sql += " AND t.la_level_id = %s"
                 filters.append(la_level_id)
             if status and status.lower() != "all":
-                sql += " AND status = %s"
+                sql += " AND t.status = %s"
                 filters.append(status)
-            sql += " ORDER BY id"
+            sql += " ORDER BY t.id"
             cursor.execute(sql, filters)
             topics = cursor.fetchall()
+            base_url = os.getenv('BASE_URL')
+            for r in topics:
+                r['media_url'] = f"{base_url}/{r['media_path']}" if r.get('media_path') else None
+        
         return jsonify(topics)
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -6293,79 +7327,159 @@ def get_topics():
 
 @app.route('/api/add_topic', methods=['POST'])
 def add_topic():
-    data = request.get_json() or {}
-    title = data.get('title')
-    la_subject_id = data.get('la_subject_id')
-    la_level_id = data.get('la_level_id')
-    status = data.get('status', 1)
-    allow_for = data.get('allow_for', 1)
-    topic_type = data.get('type', 2)
-    datetime_str = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-    connection = get_db_connection()
+    form       = request.form
+    file       = request.files.get('media')
+    media_id   = None
+
+    # 1) upload the file if provided
+    if file and file.filename:
+        media = upload_media(file)
+        media_id = media['id']
+
+    # 2) pull other fields
+    title_raw        = form.get('title', '').strip()
+    la_subject   = form.get('la_subject_id')
+    la_level     = form.get('la_level_id')
+    status       = int(form.get('status', 1))
+    allow_for    = int(form.get('allow_for', 1))
+    topic_type   = int(form.get('type', 2))
+
+    sql = """
+      INSERT INTO lifeapp.la_topics
+        (title, status, created_at, updated_at, image, allow_for, type, la_subject_id, la_level_id)
+      VALUES (
+        JSON_OBJECT('en', %s),
+        %s, NOW(), NOW(),
+        JSON_OBJECT('en', %s),
+        %s, %s, %s, %s
+      )
+    """
+    params = (
+      title_raw,
+      status,
+      media_id,
+      allow_for,
+      topic_type,
+      la_subject,
+      la_level
+    )
+
+    conn = get_db_connection()
     try:
-        with connection.cursor() as cursor:
-            sql = """
-            INSERT INTO lifeapp.la_topics (title, status, created_at, updated_at, allow_for, type, la_subject_id, la_level_id)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-            """
-            cursor.execute(sql, (title, int(status), datetime_str, datetime_str, allow_for, int(topic_type), la_subject_id, la_level_id))
-            topic_id = cursor.lastrowid
-            connection.commit()
-            return jsonify({"success": True, "topic_id": topic_id})
+        with conn.cursor() as cur:
+            cur.execute(sql, params)
+            new_id = cur.lastrowid
+        conn.commit()
+        return jsonify({"success": True, "topic_id": new_id}), 201
     except Exception as e:
         return jsonify({'error': str(e)}), 500
     finally:
-        connection.close()
+        conn.close()
 
 # Similarly, you can create update_topic and delete_topic endpoints.
 
-@app.route('/api/update_topic/<int:topic_id>', methods=['PUT'])
+@app.route('/api/update_topic/<int:topic_id>', methods=['POST'])
 def update_topic(topic_id):
-    from datetime import datetime
-    data = request.get_json() or {}
-    title = data.get('title')
-    la_subject_id = data.get('la_subject_id')
-    la_level_id = data.get('la_level_id')
-    status = data.get('status', 1)
-    allow_for = data.get('allow_for', 1)
-    topic_type = data.get('type', 2)
-    datetime_str = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    form       = request.form
+    file       = request.files.get('media')
+    new_media  = None
 
-    connection = get_db_connection()
+    if file and file.filename:
+        m = upload_media(file)
+        new_media = m['id']
+
+    title      = form.get('title', '').strip()
+    la_subject = int(form.get('la_subject_id'))
+    la_level   = int(form.get('la_level_id'))
+    status     = int(form.get('status', 1))
+    allow_for  = int(form.get('allow_for', 1))
+    topic_type = int(form.get('type', 2))
+
+    # only overwrite image if new_media is not None
+    if new_media is not None:
+        sql = """
+          UPDATE lifeapp.la_topics
+          SET title=%s, status=%s, updated_at=NOW(),
+              image=JSON_OBJECT('en', %s),
+              allow_for=%s, type=%s, la_subject_id=%s, la_level_id=%s
+          WHERE id=%s
+        """
+        params = (title, status, new_media,
+                  allow_for, topic_type,
+                  la_subject, la_level,
+                  topic_id)
+    else:
+        sql = """
+          UPDATE lifeapp.la_topics
+          SET title=%s, status=%s, updated_at=NOW(),
+              allow_for=%s, type=%s, la_subject_id=%s, la_level_id=%s
+          WHERE id=%s
+        """
+        params = (title, status,
+                  allow_for, topic_type,
+                  la_subject, la_level,
+                  topic_id)
+
+    conn = get_db_connection()
     try:
-        with connection.cursor() as cursor:
-            sql = """
-                UPDATE lifeapp.la_topics
-                SET title = %s,
-                    la_subject_id = %s,
-                    la_level_id = %s,
-                    status = %s,
-                    allow_for = %s,
-                    type = %s,
-                    updated_at = %s
-                WHERE id = %s
-            """
-            cursor.execute(sql, (title, la_subject_id, la_level_id, int(status), allow_for, topic_type, datetime_str, topic_id))
-            connection.commit()
-            return jsonify({"success": True, "topic_id": topic_id})
+        with conn.cursor() as cur:
+            cur.execute(sql, params)
+        conn.commit()
+        return jsonify({"success": True, "topic_id": topic_id}), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500
     finally:
-        connection.close()
+        conn.close()
 
 @app.route('/api/delete_topic/<int:topic_id>', methods=['DELETE'])
 def delete_topic(topic_id):
-    connection = get_db_connection()
+    conn = get_db_connection()
     try:
-        with connection.cursor() as cursor:
-            sql = "DELETE FROM lifeapp.la_topics WHERE id = %s"
-            cursor.execute(sql, (topic_id,))
-            connection.commit()
-            return jsonify({"success": True, "topic_id": topic_id})
+        # fetch media id & path
+        with conn.cursor(pymysql.cursors.DictCursor) as cur:
+            cur.execute("""
+              SELECT JSON_UNQUOTE(JSON_EXTRACT(image,'$.en')) AS media_id,
+                     m.path AS media_path
+                FROM lifeapp.la_topics t
+                LEFT JOIN lifeapp.media m 
+                  ON m.id = JSON_UNQUOTE(JSON_EXTRACT(t.image,'$.en'))
+               WHERE t.id=%s
+            """, (topic_id,))
+            row = cur.fetchone()
+
+        # delete topic
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM lifeapp.la_topics WHERE id=%s", (topic_id,))
+
+        # delete media record + S3 object
+        if row and row['media_id']:
+            media_id = int(row['media_id'])
+            key = row['media_path']
+            with conn.cursor() as cur:
+                cur.execute("DELETE FROM lifeapp.media WHERE id=%s", (media_id,))
+            conn.commit()
+
+            # delete from S3
+            s3 = boto3.client(
+              's3',
+              region_name=DO_SPACES_REGION,
+              endpoint_url=DO_SPACES_ENDPOINT,
+              aws_access_key_id=DO_SPACES_KEY,
+              aws_secret_access_key=DO_SPACES_SECRET
+            )
+            try:
+                s3.delete_object(Bucket=DO_SPACES_BUCKET, Key=key)
+            except:
+                pass
+
+        conn.commit()
+        return jsonify({"success": True, "topic_id": topic_id}), 200
+
     except Exception as e:
+        conn.rollback()
         return jsonify({'error': str(e)}), 500
     finally:
-        connection.close()
+        conn.close()
 
 
 ###################################################################################
@@ -6479,7 +7593,8 @@ def list_enrollments():
 def add_enrollment():
     try:
         data = request.get_json() or {}
-        # Removed enrollment_code input; it is now generated automatically.
+        # Now accepting enrollment_code from frontend, but will override it
+        enrollment_code = data.get('enrollment_code', '7789')  # Use provided or default to TEMP
         type_val = data.get('type')
         user_id = data.get('user_id')
         unlock_enrollment_at = data.get('unlock_enrollment_at')  # Expecting ISO datetime string if provided
@@ -6501,32 +7616,37 @@ def add_enrollment():
         connection = get_db_connection()
         try:
             cursor = connection.cursor()
-            # Insert without enrollment_code
+            # Insert with temporary enrollment_code
             sql = """
                 INSERT INTO lifeapp.la_game_enrollments 
-                (type, user_id, unlock_enrollment_at, created_at, updated_at)
-                VALUES (%s, %s, %s, %s, %s)
+                (enrollment_code, type, user_id, unlock_enrollment_at, created_at, updated_at)
+                VALUES (%s, %s, %s, %s, %s, %s)
             """
-            cursor.execute(sql, (type_val, user_id, unlock_time, created_at, updated_at))
+            cursor.execute(sql, (enrollment_code, type_val, user_id, unlock_time, created_at, updated_at))
             enrollment_id = cursor.lastrowid
 
-            # Generate enrollment_code as a 4-digit string (with leading zeroes)
-            enrollment_code = f"{enrollment_id:04d}"
-            # Update the same record with the enrollment_code
+            # Generate real enrollment_code as a 4-digit string (with leading zeroes)
+            real_enrollment_code = f"{enrollment_id:04d}"
+            # Update the same record with the real enrollment_code
             cursor.execute(
                 "UPDATE lifeapp.la_game_enrollments SET enrollment_code = %s WHERE id = %s",
-                (enrollment_code, enrollment_id)
+                (real_enrollment_code, enrollment_id)
             )
             connection.commit()
+            
+            return jsonify({
+                "success": True,
+                "message": "Enrollment created", 
+                "id": enrollment_id, 
+                "enrollment_code": real_enrollment_code
+            }), 201
+
         finally:
             connection.close()
 
-        return jsonify({"message": "Enrollment created", "id": enrollment_id, "enrollment_code": enrollment_code}), 201
-
     except Exception as e:
         logger.error("Error adding enrollment: %s", e)
-        return jsonify({"error": str(e)}), 500
-
+        return jsonify({"error": str(e), "success": False}), 500
 # 3. Edit Enrollment - PUT /enrollments/<id>
 @app.route('/api/enrollments/<int:enrollment_id>', methods=['PUT'])
 def edit_enrollment(enrollment_id):
@@ -6720,6 +7840,18 @@ def delete_game_enrollment_request(request_id):
 ####################### SETTINGS/COUPONS APIs #################################
 ###################################################################################
 ###################################################################################
+def delete_s3_object(key):
+    s3 = boto3.client(
+        's3',
+        region_name=DO_SPACES_REGION,
+        endpoint_url=DO_SPACES_ENDPOINT,
+        aws_access_key_id=DO_SPACES_KEY,
+        aws_secret_access_key=DO_SPACES_SECRET
+    )
+    try:
+        s3.delete_object(Bucket=DO_SPACES_BUCKET, Key=key)
+    except Exception:
+        pass
 
 # GET coupons with filters
 @app.route('/api/coupons', methods=['GET'])
@@ -6730,18 +7862,26 @@ def get_coupons():
             start_date = request.args.get('start_date')
             end_date = request.args.get('end_date')
             
-            base_query = '''SELECT * FROM lifeapp.coupons'''
+            base_query = '''
+            SELECT 
+                c.id, c.title, c.category_id, 
+                c.coin, c.link, c.details, 
+                c.index, c.coupon_media_id as media_id, c.created_at, c.updated_at,
+                m.path as media_path
+            FROM lifeapp.coupons c
+                left join lifeapp.media m on c.coupon_media_id = m.id
+            '''
             conditions = []
             params = []
             
             # Check and apply the start_date filter if provided
             if start_date:
-                conditions.append('created_at >= %s')
+                conditions.append('c.created_at >= %s')
                 params.append(start_date)
             
             # Check and apply the end_date filter if provided
             if end_date:
-                conditions.append('created_at <= %s')
+                conditions.append('c.created_at <= %s')
                 params.append(end_date)
             
             # Append the conditions if there are any filters
@@ -6750,6 +7890,10 @@ def get_coupons():
             
             cursor.execute(base_query, params)
             coupons = cursor.fetchall()
+            base_url = os.getenv('BASE_URL')
+            for r in coupons:
+                r['media_url'] = f"{base_url}/{r['media_path']}" if r.get('media_path') else None
+        
             return jsonify({'count': len(coupons), 'data': coupons})
     finally:
         conn.close()
@@ -6757,54 +7901,103 @@ def get_coupons():
 # POST add coupon
 @app.route('/api/coupons', methods=['POST'])
 def add_coupon():
-    data = request.json
+    # We're expecting multipart/form-data
+    form = request.form
+    file = request.files.get('media')
+    media_id = None
+
+    # 1) upload the file if provided
+    if file and file.filename:
+        media = upload_media(file)       # your existing helper
+        media_id = media['id']
+
+    # 2) pull other fields
+    title        = form.get('title')
+    category_id  = form.get('category_id')
+    coin         = form.get('coin')
+    link         = form.get('link')
+    details      = form.get('details')
+    idx          = form.get('index')
+
     conn = get_db_connection()
     try:
-        with conn.cursor() as cursor:
-            sql = '''INSERT INTO lifeapp.coupons 
-                     (title, category_id, coin, link, details, `index`, coupon_media_id)
-                     VALUES (%s, %s, %s, %s, %s, %s, %s)'''
-            cursor.execute(sql, (
-                data['title'],
-                data['category_id'],
-                data['coin'],
-                data['link'],
-                data['details'],
-                data['index'],
-                data['coupon_media_id']
-            ))
+        with conn.cursor() as cur:
+            cur.execute(
+              """
+              INSERT INTO lifeapp.coupons
+                (title, category_id, coin, link, details, `index`, coupon_media_id, created_at, updated_at)
+              VALUES (%s, %s, %s, %s, %s, %s, %s, NOW(), NOW())
+              """,
+              (title, category_id, coin, link, details, idx, media_id)
+            )
             conn.commit()
             return jsonify({'success': True}), 201
     except Exception as e:
-        return jsonify({'error': str(e)}), 400
+        conn.rollback()
+        return jsonify({'error': str(e)}), 500
     finally:
         conn.close()
 
 # PUT update coupon
 @app.route('/api/coupons/<int:id>', methods=['PUT'])
 def update_coupon(id):
-    data = request.json
+    form = request.form
+    file = request.files.get('media')
+    new_media_id = None
+
+    # if a new file is uploaded, store it & plan to delete old
+    if file and file.filename:
+        media = upload_media(file)
+        new_media_id = media['id']
+
+    # pull other fields
+    title       = form.get('title')
+    category_id = form.get('category_id')
+    coin        = form.get('coin')
+    link        = form.get('link')
+    details     = form.get('details')
+    idx         = form.get('index')
+
     conn = get_db_connection()
     try:
-        with conn.cursor() as cursor:
-            sql = '''UPDATE lifeapp.coupons SET
-                     title=%s, category_id=%s, coin=%s, link=%s,
-                     details=%s, `index`=%s, coupon_media_id=%s
-                     WHERE id=%s'''
-            cursor.execute(sql, (
-                data['title'],
-                data['category_id'],
-                data['coin'],
-                data['link'],
-                data['details'],
-                data['index'],
-                data['coupon_media_id'],
-                id
-            ))
-            conn.commit()
-            return jsonify({'success': True})
+        # if replacing media, fetch old key so we can delete from S3/db
+        if new_media_id is not None:
+            with conn.cursor(pymysql.cursors.DictCursor) as cur:
+                cur.execute("SELECT coupon_media_id, m.path AS media_path FROM coupons c LEFT JOIN media m ON c.coupon_media_id=m.id WHERE c.id=%s", (id,))
+                old = cur.fetchone()
+            # delete old media row + S3
+            if old and old['coupon_media_id']:
+                with conn.cursor() as cur:
+                    cur.execute("DELETE FROM media WHERE id=%s", (old['coupon_media_id'],))
+                delete_s3_object(old['media_path'])
+
+        # build update
+        if new_media_id is not None:
+            sql = """
+              UPDATE lifeapp.coupons
+                SET title=%s, category_id=%s, coin=%s, link=%s,
+                    details=%s, `index`=%s, coupon_media_id=%s,
+                    updated_at=NOW()
+              WHERE id=%s
+            """
+            params = (title, category_id, coin, link, details, idx, new_media_id, id)
+        else:
+            sql = """
+              UPDATE lifeapp.coupons
+                SET title=%s, category_id=%s, coin=%s, link=%s,
+                    details=%s, `index`=%s,
+                    updated_at=NOW()
+              WHERE id=%s
+            """
+            params = (title, category_id, coin, link, details, idx, id)
+
+        with conn.cursor() as cur:
+            cur.execute(sql, params)
+        conn.commit()
+        return jsonify({'success': True})
     except Exception as e:
-        return jsonify({'error': str(e)}), 400
+        conn.rollback()
+        return jsonify({'error': str(e)}), 500
     finally:
         conn.close()
 
@@ -6813,12 +8006,31 @@ def update_coupon(id):
 def delete_coupon(id):
     conn = get_db_connection()
     try:
-        with conn.cursor() as cursor:
-            cursor.execute('DELETE FROM lifeapp.coupons WHERE id = %s', (id,))
-            conn.commit()
-            return jsonify({'success': True})
+        # fetch the media id + path
+        with conn.cursor(pymysql.cursors.DictCursor) as cur:
+            cur.execute("""
+              SELECT coupon_media_id, m.path AS media_path
+                FROM lifeapp.coupons c
+                LEFT JOIN media m ON c.coupon_media_id=m.id
+               WHERE c.id=%s
+            """, (id,))
+            row = cur.fetchone()
+
+        # delete the coupon row
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM lifeapp.coupons WHERE id=%s", (id,))
+
+        # delete media record + S3 object if exists
+        if row and row['coupon_media_id']:
+            with conn.cursor() as cur:
+                cur.execute("DELETE FROM media WHERE id=%s", (row['coupon_media_id'],))
+            delete_s3_object(row['media_path'])
+
+        conn.commit()
+        return jsonify({'success': True})
     except Exception as e:
-        return jsonify({'error': str(e)}), 400
+        conn.rollback()
+        return jsonify({'error': str(e)}), 500
     finally:
         conn.close()
 
@@ -6832,46 +8044,29 @@ def delete_coupon(id):
 
 @app.route('/admin/push-notification-campaigns', methods=['GET'])
 def list_push_notification_campaigns():
-    try:
-        # Optional: support pagination
-        page = int(request.args.get('page', 1))
-        per_page = int(request.args.get('per_page', 50))
-        offset = (page - 1) * per_page
+    page    = int(request.args.get('page', 1))
+    per     = int(request.args.get('per_page', 50))
+    offset  = (page-1)*per
 
-        connection = get_db_connection()
-        with connection.cursor() as cursor:
-            # Join push_notification_campaigns (alias p) with schools (alias s) to display the school name.
-            sql = """
-                SELECT 
-                  p.id,
-                  p.created_by,
-                  p.name,
-                  p.title,
-                  p.body,
-                  p.media_id,
-                  p.school_id,
-                  s.name AS school_name,
-                  p.city,
-                  p.state,
-                  p.scheduled_date,
-                  p.scheduled_at,
-                  p.completed_at,
-                  p.users,
-                  p.success_users,
-                  p.failed_users,
-                  p.created_at,
-                  p.updated_at
-                FROM lifeapp.push_notification_campaigns p
-                INNER JOIN lifeapp.schools s ON p.school_id = s.id
-                ORDER BY p.id DESC
-                LIMIT %s OFFSET %s
-            """
-            cursor.execute(sql, (per_page, offset))
-            campaigns = cursor.fetchall()
-        connection.close()
-        return jsonify({"campaigns": campaigns}), 200
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
+    conn = get_db_connection()
+    with conn.cursor() as cur:
+        cur.execute("""
+          SELECT p.*, s.name AS school_name, m.path AS media_path
+            FROM lifeapp.push_notification_campaigns p
+            JOIN lifeapp.schools s ON p.school_id = s.id
+            LEFT JOIN lifeapp.media m ON p.media_id = m.id
+           ORDER BY p.id DESC
+           LIMIT %s OFFSET %s
+        """, (per, offset))
+        rows = cur.fetchall()
+    conn.close()
+
+    # build full media_url
+    base = os.getenv("BASE_URL","")
+    for r in rows:
+        r['media_url'] = base + "/" + r['media_path'] if r.get('media_path') else None
+
+    return jsonify({"campaigns": rows}), 200
 
 # -------------------------
 # Endpoint: Add Campaign
@@ -6879,163 +8074,178 @@ def list_push_notification_campaigns():
 @app.route('/admin/push-notification-campaigns', methods=['POST'])
 def add_push_notification_campaign():
     try:
-        # Get campaign data from form and file from request
-        data = request.form.to_dict()
+        # Extract form data with proper validation
+        form = request.form
+        
+        # Validate required fields
+        required_fields = ['name', 'title', 'body', 'school_id']
+        for field in required_fields:
+            if not form.get(field):
+                return jsonify({'error': f'Missing required field: {field}'}), 400
+        
+        # Handle file upload
         file = request.files.get('media')
-
-        # Required fields: name, title, and body
-        if not data.get('name') or not data.get('title') or not data.get('body'):
-            return jsonify({'error': 'Name, title, and body are required.'}), 400
-
-        # Process schedule if provided (for instance, a scheduled date/time in ISO format)
-        scheduled_date = data.get('scheduled_date')  # Should be a full datetime string or empty
-
-        # Process media file (if provided)
         media_id = None
-        if file:
-            filename = secure_filename(file.filename)
-            upload_folder = app.config['UPLOAD_FOLDER']
-            if not os.path.exists(upload_folder):
-                os.makedirs(upload_folder)
-            path = os.path.join(upload_folder, filename)
-            file.save(path)
-            # Here you could insert into your media table and retrieve the inserted ID.
-            connection = get_db_connection()
-            with connection.cursor() as cursor:
-                cursor.execute("INSERT INTO media (name, path) VALUES (%s, %s)", (filename, path))
-                media_id = cursor.lastrowid
-                connection.commit()
-            connection.close()
+        if file and file.filename:
+            try:
+                media = upload_media(file)
+                media_id = media['id']
+            except Exception as e:
+                app.logger.error(f"File upload error: {str(e)}")
+                return jsonify({'error': f'File upload failed: {str(e)}'}), 500
 
-        # Insert the campaign row.
-        created_at = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        connection = get_db_connection()
-        with connection.cursor() as cursor:
-            sql = """
-                INSERT INTO lifeapp.push_notification_campaigns 
-                (name, title, body, media_id, school_id, city, state, scheduled_date, created_by, created_at, updated_at)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-            """
-            # Expect that your form includes school_id, city, and state as well.
-            cursor.execute(sql, (
-                data.get('name'),
-                data.get('title'),
-                data.get('body'),
-                media_id,
-                data.get('school_id'),
-                data.get('city'),
-                data.get('state'),
-                scheduled_date,
-                data.get('created_by') or 1,  # Replace with current user ID logic if needed.
-                created_at,
-                created_at
-            ))
-            campaign_id = cursor.lastrowid
-            connection.commit()
-        connection.close()
-        return jsonify({"message": "Campaign added successfully", "campaign_id": campaign_id}), 201
+        # Make sure school_id is valid
+        try:
+            school_id = int(form.get('school_id'))
+        except (TypeError, ValueError):
+            return jsonify({'error': 'Invalid school_id format'}), 400
+
+        # Prepare empty JSON arrays for the JSON columns
+        empty_json = json.dumps([])
+        
+        now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        conn = get_db_connection()
+        try:
+            with conn.cursor() as cur:
+                cur.execute("""
+                  INSERT INTO lifeapp.push_notification_campaigns
+                    (id, name, title, body, media_id, school_id, city, state, scheduled_date,
+                     users, success_users, failed_users, created_by, created_at, updated_at)
+                  VALUES (NULL, %s, %s, %s, %s, %s, %s, %s, %s,
+                          %s, %s, %s, %s, %s, %s)
+                """, (
+                  form['name'], 
+                  form['title'], 
+                  form['body'], 
+                  media_id,
+                  school_id,
+                  form.get('city', ''),
+                  form.get('state', ''),
+                  form.get('scheduled_date') if form.get('scheduled_date') else None,
+                  empty_json, empty_json, empty_json,        # Properly formatted JSON arrays
+                  form.get('created_by', 1),
+                  now, now
+                ))
+                cid = cur.lastrowid
+            conn.commit()
+            return jsonify({"message":"Campaign added successfully","campaign_id":cid}), 201
+        except Exception as e:
+            conn.rollback()
+            app.logger.error(f"Database error: {str(e)}")
+            return jsonify({'error': f'Database error: {str(e)}'}), 500
+        finally:
+            conn.close()
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
+        app.logger.error(f"Unexpected error: {str(e)}")
+        return jsonify({'error': f'Unexpected error: {str(e)}'}), 500
+    
 # -------------------------
 # Endpoint: Update Campaign
 # -------------------------
-@app.route('/admin/push-notification-campaigns/<int:campaign_id>', methods=['PUT'])
-def update_push_notification_campaign(campaign_id):
+@app.route('/admin/push-notification-campaigns/<int:cid>', methods=['PUT'])
+def update_push_notification_campaign(cid):
+    form = request.form
+    file = request.files.get('media')
+    new_mid = None
+
+    # if new file, upload & plan to delete old later
+    if file and file.filename:
+        m = upload_media(file)
+        new_mid = m['id']
+
+    now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    conn = get_db_connection()
     try:
-        data = request.form.to_dict()
-        file = request.files.get('media')
-        scheduled_date = data.get('scheduled_date')
-        media_id = None
-        if file:
-            filename = secure_filename(file.filename)
-            upload_folder = app.config['UPLOAD_FOLDER']
-            if not os.path.exists(upload_folder):
-                os.makedirs(upload_folder)
-            path = os.path.join(upload_folder, filename)
-            file.save(path)
-            connection = get_db_connection()
-            with connection.cursor() as cursor:
-                cursor.execute("INSERT INTO media (name, path) VALUES (%s, %s)", (filename, path))
-                media_id = cursor.lastrowid
-                connection.commit()
-            connection.close()
-        
-        updated_at = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        connection = get_db_connection()
-        with connection.cursor() as cursor:
-            # If a new media file is provided, update document; else, leave unchanged.
-            if media_id:
-                sql = """
-                    UPDATE lifeapp.push_notification_campaigns
-                    SET name=%s,
-                        title=%s,
-                        body=%s,
-                        media_id=%s,
-                        school_id=%s,
-                        city=%s,
-                        state=%s,
-                        scheduled_date=%s,
-                        updated_at=%s
-                    WHERE id = %s
-                """
-                cursor.execute(sql, (
-                    data.get('name'),
-                    data.get('title'),
-                    data.get('body'),
-                    media_id,
-                    data.get('school_id'),
-                    data.get('city'),
-                    data.get('state'),
-                    scheduled_date,
-                    updated_at,
-                    campaign_id
-                ))
-            else:
-                sql = """
-                    UPDATE lifeapp.push_notification_campaigns
-                    SET name=%s,
-                        title=%s,
-                        body=%s,
-                        school_id=%s,
-                        city=%s,
-                        state=%s,
-                        scheduled_date=%s,
-                        updated_at=%s
-                    WHERE id = %s
-                """
-                cursor.execute(sql, (
-                    data.get('name'),
-                    data.get('title'),
-                    data.get('body'),
-                    data.get('school_id'),
-                    data.get('city'),
-                    data.get('state'),
-                    scheduled_date,
-                    updated_at,
-                    campaign_id
-                ))
-            connection.commit()
-        connection.close()
-        return jsonify({"message": "Campaign updated successfully", "campaign_id": campaign_id}), 200
+        # if replacing media: grab old record first
+        if new_mid is not None:
+            with conn.cursor(pymysql.cursors.DictCursor) as cur:
+                cur.execute("""
+                  SELECT media_id, m.path AS media_path
+                    FROM lifeapp.push_notification_campaigns p
+                    LEFT JOIN media m ON p.media_id=m.id
+                   WHERE p.id=%s
+                """, (cid,))
+                old = cur.fetchone()
+            # delete old media row + S3
+            if old and old['media_id']:
+                with conn.cursor() as cur:
+                    cur.execute("DELETE FROM media WHERE id=%s", (old['media_id'],))
+                delete_s3_object(old['media_path'])
+
+        # build update
+        if new_mid is not None:
+            sql = """
+              UPDATE lifeapp.push_notification_campaigns
+                 SET name=%s, title=%s, body=%s, media_id=%s,
+                     school_id=%s, city=%s, state=%s,
+                     scheduled_date=%s, updated_at=%s
+               WHERE id=%s
+            """
+            params = (
+              form['name'], form['title'], form['body'], new_mid,
+              form.get('school_id'), form.get('city'), form.get('state'),
+              form.get('scheduled_date'), now, cid
+            )
+        else:
+            sql = """
+              UPDATE lifeapp.push_notification_campaigns
+                 SET name=%s, title=%s, body=%s,
+                     school_id=%s, city=%s, state=%s,
+                     scheduled_date=%s, updated_at=%s
+               WHERE id=%s
+            """
+            params = (
+              form['name'], form['title'], form['body'],
+              form.get('school_id'), form.get('city'), form.get('state'),
+              form.get('scheduled_date'), now, cid
+            )
+
+        with conn.cursor() as cur:
+            cur.execute(sql, params)
+        conn.commit()
+        return jsonify({"message":"Campaign updated","campaign_id":cid}), 200
+
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        conn.rollback()
+        return jsonify({'error':str(e)}), 500
+    finally:
+        conn.close()
 
 # -------------------------
 # Endpoint: Delete Campaign
 # -------------------------
-@app.route('/admin/push-notification-campaigns/<int:campaign_id>', methods=['DELETE'])
-def delete_push_notification_campaign(campaign_id):
+@app.route('/admin/push-notification-campaigns/<int:cid>', methods=['DELETE'])
+def delete_push_notification_campaign(cid):
+    conn = get_db_connection()
     try:
-        connection = get_db_connection()
-        with connection.cursor() as cursor:
-            cursor.execute("DELETE FROM lifeapp.push_notification_campaigns WHERE id = %s", (campaign_id,))
-            connection.commit()
-        connection.close()
-        return jsonify({"message": "Campaign deleted successfully", "campaign_id": campaign_id}), 200
+        # fetch media_id & path
+        with conn.cursor(pymysql.cursors.DictCursor) as cur:
+            cur.execute("""
+              SELECT media_id, m.path AS media_path
+                FROM lifeapp.push_notification_campaigns p
+                LEFT JOIN media m ON p.media_id=m.id
+               WHERE p.id=%s
+            """, (cid,))
+            row = cur.fetchone()
+
+        # delete campaign
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM lifeapp.push_notification_campaigns WHERE id=%s", (cid,))
+
+        # delete media if present
+        if row and row['media_id']:
+            with conn.cursor() as cur:
+                cur.execute("DELETE FROM media WHERE id=%s", (row['media_id'],))
+            delete_s3_object(row['media_path'])
+
+        conn.commit()
+        return jsonify({"message":"Campaign deleted","campaign_id":cid}), 200
+
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
-    
+        conn.rollback()
+        return jsonify({'error':str(e)}), 500
+    finally:
+        conn.close()   
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(debug=True,  use_reloader=True)

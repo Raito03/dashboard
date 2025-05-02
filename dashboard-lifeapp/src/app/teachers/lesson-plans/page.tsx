@@ -1,12 +1,12 @@
 'use client'
 import '@tabler/core/dist/css/tabler.min.css';
 // import 'bootstrap/dist/css/bootstrap.min.css';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import React from 'react';
 import { Inter } from 'next/font/google';
 const inter = Inter({ subsets: ['latin'] });
 import { Sidebar } from '@/components/ui/sidebar';
-import { IconSearch, IconBell, IconSettings, IconEdit } from '@tabler/icons-react';
+import { IconSearch, IconBell, IconSettings, IconEdit, IconTrash } from '@tabler/icons-react';
 import { Plus, Search, XCircle } from "lucide-react";
 
 // const poppins = Poppins({
@@ -16,12 +16,12 @@ import { Plus, Search, XCircle } from "lucide-react";
 // });
 
 interface LessonPlan {
-  id?: number;
-  language: string;  // e.g. "English"
-  type: string;      // e.g. "Life Lab - Demo Models"
-  title: string;
-  document: string;
-  status: string;    // "Published" or "Drafted"
+    id: number
+    language: string
+    type: string
+    title: string
+    status: string
+    media_url?: string
 }
 
 interface Language {
@@ -46,41 +46,49 @@ function labelToTypeValue(label: string): number {
 
 // const api_startpoint = 'https://lifeapp-api-vv1.vercel.app'
 const api_startpoint = 'http://152.42.239.141:5000'
+// const api_startpoint = 'http://127.0.0.1:5000'
 export default function LessonPlans() {
-    const [tableData, setTableData] = useState<LessonPlan[]>([]);
+    
+    // filters
     const [languages, setLanguages] = useState<Language[]>([]);
     const [selectedLanguage, setSelectedLanguage] = useState<string>('');
     const [selectedStatus, setSelectedStatus] = useState<string>('');
     const [selectedTitle, setSelectedTitle] = useState<string>('');
+
+    // data + loading
+    const [tableData, setTableData] = useState<LessonPlan[]>([]);
+    const [isTableLoading, setIsTableLoading] = useState(false);
+    const [isAddLoading, setIsAddLoading] = useState(false);
+    const [isEditLoading, setIsEditLoading] = useState(false);
+
+    // pagination
     const [currentPage, setCurrentPage] = useState<number>(0);
     const rowsPerPage = 50;
-    const [isTableLoading, setIsTableLoading] = useState(false);
     const paginatedData = tableData.slice(currentPage * rowsPerPage, (currentPage + 1) * rowsPerPage);
+
+    // lightbox
+    const [lightboxUrl, setLightboxUrl] = useState<string|null>(null)
 
     // Modal States
     const [showEditModal, setShowEditModal] = useState(false);
-    const [editingRow, setEditingRow] = useState<LessonPlan | null>(null);
     const [showAddModal, setShowAddModal] = useState(false);
-    const [newLessonPlan, setNewLessonPlan] = useState<LessonPlan>({
-        language: '',
-        type: 'Default type (None Mentioned)',
-        title: '',
-        document: '',
-        status: 'Drafted'
-    });
+    const [editingRow, setEditingRow] = useState<LessonPlan | null>(null);
+    const [file, setFile]               = useState<File|null>(null)
+    const fileRef = useRef<HTMLInputElement>(null)
+    const [newLessonPlan, setNewLessonPlan] = useState<LessonPlan | null>(null);
 
     // A fallback mapping if needed (if your languages array is empty)
-    const languageMap: Record<string, number> = {
-        "English": 1,
-        "Hindi": 2,
-        "Tamil": 3,
-        "Marathi": 4,
-        "Telugu": 5,
-        "Kannada": 6,
-        "Malayalam": 7,
-        "Odiya": 8,
-        "Gujarati": 9,
-    };
+    // const languageMap: Record<string, number> = {
+    //     "English": 1,
+    //     "Hindi": 2,
+    //     "Tamil": 3,
+    //     "Marathi": 4,
+    //     "Telugu": 5,
+    //     "Kannada": 6,
+    //     "Malayalam": 7,
+    //     "Odiya": 8,
+    //     "Gujarati": 9,
+    // };
 
     // Fetch available languages
     async function fetchLanguages() {
@@ -119,7 +127,35 @@ export default function LessonPlans() {
         setSelectedLanguage("");
         setSelectedStatus("");
         setSelectedTitle("");
-        setTableData([]);
+        
+        // After clearing filters, make a search request with empty filters
+        const emptyFilters = { language: "", status: "", title: "" };
+        setIsTableLoading(true);
+        
+        try {
+            fetch(`${api_startpoint}/api/lesson_plans_search`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(emptyFilters)
+            })
+            .then(res => res.json())
+            .then(data => {
+                setTableData(Array.isArray(data) ? data : []);
+                setCurrentPage(0);
+                setIsTableLoading(false);
+            });
+        } catch (error) {
+            console.error("Search error:", error);
+            setTableData([]);
+            setIsTableLoading(false);
+        }
+    }
+    
+    // delete
+    const handleDelete = async(id:number)=>{
+        if(!confirm('Delete?')) return
+        await fetch(`${api_startpoint}/api/delete_lesson_plan/${id}`,{ method:'DELETE' })
+        handleSearch()
     }
 
     // Open edit modal
@@ -127,81 +163,53 @@ export default function LessonPlans() {
         // Clone the row data into editing state
         setEditingRow({ ...row });
         setShowEditModal(true);
+        setFile(null)
+        if(fileRef.current) fileRef.current.value = ''
     }
 
     // Save changes to an existing Lesson Plan
-    async function handleSaveChanges() {
+    async function handleSaveChanges(e: React.FormEvent) {
+        e.preventDefault();
         if (!editingRow || !editingRow.id) return;
-
-        // Convert the textual type to numeric TINYINT
-        const numericType = labelToTypeValue(editingRow.type);
-
-        // Convert status to numeric TINYINT
-        const numericStatus = editingRow.status === "Published" ? 1 : 0;
-
-        // Find the language ID from the languages array
-        const languageObj = languages.find(lang => lang.name === editingRow.language);
-        const languageId = languageObj ? languageObj.id : 1; // fallback to 1 if not found
-
-        const payload = {
-        id: editingRow.id,
-        la_lesson_plan_language_id: languageId,
-        title: editingRow.title,
-        document: editingRow.document || "",
-        type: numericType,
-        status: numericStatus,
-        };
-
+        setIsEditLoading(true);
         try {
-        await fetch(`${api_startpoint}/api/update_lesson_plan`, {
+          const form = new FormData(e.target as HTMLFormElement);
+          form.append('id', String(editingRow.id));
+          if (file) form.append('media', file);
+          
+          await fetch(`${api_startpoint}/api/update_lesson_plan`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-        });
-        setShowEditModal(false);
-        handleSearch(); // Refresh table
+            body: form
+          });
+          
+          setIsEditLoading(false);
+          setShowEditModal(false);
+          handleSearch(); // Refresh table
         } catch (error) {
-        console.error("Update error:", error);
+          console.error("Update error:", error);
+          setIsEditLoading(false);
         }
     }
 
     // Add a new Lesson Plan
-    async function handleAddLessonPlan() {
-        // Convert the textual type to numeric
-        const numericType = labelToTypeValue(newLessonPlan.type);
-        // Convert status to numeric
-        const numericStatus = newLessonPlan.status === "Published" ? 1 : 0;
-
-        // Find the language ID from the languages array
-        const languageObj = languages.find(lang => lang.name === newLessonPlan.language);
-        const languageId = languageObj ? languageObj.id : 1;
-
-        const payload = {
-        la_lesson_plan_language_id: languageId,
-        title: newLessonPlan.title,
-        document: newLessonPlan.document || "",
-        type: numericType,
-        status: numericStatus
-        };
-
+    async function handleAddLessonPlan(e: React.FormEvent) {
+        e.preventDefault();
+        setIsAddLoading(true);
         try {
-        await fetch(`${api_startpoint}/api/add_lesson_plan`, {
+          const form = new FormData(e.target as HTMLFormElement);
+          if (file) form.append('media', file);
+          
+          await fetch(`${api_startpoint}/api/add_lesson_plan`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-        });
-        setShowAddModal(false);
-        // Reset the form
-        setNewLessonPlan({
-            language: '',
-            type: 'Default type (None Mentioned)',
-            title: '',
-            document: '',
-            status: 'Drafted'
-        });
-        handleSearch();
+            body: form
+          });
+          
+          setIsAddLoading(false);
+          setShowAddModal(false);
+          handleSearch();
         } catch (error) {
-        console.error("Add error:", error);
+          console.error("Add error:", error);
+          setIsAddLoading(false);
         }
     }
 
@@ -213,19 +221,6 @@ export default function LessonPlans() {
         <div className={`page bg-light ${inter.className} font-sans`}>
             <Sidebar />
             <div className="page-wrapper" style={{ marginLeft: '250px' }}>
-                {/* <header className="navbar navbar-expand-md navbar-light bg-white shadow-sm border-bottom mb-3">
-                    <div className="container-fluid">
-                        <div className="d-flex align-items-center w-full">
-                            <span className='font-bold text-xl text-black'>LifeAppDashBoard</span>
-                            <div className='w-5/6'></div>
-                            <div className='d-flex gap-3 align-items-center'>
-                                <a href="#" className="btn btn-light btn-icon"><IconSearch size={20} /></a>
-                                <a href="#" className="btn btn-light btn-icon"><IconBell size={20} /></a>
-                                <a href="#" className="btn btn-light btn-icon"><IconSettings size={20} /></a>
-                            </div>
-                        </div>
-                    </div>
-                </header> */}
                 <div className="page-body">
                     <div className="container-xl pt-0 pb-4">
                         <div className="card shadow-sm border-0 mb-4">
@@ -304,6 +299,7 @@ export default function LessonPlans() {
                                                 <th>Language</th>
                                                 <th>Type</th>
                                                 <th>Title</th>
+                                                <th>Document</th>
                                                 <th>Status</th>
                                                 <th>Actions</th>
                                             </tr>
@@ -315,10 +311,29 @@ export default function LessonPlans() {
                                                 <td>{row.language}</td>
                                                 <td>{row.type}</td>
                                                 <td>{row.title}</td>
-                                                <td>{row.status}</td>
                                                 <td>
+                                                    {row.media_url?.match(/\.(jpe?g|png|gif)$/i)
+                                                    ? <img
+                                                        src={row.media_url}
+                                                        className="w-12 h-12 object-cover cursor-pointer"
+                                                        onClick={()=>setLightboxUrl(row.media_url!)}
+                                                        />
+                                                    : row.media_url
+                                                        ? <button
+                                                            className="btn btn-link"
+                                                            onClick={()=>window.open(row.media_url,'_blank')}
+                                                            >📄 File</button>
+                                                        : '—'}
+                                                </td>
+                                                <td>{row.status}</td>
+                                                <td className='flex gap-1'>
                                                     <button className="btn btn-sm btn-info" onClick={() => handleEditClick(row)}>
                                                     <IconEdit size={16} />
+                                                    </button>
+                                                    <button
+                                                        className="btn btn-danger btn-sm"
+                                                        onClick={()=>handleDelete(row.id)}
+                                                        ><IconTrash size={14}/>
                                                     </button>
                                                 </td>
                                                 </tr>
@@ -380,154 +395,189 @@ export default function LessonPlans() {
 
             {/* Edit Modal */}
             {showEditModal && editingRow && (
-                <div className="modal show d-block" tabIndex={-1} role="dialog">
-                <div className="modal-dialog" role="document">
-                    <div className="modal-content">
-                    <div className="modal-header">
-                        <h5 className="modal-title">Edit Lesson Plan</h5>
-                        <button type="button" className="btn-close" onClick={() => setShowEditModal(false)}></button>
-                    </div>
-                    <div className="modal-body">
-                        <div className="mb-3">
-                        <label className="form-label">Language</label>
-                        <select
-                            className="form-select"
-                            value={editingRow.language || ''}
-                            onChange={(e) => setEditingRow({ ...editingRow, language: e.target.value })}
-                        >
-                            <option value="">Select Language</option>
-                            {languages.map((lang) => (
-                            <option key={lang.id} value={lang.name}>{lang.name}</option>
-                            ))}
-                        </select>
+                <div className="modal show d-block bg-black bg-opacity-50" tabIndex={-1} role="dialog">
+                    <form onSubmit={handleSaveChanges} className="modal-dialog" role="document">
+                        <div className="modal-content">
+                            <div className="modal-header">
+                                <h5 className="modal-title">
+                                    {isEditLoading && <div className="animate-spin border-t-4 border-sky-500 rounded-full w-4 h-4 mr-2"/>}
+                                    Edit Lesson Plan
+                                </h5>
+                                <button type="button" className="btn-close" onClick={() => setShowEditModal(false)}></button>
+                            </div>
+                            <div className="modal-body">
+                                <div className="mb-3">
+                                    <label className="form-label">Language</label>
+                                    <select
+                                        name="language_id"
+                                        className="form-select"
+                                        defaultValue={languages.find(l => l.name === editingRow.language)?.id || ""}
+                                        required
+                                    >
+                                        <option value="">Select Language</option>
+                                        {languages.map((lang) => (
+                                        <option key={lang.id} value={lang.id}>{lang.name}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div className="mb-3">
+                                    <label className="form-label">Type</label>
+                                    <select
+                                        name="type"
+                                        className="form-select"
+                                        defaultValue={TYPE_OPTIONS.find(opt => opt.label === editingRow?.type)?.value || ""}
+                                        required
+                                    >
+                                        {TYPE_OPTIONS.map((option) => (
+                                        <option key={option.value} value={option.value}>
+                                            {option.label}
+                                        </option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div className="mb-3">
+                                    <label className="form-label">Title</label>
+                                    <input
+                                        name="title" 
+                                        defaultValue={editingRow.title}
+                                        type="text"
+                                        className="form-control"
+                                        required
+                                    />
+                                </div>
+                                <div className="mb-3">
+                                    <label className="form-label">Document</label>
+                                    <input
+                                        type="file"
+                                        name="media"
+                                        ref={fileRef}
+                                        onChange={e=>setFile(e.target.files?.[0]||null)}
+                                        className="mb-2"
+                                    />
+                                </div>
+                                <div className="mb-3">
+                                    <label className="form-label">Status</label>
+                                    <select
+                                        name="status"
+                                        className="form-select" 
+                                        defaultValue={editingRow?.status === "Published" ? 1 : 0}
+                                        required
+                                    >
+                                        <option value="1">Published</option>
+                                        <option value="0">Drafted</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div className="modal-footer">
+                                <button type="button" className="btn btn-secondary" onClick={() => setShowEditModal(false)}>Close</button>
+                                <button type="submit" className="btn btn-primary">Save changes</button>
+                            </div>
                         </div>
-                        <div className="mb-3">
-                        <label className="form-label">Type</label>
-                        <select
-                            className="form-select"
-                            value={editingRow.type || 'Default type (None Mentioned)'}
-                            onChange={(e) => setEditingRow({ ...editingRow, type: e.target.value })}
-                        >
-                            {TYPE_OPTIONS.map((option) => (
-                            <option key={option.value} value={option.label}>
-                                {option.label}
-                            </option>
-                            ))}
-                        </select>
-                        </div>
-                        <div className="mb-3">
-                        <label className="form-label">Title</label>
-                        <input
-                            type="text"
-                            className="form-control"
-                            value={editingRow.title || ''}
-                            onChange={(e) => setEditingRow({ ...editingRow, title: e.target.value })}
-                        />
-                        </div>
-                        <div className="mb-3">
-                        <label className="form-label">Document</label>
-                        <textarea
-                            className="form-control"
-                            value={editingRow.document || ''}
-                            onChange={(e) => setEditingRow({ ...editingRow, document: e.target.value })}
-                        />
-                        </div>
-                        <div className="mb-3">
-                        <label className="form-label">Status</label>
-                        <select
-                            className="form-select"
-                            value={editingRow.status || ''}
-                            onChange={(e) => setEditingRow({ ...editingRow, status: e.target.value })}
-                        >
-                            <option value="Published">Published</option>
-                            <option value="Drafted">Drafted</option>
-                        </select>
-                        </div>
-                    </div>
-                    <div className="modal-footer">
-                        <button type="button" className="btn btn-secondary" onClick={() => setShowEditModal(false)}>Close</button>
-                        <button type="button" className="btn btn-primary" onClick={handleSaveChanges}>Save changes</button>
-                    </div>
-                    </div>
-                </div>
+                    </form>
                 </div>
             )}
 
             {/* Add Modal */}
             {showAddModal && (
-                <div className="modal show d-block" tabIndex={-1} role="dialog">
-                <div className="modal-dialog" role="document">
-                    <div className="modal-content">
-                    <div className="modal-header">
-                        <h5 className="modal-title">Add New Lesson Plan</h5>
-                        <button type="button" className="btn-close" onClick={() => setShowAddModal(false)}></button>
-                    </div>
-                    <div className="modal-body">
-                        <div className="mb-3">
-                        <label className="form-label">Language</label>
-                        <select
-                            className="form-select"
-                            value={newLessonPlan.language}
-                            onChange={(e) => setNewLessonPlan({ ...newLessonPlan, language: e.target.value })}
-                        >
-                            <option value="">Select Language</option>
-                            {languages.map((lang) => (
-                            <option key={lang.id} value={lang.name}>{lang.name}</option>
-                            ))}
-                        </select>
+                <div className="modal show d-block bg-black bg-opacity-50" tabIndex={-1} role="dialog">
+                    <form onSubmit={handleAddLessonPlan} className="modal-dialog" role="document">
+                        <div className="modal-content">
+                            <div className="modal-header">
+                                <h5 className="modal-title">
+                                    {isAddLoading && <div className="animate-spin border-t-4 border-sky-500 rounded-full w-4 h-4 mr-2"/>}
+                                    Add New Lesson Plan
+                                </h5>
+                                <button type="button" className="btn-close" onClick={() => setShowAddModal(false)}></button>
+                            </div>
+                            <div className="modal-body">
+                                <div className="mb-3">
+                                    <label className="form-label">Language</label>
+                                    <select
+                                        name="language_id"
+                                        className="form-select"
+                                        required
+                                    >
+                                        <option value="">Select Language</option>
+                                        {languages.map((lang) => (
+                                        <option key={lang.id} value={lang.id}>{lang.name}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div className="mb-3">
+                                    <label className="form-label">Type</label>
+                                    <select
+                                        name="type"
+                                        className="form-select"
+                                        defaultValue={TYPE_OPTIONS.find(opt => opt.label === editingRow?.type)?.value || ""}
+                                        required
+                                    >
+                                        {TYPE_OPTIONS.map((option) => (
+                                        <option key={option.value} value={option.value}>
+                                            {option.label}
+                                        </option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div className="mb-3">
+                                    <label className="form-label">Title</label>
+                                    <input
+                                        name="title"
+                                        type="text"
+                                        className="form-control"
+                                       required
+                                    />
+                                </div>
+                                <div className="mb-3">
+                                    <label className="form-label">Document</label>
+                                    <input
+                                    type="file"
+                                    name="media"
+                                    ref={fileRef}
+                                    onChange={e=>setFile(e.target.files?.[0]||null)}
+                                    className="mb-2"
+                                    />
+                                </div>
+                                <div className="mb-3">
+                                    <label className="form-label">Status</label>
+                                    <select
+                                        name="status"
+                                        className="form-select" 
+                                        defaultValue={editingRow?.status === "Published" ? 1 : 0}
+                                        required
+                                    >
+                                        <option value="1">Published</option>
+                                        <option value="0">Drafted</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div className="modal-footer">
+                                <button type="button" className="btn btn-secondary" onClick={() => setShowAddModal(false)}>Close</button>
+                                <button type="submit" className="btn btn-primary">Add Lesson Plan</button>
+                            </div>
                         </div>
-                        <div className="mb-3">
-                        <label className="form-label">Type</label>
-                        <select
-                            className="form-select"
-                            value={newLessonPlan.type}
-                            onChange={(e) => setNewLessonPlan({ ...newLessonPlan, type: e.target.value })}
-                        >
-                            {TYPE_OPTIONS.map((option) => (
-                            <option key={option.value} value={option.label}>
-                                {option.label}
-                            </option>
-                            ))}
-                        </select>
-                        </div>
-                        <div className="mb-3">
-                        <label className="form-label">Title</label>
-                        <input
-                            type="text"
-                            className="form-control"
-                            value={newLessonPlan.title}
-                            onChange={(e) => setNewLessonPlan({ ...newLessonPlan, title: e.target.value })}
-                        />
-                        </div>
-                        <div className="mb-3">
-                        <label className="form-label">Document</label>
-                        <textarea
-                            className="form-control"
-                            value={newLessonPlan.document}
-                            onChange={(e) => setNewLessonPlan({ ...newLessonPlan, document: e.target.value })}
-                        />
-                        </div>
-                        <div className="mb-3">
-                        <label className="form-label">Status</label>
-                        <select
-                            className="form-select"
-                            value={newLessonPlan.status}
-                            onChange={(e) => setNewLessonPlan({ ...newLessonPlan, status: e.target.value })}
-                        >
-                            <option value="Published">Published</option>
-                            <option value="Drafted">Drafted</option>
-                        </select>
-                        </div>
-                    </div>
-                    <div className="modal-footer">
-                        <button type="button" className="btn btn-secondary" onClick={() => setShowAddModal(false)}>Close</button>
-                        <button type="button" className="btn btn-primary" onClick={handleAddLessonPlan}>Add Lesson Plan</button>
-                    </div>
-                    </div>
-                </div>
+                    </form>
                 </div>
             )}
             
+            {/* Lightbox */}
+            {lightboxUrl && (
+                <div
+                className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+                onClick={()=>setLightboxUrl(null)}
+                >
+                <div className="relative">
+                    <img
+                    src={lightboxUrl}
+                    alt="Preview"
+                    className="max-w-[90vw] max-h-[90vh] rounded-lg shadow-lg"
+                    />
+                    <button
+                    className="absolute top-2 right-2 text-white bg-gray-900 rounded-full p-1"
+                    onClick={e=>{ e.stopPropagation(); setLightboxUrl(null) }}
+                    >✕</button>
+                </div>
+                </div>
+            )}
         </div>
         
     );

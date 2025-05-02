@@ -31,6 +31,8 @@ interface Campaign {
     failed_users: string; // JSON string
     created_at: string;
     updated_at: string;
+    media_path?:string;
+    media_url?: string;
   }
 export default function Campaigns() {
     // State for campaign table data
@@ -45,6 +47,9 @@ export default function Campaigns() {
   const [showEditModal, setShowEditModal] = useState<boolean>(false);
   const [showDeleteModal, setShowDeleteModal] = useState<boolean>(false);
   const [selectedCampaign, setSelectedCampaign] = useState<Campaign | null>(null);
+
+  // lightbox
+  const [lightboxUrl, setLightboxUrl] = useState<string|null>(null)
 
   // State for form fields (for add & edit)
   const [formData, setFormData] = useState({
@@ -104,29 +109,54 @@ export default function Campaigns() {
   };
 
   // Add Campaign (POST)
-  const handleAddCampaign = async (e: FormEvent) => {
+  // Add Campaign (POST) with improved error handling
+  const handleAddCampaign = async (e: { preventDefault: () => void; }) => {
     e.preventDefault();
+    setIsLoading(true);
+    
+    // Validate form data
+    if (!formData.name || !formData.title || !formData.body || !formData.school_id) {
+      alert("Please fill in all required fields: Name, Title, Body, and School ID");
+      setIsLoading(false);
+      return;
+    }
+    
+    // Check if school_id is numeric
+    if (isNaN(parseInt(formData.school_id))) {
+      alert("School ID must be a number");
+      setIsLoading(false);
+      return;
+    }
+    
     const fd = new FormData();
     fd.append("name", formData.name);
     fd.append("title", formData.title);
     fd.append("body", formData.body);
     fd.append("school_id", formData.school_id);
-    fd.append("city", formData.city);
-    fd.append("state", formData.state);
-    fd.append("scheduled_date", formData.scheduled_date);
-    if (formData.media) {
-      fd.append("media", formData.media);
-    }
+    
+    // Only append non-empty values
+    if (formData.city) fd.append("city", formData.city);
+    if (formData.state) fd.append("state", formData.state);
+    if (formData.scheduled_date) fd.append("scheduled_date", formData.scheduled_date);
+    if (formData.media) fd.append("media", formData.media);
+    
     try {
       const response = await fetch(`${api_startpoint}/admin/push-notification-campaigns`, {
         method: 'POST',
         body: fd,
       });
-      if (!response.ok) throw new Error("Failed to add campaign");
+      
+      // Handle both success and error responses
       const result = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(result.error || "Failed to add campaign");
+      }
+      
       console.log("Campaign added:", result);
       setShowAddModal(false);
-      // Clear form data (if desired)
+      
+      // Clear form data
       setFormData({
         name: '',
         title: '',
@@ -137,10 +167,15 @@ export default function Campaigns() {
         scheduled_date: '',
         media: null,
       });
+      
+      // Refresh the campaign list
       fetchCampaigns();
+      
     } catch (error) {
-      console.error(error);
+      console.error("Error adding campaign:", error);
       alert(error instanceof Error ? error.message : "Unknown error");
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -246,6 +281,7 @@ export default function Campaigns() {
                   <thead>
                     <tr>
                       <th>Sr No.</th>
+                      <th>Image</th>
                       <th>Name</th>
                       <th>Title</th>
                       <th>Body</th>
@@ -263,6 +299,20 @@ export default function Campaigns() {
                     {campaigns.map((campaign, index) => (
                       <tr key={campaign.id}>
                         <td>{(currentPage - 1) * perPage + index + 1}</td>
+                        <td>
+                          {campaign.media_url?.match(/\.(jpe?g|png|gif)$/i)
+                              ? <img
+                                  src={campaign.media_url}
+                                  className="w-12 h-12 object-cover cursor-pointer"
+                                  onClick={()=>setLightboxUrl(campaign.media_url!)}
+                                  />
+                              : campaign.media_url
+                                  ? <button
+                                      className="btn btn-link"
+                                      onClick={()=>window.open(campaign.media_url,'_blank')}
+                                      >📄 File</button>
+                                  : '—'}
+                      </td>
                         <td>{campaign.name}</td>
                         <td>{campaign.title}</td>
                         <td>{campaign.body}</td>
@@ -532,6 +582,31 @@ export default function Campaigns() {
               </div>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Lightbox */}
+      {lightboxUrl && (
+        <div
+            className="position-fixed start-0 end-0 top-0 bottom-0 bg-dark bg-opacity-75 d-flex align-items-center justify-content-center"
+            style={{ zIndex: 1050 }}
+            onClick={() => setLightboxUrl(null)}
+        >
+            <div className="position-relative">
+                <img
+                    src={lightboxUrl}
+                    alt="Preview"
+                    className="img-fluid rounded max-w-full max-h-full"
+                    style={{ maxWidth: '90vw', maxHeight: '90vh' }}
+                />
+                <button
+                    className="position-absolute top-0 end-0 btn btn-sm btn-dark rounded-circle"
+                    style={{ margin: '0.5rem' }}
+                    onClick={e => { e.stopPropagation(); setLightboxUrl(null) }}
+                >
+                    <IconX size={16} />
+                </button>
+            </div>
         </div>
       )}
     </div>

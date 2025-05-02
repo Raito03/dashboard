@@ -5,7 +5,7 @@ import { Sidebar } from '@/components/ui/sidebar';
 import '@tabler/core/dist/css/tabler.min.css';
 import NumberFlow from '@number-flow/react';
 import { IconEdit, IconPlus, IconTrash } from '@tabler/icons-react';
-import { ChevronDown } from 'lucide-react';
+import { ChevronDown, Download } from 'lucide-react';
 const inter = Inter({ subsets: ['latin'] });
 //const api_startpoint = 'https://lifeapp-api-vv1.vercel.app'
 const api_startpoint = 'http://152.42.239.141:5000'
@@ -252,6 +252,7 @@ function SearchableDropdown({
         </div>
     );
 }
+
 export default function MentorsDashboard() {
   const [filters, setFilters] = useState<FilterState>({
     school: '',
@@ -268,6 +269,7 @@ export default function MentorsDashboard() {
     mentorCode: ''
   });
 
+  const [filterState, setFilterState] = useState("");
   const stats = [
     { title: 'TOTAL DOWNLOADS BY MENTORS', value: 128991 },
     { title: 'TOTAL NUMBER OF MENTORS', value: 0 },
@@ -309,28 +311,43 @@ export default function MentorsDashboard() {
   // };
 
   const handleClear = () => {
-    const isAlreadyClear =
-      filters.state === '' &&
-      filters.mobileNumber === '' &&
-      filters.mentorCode === '';
+    setFilterState("");
+    setFilters({
+      school: '',
+      grade: '',
+      state: '',
+      city: '',
+      Company: '',
+      Session: '',
+      SessionBooked: '',
+      SessionCompleted: '',
+      startDate: '',
+      endDate: '',
+      mobileNumber: '',
+      mentorCode: ''
+    });
     
-    if (!isAlreadyClear) {
-      setFilters({
-        school: '',
-        grade: '',
+    // Use empty values directly in the fetch call
+    fetch(`${api_startpoint}/api/mentors`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
         state: '',
-        city: '',
-        Company: '',
-        Session: '',
-        SessionBooked: '',
-        SessionCompleted: '',
-        startDate: '',
-        endDate: '',
-        mobileNumber: '',
-        mentorCode: ''
+        mobile_no: '',
+        mentor_code: ''
+      }),
+    })
+      .then((response) => response.json())
+      .then((data) => {
+        setMentors(data);
+        setLoading(false);
+      })
+      .catch((error) => {
+        console.error("Error fetching mentors:", error);
+        setLoading(false);
       });
-      fetchMentors();
-    }
   };
   
 
@@ -634,6 +651,21 @@ export default function MentorsDashboard() {
     }
   };
   
+  const mentorsCsvTemplate =
+  "name,email,mobile_no,pin,state,city,gender,dob (YYYY-MM-DD)\n";
+
+  const downloadMentorsCsvTemplate = () => {
+    const blob = new Blob([mentorsCsvTemplate], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.setAttribute('download', 'mentors_template.csv');
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <div className={`page bg-body ${inter.className} font-sans`}>
         <Sidebar />
@@ -647,7 +679,7 @@ export default function MentorsDashboard() {
                   <h6 className="text-sm text-gray-500">Total Mentors</h6>
                   <p className="text-2xl font-bold text-gray-800">{mentors.length}</p>
                 </div>
-                <div className="flex justify-center justify-items-center w-2/6 h-1/2 gap-2">
+                <div className="flex justify-center justify-items-center w-3/6 h-1/2 gap-2">
                   <button className="btn btn-primary text-center mb-0 " onClick={() => setShowAddModal(true)}>
                     <IconPlus size={18} /> Add Mentor
                   </button>
@@ -656,6 +688,12 @@ export default function MentorsDashboard() {
                     onClick={() => setShowCsvModal(true)}
                   >
                     <IconPlus size={18} /> Upload CSV
+                  </button>
+                  <button
+                    className="btn btn-secondary d-inline-flex align-items-center"
+                    onClick={downloadMentorsCsvTemplate}
+                  >
+                    <Download className="me-2" size={16} /> Download CSV Template
                   </button>
                 </div>
                 
@@ -669,13 +707,25 @@ export default function MentorsDashboard() {
                 {/* State Filter */}
                 <div>
                   <label className="form-label">State</label>
-                  <input
+                  {/* <input
                     type="text"
                     className="form-control"
                     placeholder="Enter State"
                     value={filters.state}
                     onChange={(e) => setFilters(prev => ({ ...prev, state: e.target.value }))}
+                  /> */}
+                  <SearchableDropdown
+                    options={states}
+                    placeholder="Select State"
+                    value={filterState}
+                    onChange={(value) => {
+                      setFilterState(value);
+                      setFilters(prev => ({ ...prev, state: value }));
+                    }}
+                    isLoading={isStatesLoading}
+                    maxDisplayItems={200}
                   />
+
                 </div>
                 {/* Mobile Number Filter */}
                 <div>
@@ -708,6 +758,7 @@ export default function MentorsDashboard() {
                 <button
                   className="btn btn-warning"
                   onClick={() => {
+                    handleClear();
                     handleClear();
                     fetchMentors();
                   }}
@@ -850,8 +901,8 @@ export default function MentorsDashboard() {
                                 aria-placeholder='Gender'
                                 //value={newSection.status} 
                                 onChange={(e) => setNewMentor({ ...newMentor, gender: e.target.value })}>
-                                <option value='Male'>Male</option>
-                                <option value='Female'>Female</option>
+                                <option value='0'>Male</option>
+                                <option value='1'>Female</option>
                             </select>
                         </div>
                       {/* Add other fields as needed */}
@@ -941,8 +992,8 @@ export default function MentorsDashboard() {
                           value={editMentor.gender}
                           onChange={(e) => setEditMentor({ ...editMentor, gender: e.target.value })}
                         >
-                          <option value='Male'>Male</option>
-                          <option value='Female'>Female</option>
+                          <option value='0'>Male</option>
+                          <option value='1'>Female</option>
                         </select>
                       </div>
                     </div>

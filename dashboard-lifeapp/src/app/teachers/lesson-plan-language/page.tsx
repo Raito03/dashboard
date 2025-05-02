@@ -6,7 +6,7 @@ import React from 'react';
 import { Inter } from 'next/font/google';
 const inter = Inter({ subsets: ['latin'] });
 import { Sidebar } from '@/components/ui/sidebar';
-import { IconSearch, IconBell, IconSettings, IconEdit } from '@tabler/icons-react';
+import { IconSearch, IconBell, IconSettings, IconEdit, IconTrash } from '@tabler/icons-react';
 import { Plus, XCircle } from "lucide-react";
 
 // const poppins = Poppins({
@@ -23,6 +23,7 @@ interface LessonPlanLanguage {
 
 // const api_startpoint = 'https://lifeapp-api-vv1.vercel.app'
 const api_startpoint = 'http://152.42.239.141:5000'
+// const api_startpoint = 'http://127.0.0.1:5000'
 export default function LessonPlanLanguage() {
     const [tableData, setTableData] = useState<LessonPlanLanguage[]>([]);
     const [currentPage, setCurrentPage] = useState<number>(0);
@@ -122,6 +123,22 @@ export default function LessonPlanLanguage() {
         }
     };
 
+    const handleDelete = async (id: number) => {
+        if (!confirm('Are you sure you want to delete this item?')) return;
+    
+        try {
+            const res = await fetch(`${api_startpoint}/api/delete_lesson_plan_language/${id}`, {
+                method: 'DELETE'
+            });
+    
+            if (!res.ok) throw new Error(`Delete failed: ${res.status}`);
+            fetchLessonPlanLanguages(); // Refresh data
+        } catch (error) {
+            console.error("Delete error:", error);
+            alert("Failed to delete the lesson plan language.");
+        }
+    };
+    
     return (
         <div className={`page bg-light ${inter.className} font-sans`}>
             <Sidebar />
@@ -166,9 +183,12 @@ export default function LessonPlanLanguage() {
                                                 <tr key={index}>
                                                     <td>{row.title}</td>
                                                     <td>{row.status}</td>
-                                                    <td>
+                                                    <td className="flex gap-2">
                                                         <button className="btn btn-sm btn-info" onClick={() => handleEditClick(row)}>
                                                             <IconEdit size={16} />
+                                                        </button>
+                                                        <button className="btn btn-sm btn-danger" onClick={() => handleDelete(row.id!)}>
+                                                            <IconTrash size={16} />
                                                         </button>
                                                     </td>
                                                 </tr>

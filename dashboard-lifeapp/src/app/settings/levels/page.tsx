@@ -9,30 +9,31 @@ import '@tabler/core/dist/css/tabler.min.css';
 import { IconEdit, IconTrash } from '@tabler/icons-react';
 
 interface Levels {
-        created_at: string,
-        description: string,
-        id: number,
-        jigyasa_points: number,
-        mission_points: number,
-        pragya_points: number,
-        puzzle_points: number,
-        puzzle_time: number,
-        quiz_points: number,
-        quiz_time: number,
-        riddle_points: number,
-        riddle_time: number,
-        status: number,
-        title: string,
-        updated_at: string
+    created_at: string,
+    description: string,
+    id: number,
+    jigyasa_points: number,
+    mission_points: number,
+    pragya_points: number,
+    puzzle_points: number,
+    puzzle_time: number,
+    quiz_points: number,
+    quiz_time: number,
+    riddle_points: number,
+    riddle_time: number,
+    status: number,
+    title: string,
+    updated_at: string
 }
 
 // const api_startpoint = 'https://lifeapp-api-vv1.vercel.app'
 const api_startpoint = 'http://152.42.239.141:5000'
-
+// const api_startpoint = 'http://127.0.0.1:5000'
 export default function SettingsLevels() {
     const [levels, setLevels] = useState<Levels[]>([]);
     const [loading, setLoading] = useState(true);
-    
+    const [isAddLoading, setIsAddLoading] = useState(false)
+    const [isEditLoading, setIsEditLoading] = useState(false)
     async function fetchLevels() {
         try {
             setLoading(true); // Start loading
@@ -71,7 +72,7 @@ export default function SettingsLevels() {
 
     const handleSubmit = async (e: { preventDefault: () => void; }) => {
         e.preventDefault();
-        
+        setIsAddLoading(true)
         const newLevel = {
             title: { en: title },
             description: { en: description },
@@ -101,6 +102,8 @@ export default function SettingsLevels() {
             }
         } catch (error) {
             console.error('Error adding level:', error);
+        } finally {
+            setIsAddLoading(false)
         }
     };
     
@@ -116,38 +119,49 @@ export default function SettingsLevels() {
     mission_points: 0,
     pragya_points: 0,
     puzzle_points: 0,
-    puzzle_time: 0,
+    puzzle_time: 60,
     quiz_points: 0,
-    quiz_time: 0,
+    quiz_time: 60,
     riddle_points: 0,
-    riddle_time: 0,
+    riddle_time: 60,
     status: 1,
     created_at: "",
     updated_at: ""
     });
 
     // Add a handler for editing a level
-    const handleEditClick = (level:Levels) => {
-    setSelectedLevel(level);
-    // Pre-populate the form with the selected level's data
-    setEditFormValues({
-        id: level.id,
-        title: level.title,
-        description: level.description,
-        jigyasa_points: level.jigyasa_points,
-        mission_points: level.mission_points,
-        pragya_points: level.pragya_points,
-        puzzle_points: level.puzzle_points,
-        puzzle_time: level.puzzle_time,
-        quiz_points: level.quiz_points,
-        quiz_time: level.quiz_time,
-        riddle_points: level.riddle_points,
-        riddle_time: level.riddle_time,
-        status: level.status,
-        created_at: level.created_at,
-        updated_at: level.updated_at
-    });
-    setShowEditModal(true);
+    const handleEditClick = (level: Levels) => {
+        setSelectedLevel(level);
+      
+        try {
+          const parsedTitle       = JSON.parse(level.title);
+          const parsedDescription = JSON.parse(level.description);
+      
+          setEditFormValues({
+            ...editFormValues,
+            id: level.id,
+            // now display the human string, not the JSON blob:
+            title: parsedTitle.en,
+            description: parsedDescription.en,
+            jigyasa_points: level.jigyasa_points,
+            mission_points: level.mission_points,
+            pragya_points: level.pragya_points,
+            puzzle_points: level.puzzle_points,
+            puzzle_time: level.puzzle_time,
+            quiz_points: level.quiz_points,
+            quiz_time: level.quiz_time,
+            riddle_points: level.riddle_points,
+            riddle_time: level.riddle_time,
+            status: level.status,
+            created_at: level.created_at,
+            updated_at: level.updated_at
+          });
+        } catch (err) {
+          console.error("JSON parse error:", err);
+          setErrorMessage("Failed to parse level data");
+        }
+      
+        setShowEditModal(true);
     };
 
     // Handle form field changes in the edit modal
@@ -168,212 +182,60 @@ export default function SettingsLevels() {
 
     // Handle edit form submission
     const handleEditSubmit = async (e: { preventDefault: () => void; }) => {
-    e.preventDefault();
-    
-    try {
-        const res = await fetch(`${api_startpoint}/api/levels_update`, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(editFormValues)
-        });
+        e.preventDefault();
+        setIsEditLoading(true)
+        try {
+            // Convert text values back to JSON objects for API
+            const formDataForAPI = {
+                id: editFormValues.id,
+                title: { en: editFormValues.title },
+                description: { en: editFormValues.description },
+                jigyasa_points: editFormValues.jigyasa_points,
+                mission_points: editFormValues.mission_points,
+                pragya_points: editFormValues.pragya_points,
+                puzzle_points: editFormValues.puzzle_points,
+                puzzle_time: editFormValues.puzzle_time,
+                quiz_points: editFormValues.quiz_points,
+                quiz_time: editFormValues.quiz_time,
+                riddle_points: editFormValues.riddle_points,
+                riddle_time: editFormValues.riddle_time,
+                status: editFormValues.status,
+            };
+            
+            const res = await fetch(`${api_startpoint}/api/levels_update`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(formDataForAPI)
+            });
 
-        if (res.ok) {
-        setShowEditModal(false);
-        setSelectedLevel(null);
-        // Reset form and refresh data
-        setEditFormValues({
-            id: 0, title: "", description: "",
-            jigyasa_points: 0, mission_points: 0, pragya_points: 0,
-            puzzle_points: 0, puzzle_time: 0, quiz_points: 0,
-            quiz_time: 0, riddle_points: 0, riddle_time: 0, status: 1,
-            created_at: "", updated_at: ""
-        });
-        await fetchLevels(); // You'll need a function to fetch levels data
-        } else {
-        const errorData = await res.json();
-        setErrorMessage(errorData.error || 'Error updating level');
-        }
-    } catch (err) {
-        setErrorMessage('Error connecting to API');
-        console.error('Error updating level:', err);
-    }
-    };
-
-    // Edit Level Modal Component
-    const EditLevelModal = () => (
-    <div className="fixed top-0 right-0 h-full w-2/5 bg-white shadow-lg z-50 transform transition-transform duration-300 overflow-y-auto"
-        style={{ transform: showEditModal ? 'translateX(0)' : 'translateX(100%)' }}>
-        <div className="p-4 border-b flex justify-between items-center">
-            <h2 className="text-xl font-semibold">Edit Level</h2>
-            <button onClick={() => {
+            if (res.ok) {
                 setShowEditModal(false);
                 setSelectedLevel(null);
-            }}>
-                <svg xmlns="http://www.w3.org/2000/svg" className="icon icon-tabler icon-tabler-x" width="24" height="24" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor" fill="none" strokeLinecap="round" strokeLinejoin="round">
-                    <path stroke="none" d="M0 0h24v24H0z" fill="none"></path>
-                    <path d="M18 6L6 18"></path>
-                    <path d="M6 6l12 12"></path>
-                </svg>
-            </button>
-        </div>
-        <div className="p-4">
-            {errorMessage && <p className="text-red-500">{errorMessage}</p>}    
-            <form onSubmit={handleEditSubmit}>
-                <div className="mb-4">
-                    <label className="block mb-1">Title</label>
-                    <input
-                        type="text"
-                        name="title"
-                        value={editFormValues.title}
-                        onChange={handleEditChange}
-                        className="w-full border p-2"
-                        required
-                    />
-                </div>
-                <div className="mb-4">
-                    <label className="block mb-1">Description</label>
-                    <input
-                        type="text"
-                        name="description"
-                        value={editFormValues.description}
-                        onChange={handleEditChange}
-                        className="w-full border p-2"
-                        required
-                    />
-                </div>
-                <div className="d-flex flex-col gap-1">
-                    <div className="mb-4">
-                        <label className="block mb-1">Jigyasa Points</label>
-                        <input
-                            type="number"
-                            name="jigyasa_points"
-                            value={editFormValues.jigyasa_points}
-                            onChange={handleEditChange}
-                            className="w-full border p-2"
-                            required
-                        />
-                    </div>
-                    <div className="mb-4">
-                        <label className="block mb-1">Mission Points</label>
-                        <input
-                            type="number"
-                            name="mission_points"
-                            value={editFormValues.mission_points}
-                            onChange={handleEditChange}
-                            className="w-full border p-2"
-                            required
-                        />
-                    </div>
-                    <div className="mb-4">
-                        <label className="block mb-1">Pragya Points</label>
-                        <input
-                            type="number"
-                            name="pragya_points"
-                            value={editFormValues.pragya_points}
-                            onChange={handleEditChange}
-                            className="w-full border p-2"
-                            required
-                        />
-                    </div>
-                    <div className="mb-4">
-                        <label className="block mb-1">Puzzle Points</label>
-                        <input
-                            type="number"
-                            name="puzzle_points"
-                            value={editFormValues.puzzle_points}
-                            onChange={handleEditChange}
-                            className="w-full border p-2"
-                            required
-                        />
-                    </div>
-                    <div className="mb-4">
-                        <label className="block mb-1">Puzzle Time</label>
-                        <input
-                            type="number"
-                            name="puzzle_time"
-                            value={editFormValues.puzzle_time}
-                            onChange={handleEditChange}
-                            className="w-full border p-2"
-                            required
-                        />
-                    </div>
-                    <div className="mb-4">
-                        <label className="block mb-1">Quiz Points</label>
-                        <input
-                            type="number"
-                            name="quiz_points"
-                            value={editFormValues.quiz_points}
-                            onChange={handleEditChange}
-                            className="w-full border p-2"
-                            required
-                        />
-                    </div>
-                    <div className="mb-4">
-                        <label className="block mb-1">Quiz Time</label>
-                        <input
-                            type="number"
-                            name="quiz_time"
-                            value={editFormValues.quiz_time}
-                            onChange={handleEditChange}
-                            className="w-full border p-2"
-                            required
-                        />
-                    </div>
-                    <div className="mb-4">
-                        <label className="block mb-1">Riddle Points</label>
-                        <input
-                            type="number"
-                            name="riddle_points"
-                            value={editFormValues.riddle_points}
-                            onChange={handleEditChange}
-                            className="w-full border p-2"
-                            required
-                        />
-                    </div>
-                    <div className="mb-4">
-                        <label className="block mb-1">Riddle Time</label>
-                        <input
-                            type="number"
-                            name="riddle_time"
-                            value={editFormValues.riddle_time}
-                            onChange={handleEditChange}
-                            className="w-full border p-2"
-                            required
-                        />
-                    </div>
-                    <div className="mb-4">
-                        <label className="block mb-1">Status</label>
-                        <select
-                            name="status"
-                            value={editFormValues.status}
-                            onChange={handleEditChange}
-                            className="w-full border p-2"
-                            required
-                        >
-                            <option value={1}>Active</option>
-                            <option value={0}>Inactive</option>
-                        </select>
-                    </div>
-                </div>
-                <div className="flex justify-end gap-2">
-                    <button 
-                        type="button" 
-                        className="btn btn-secondary" 
-                        onClick={() => {
-                        setShowEditModal(false);
-                        setSelectedLevel(null);
-                        }}
-                    >
-                        Cancel
-                    </button>
-                    <button type="submit" className="btn btn-primary">Update Level</button>
-                </div>
-            </form>
-        </div>
-    </div>
-    );
+                setErrorMessage('');
+                // Reset form and refresh data
+                setEditFormValues({
+                    id: 0, title: "", description: "",
+                    jigyasa_points: 0, mission_points: 0, pragya_points: 0,
+                    puzzle_points: 0, puzzle_time: 60, quiz_points: 0,
+                    quiz_time: 60, riddle_points: 0, riddle_time: 60, status: 1,
+                    created_at: "", updated_at:''
+                });
+                await fetchLevels();
+            } else {
+                const errorData = await res.json();
+                setErrorMessage(errorData.error || 'Error updating level');
+            }
+        } catch (err) {
+            setErrorMessage('Error connecting to API');
+            console.error('Error updating level:', err);
+        } finally {
+            setIsEditLoading(true)
+        }
+    };
+
+
 
 
 
@@ -491,7 +353,7 @@ export default function SettingsLevels() {
                         </div>
                         {/* Sliding Add Modal */}
                         {showAddModal && (
-                            <div className="modal fade show d-block" 
+                            <div className="modal fade show d-block mt-0" 
                                 style={{ 
                                     background: 'rgba(0,0,0,0.5)', 
                                     position: 'fixed', 
@@ -526,53 +388,57 @@ export default function SettingsLevels() {
                                                     <select
                                                         name="status"
                                                         value={status}
-                                                        onChange={()=>setStatus}
+                                                        onChange={(e: React.ChangeEvent<HTMLSelectElement>) =>
+                                                        setStatus(Number(e.target.value))
+                                                        }
                                                         className="w-full border p-2"
                                                         required
                                                     >
-                                                        <option value={undefined}>Select role</option>
-                                                        <option value= {1}>Active</option>
-                                                        <option value={0}>Inactive</option>
-                                                        
+                                                        <option value="">Select status</option>
+                                                        <option value="1">Active</option>
+                                                        <option value="0">Inactive</option>
                                                     </select>
                                                 </div>
+
                                                 <div className="mb-3">
                                                     <label className="form-label">Mission Points</label>
-                                                    <input type="number" className="form-control" value={missionPoints} onChange={()=>setMissionPoints} required />
+                                                    <input type="number" className="form-control" value={missionPoints} onChange={(e: React.ChangeEvent<HTMLInputElement>)=>setMissionPoints(Number(e.target.value))} required />
                                                 </div>
                                                 <div className="mb-3">
                                                     <label className="form-label">Jigyasa Points</label>
-                                                    <input type="number" className="form-control" value={jigyasaPoints} onChange={()=>setJigyasaPoints} required />
+                                                    <input type="number" className="form-control" value={jigyasaPoints} onChange={(e: React.ChangeEvent<HTMLInputElement>)=>setJigyasaPoints(Number(e.target.value))} required />
                                                 </div>
                                                 <div className="mb-3">
                                                     <label className="form-label">Pragya Points</label>
-                                                    <input type="number" className="form-control" value={pragyaPoints} onChange={()=>setPragyaPoints} required />
+                                                    <input type="number" className="form-control" value={pragyaPoints} onChange={(e: React.ChangeEvent<HTMLInputElement>)=>setPragyaPoints(Number(e.target.value))} required />
                                                 </div>
                                                 <div className="mb-3">
                                                     <label className="form-label">Quiz Points</label>
-                                                    <input type="number" className="form-control" value={quizPoints} onChange={()=>setQuizPoints} required />
+                                                    <input type="number" className="form-control" value={quizPoints} onChange={(e: React.ChangeEvent<HTMLInputElement>)=>setQuizPoints(Number(e.target.value))} required />
                                                 </div>
                                                 <div className="mb-3">
                                                     <label className="form-label">Puzzle Points</label>
-                                                    <input type="number" className="form-control" value={puzzlePoints} onChange={()=>setPuzzlePoints} required />
+                                                    <input type="number" className="form-control" value={puzzlePoints} onChange={(e: React.ChangeEvent<HTMLInputElement>)=>setPuzzlePoints(Number(e.target.value))} required />
                                                 </div>
                                                 <div className="mb-3">
                                                     <label className="form-label">Riddle Points</label>
-                                                    <input type="number" className="form-control" value={riddlePoints} onChange={()=>setRiddlePoints} required />
+                                                    <input type="number" className="form-control" value={riddlePoints} onChange={(e: React.ChangeEvent<HTMLInputElement>)=>setRiddlePoints(Number(e.target.value))} required />
                                                 </div>
                                                 <div className="mb-3">
                                                     <label className="form-label">Quiz Time</label>
-                                                    <input type="number" className="form-control" value={quizTime} onChange={()=>setQuizTime} required />
+                                                    <input type="number" className="form-control" value={quizTime} onChange={(e: React.ChangeEvent<HTMLInputElement>)=>setQuizTime(Number(e.target.value))} required />
                                                 </div>
                                                 <div className="mb-3">
                                                     <label className="form-label">Puzzle Time</label>
-                                                    <input type="number" className="form-control" value={puzzleTime} onChange={()=>setPuzzleTime} required />
+                                                    <input type="number" className="form-control" value={puzzleTime} onChange={(e: React.ChangeEvent<HTMLInputElement>)=>setPuzzleTime(Number(e.target.value))} required />
                                                 </div>
                                                 <div className="mb-3">
                                                     <label className="form-label">Riddle Time</label>
-                                                    <input type="number" className="form-control" value={riddleTime} onChange={()=>setRiddleTime} required />
+                                                    <input type="number" className="form-control" value={riddleTime} onChange={(e: React.ChangeEvent<HTMLInputElement>)=>setRiddleTime(Number(e.target.value))} required />
                                                 </div>
-                                                <button type="submit" className="btn btn-success">Save Level</button>
+                                                <button type="submit" className="btn btn-success" disabled={isAddLoading}>
+                                                    {isAddLoading && <div className='animate-spin rounded-full border-t-4 border-white w-4 h-4 mr-2'></div>}
+                                                    {isAddLoading? 'Saving':'Save Level'}</button>
                                             </form>
                                         </div>
                                     </div>
@@ -580,7 +446,181 @@ export default function SettingsLevels() {
                             </div>
                         )}
                         {/* Edit Modal */}
-                        {showEditModal && <EditLevelModal />}
+                        {showEditModal && (
+                            <div className="fixed top-0 right-0 h-full w-2/5 shadow-lg z-50 transform transition-transform duration-300 overflow-y-auto mt-0 bg-white"
+                            style={{ transform: showEditModal ? 'translateX(0)' : 'translateX(100%)' }}>
+                            <div className="p-4 border-b flex justify-between items-center">
+                                <h2 className="text-xl font-semibold">Edit Level</h2>
+                                <button onClick={() => {
+                                    setShowEditModal(false);
+                                    setSelectedLevel(null);
+                                }}>
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="icon icon-tabler icon-tabler-x" width="24" height="24" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor" fill="none" strokeLinecap="round" strokeLinejoin="round">
+                                        <path stroke="none" d="M0 0h24v24H0z" fill="none"></path>
+                                        <path d="M18 6L6 18"></path>
+                                        <path d="M6 6l12 12"></path>
+                                    </svg>
+                                </button>
+                            </div>
+                            <div className="p-4">
+                                {errorMessage && <p className="text-red-500">{errorMessage}</p>}    
+                                <form onSubmit={handleEditSubmit}>
+                                    <div className="mb-4">
+                                        <label className="block mb-1">Title</label>
+                                        <input
+                                            type="text"
+                                            name="title"
+                                            value={editFormValues.title}
+                                            onChange={handleEditChange}
+                                            className="w-full border p-2"
+                                            required
+                                        />
+                                    </div>
+                                    <div className="mb-4">
+                                        <label className="block mb-1">Description</label>
+                                        <input
+                                            type="text"
+                                            name="description"
+                                            value={editFormValues.description}
+                                            onChange={handleEditChange}
+                                            className="w-full border p-2"
+                                            required
+                                        />
+                                    </div>
+                                    <div className="d-flex flex-col gap-1">
+                                        <div className="mb-4">
+                                            <label className="block mb-1">Jigyasa Points</label>
+                                            <input
+                                                type="number"
+                                                name="jigyasa_points"
+                                                value={editFormValues.jigyasa_points}
+                                                onChange={handleEditChange}
+                                                className="w-full border p-2"
+                                                required
+                                            />
+                                        </div>
+                                        <div className="mb-4">
+                                            <label className="block mb-1">Mission Points</label>
+                                            <input
+                                                type="number"
+                                                name="mission_points"
+                                                value={editFormValues.mission_points}
+                                                onChange={handleEditChange}
+                                                className="w-full border p-2"
+                                                required
+                                            />
+                                        </div>
+                                        <div className="mb-4">
+                                            <label className="block mb-1">Pragya Points</label>
+                                            <input
+                                                type="number"
+                                                name="pragya_points"
+                                                value={editFormValues.pragya_points}
+                                                onChange={handleEditChange}
+                                                className="w-full border p-2"
+                                                required
+                                            />
+                                        </div>
+                                        <div className="mb-4">
+                                            <label className="block mb-1">Puzzle Points</label>
+                                            <input
+                                                type="number"
+                                                name="puzzle_points"
+                                                value={editFormValues.puzzle_points}
+                                                onChange={handleEditChange}
+                                                className="w-full border p-2"
+                                                required
+                                            />
+                                        </div>
+                                        <div className="mb-4">
+                                            <label className="block mb-1">Puzzle Time</label>
+                                            <input
+                                                type="number"
+                                                name="puzzle_time"
+                                                value={editFormValues.puzzle_time}
+                                                onChange={handleEditChange}
+                                                className="w-full border p-2"
+                                                required
+                                            />
+                                        </div>
+                                        <div className="mb-4">
+                                            <label className="block mb-1">Quiz Points</label>
+                                            <input
+                                                type="number"
+                                                name="quiz_points"
+                                                value={editFormValues.quiz_points}
+                                                onChange={handleEditChange}
+                                                className="w-full border p-2"
+                                                required
+                                            />
+                                        </div>
+                                        <div className="mb-4">
+                                            <label className="block mb-1">Quiz Time</label>
+                                            <input
+                                                type="number"
+                                                name="quiz_time"
+                                                value={editFormValues.quiz_time}
+                                                onChange={handleEditChange}
+                                                className="w-full border p-2"
+                                                required
+                                            />
+                                        </div>
+                                        <div className="mb-4">
+                                            <label className="block mb-1">Riddle Points</label>
+                                            <input
+                                                type="number"
+                                                name="riddle_points"
+                                                value={editFormValues.riddle_points}
+                                                onChange={handleEditChange}
+                                                className="w-full border p-2"
+                                                required
+                                            />
+                                        </div>
+                                        <div className="mb-4">
+                                            <label className="block mb-1">Riddle Time</label>
+                                            <input
+                                                type="number"
+                                                name="riddle_time"
+                                                value={editFormValues.riddle_time}
+                                                onChange={handleEditChange}
+                                                className="w-full border p-2"
+                                                required
+                                            />
+                                        </div>
+                                        <div className="mb-4">
+                                            <label className="block mb-1">Status</label>
+                                            <select
+                                                name="status"
+                                                value={editFormValues.status}
+                                                onChange={handleEditChange}
+                                                className="w-full border p-2"
+                                                required
+                                            >
+                                                <option value={1}>Active</option>
+                                                <option value={0}>Inactive</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                    <div className="flex justify-end gap-2">
+                                        <button 
+                                            type="button" 
+                                            className="btn btn-secondary" 
+                                            onClick={() => {
+                                            setShowEditModal(false);
+                                            setSelectedLevel(null);
+                                            }}
+                                        >
+                                            Cancel
+                                        </button>
+                                        <button type="submit" className="btn btn-primary" disabled={isEditLoading}>
+                                            {isEditLoading && <div className= 'animate-spin rounded-full border-t-4 border-white w-4 h-4 mr-2'></div>}
+                                            {isEditLoading ?'Updating':'Update Level'}
+                                        </button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                        )}
                     </div>
                 </div>
             </div>

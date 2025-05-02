@@ -10,6 +10,7 @@ import { IconEdit, IconPlus, IconTrash } from '@tabler/icons-react';
 
 // const api_startpoint = 'https://lifeapp-api-vv1.vercel.app'
 const api_startpoint = 'http://152.42.239.141:5000'
+// const api_startpoint = 'http://127.0.0.1:5000'
 
 interface Section {
     id: number;
@@ -88,23 +89,24 @@ export default function SettingsSections() {
         }
     }
 
-    async function handleDeleteSection() {
-        if (deletingSectionId === null) return;
+    async function handleDeleteSectionDirect(id: number) {
         try {
             const response = await fetch(`${api_startpoint}/api/sections_delete`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ id: deletingSectionId })
+                body: JSON.stringify({ id: id })
             });
             if (response.ok) {
                 fetchSections();
-                setShowDeleteModal(false);
                 setDeletingSectionId(null);
+                // Ensure other state is clean
+                setNewSection({ name: '', status: 1 });
             }
         } catch (error) {
             console.error('Error deleting section:', error);
         }
     }
+
     return (
         <div className={`page bg-body ${inter.className} font-sans`}>
             <Sidebar />
@@ -127,7 +129,11 @@ export default function SettingsSections() {
                                             <option value="inactive">Inactive</option>
                                         </select>
                                     </div>
-                                    <button className="btn btn-primary" onClick={() => setShowAddModal(true)}>
+                                    <button className="btn btn-primary" onClick={() => {
+                                        // Reset form state completely before showing modal
+                                        setNewSection({ name: '', status: 1 });
+                                        setShowAddModal(true);
+                                    }}>
                                         <IconPlus size={16} className="me-1" /> Add New Section
                                     </button>
                                 </div>
@@ -165,8 +171,7 @@ export default function SettingsSections() {
                                                             <button className="btn btn-sm btn-outline-danger mx-1"
                                                                onClick={() => { 
                                                                 if (window.confirm('Are you sure you want to delete this section?')) {
-                                                                    setDeletingSectionId(section.id); 
-                                                                    setShowDeleteModal(true);
+                                                                    handleDeleteSectionDirect(section.id);
                                                                 }
                                                             }}>
                                                                 <IconTrash size={16} />
@@ -197,7 +202,15 @@ export default function SettingsSections() {
                         <div className="modal-content">
                             <div className="modal-header">
                                 <h5 className="modal-title">Add New Section</h5>
-                                <button type="button" className="btn-close" onClick={() => setShowAddModal(false)}></button>
+                                <button 
+                                    type="button" 
+                                    className="btn-close" 
+                                    onClick={() => {
+                                        setShowAddModal(false);
+                                        // Reset form when manually closing
+                                        setNewSection({ name: '', status: 1 });
+                                    }}
+                                ></button>
                             </div>
                             <div className="modal-body">
                                 <div className="mb-3">
@@ -205,8 +218,9 @@ export default function SettingsSections() {
                                     <input 
                                         type="text" 
                                         className="form-control" 
-                                        value={newSection.name} 
+                                        value={newSection.name || ''} 
                                         onChange={(e) => setNewSection({ ...newSection, name: e.target.value })} 
+                                        key={`new-section-name-${showAddModal}`}
                                     />
                                 </div>
                                 <div className="mb-3">
@@ -221,7 +235,11 @@ export default function SettingsSections() {
                                 </div>
                             </div>
                             <div className="modal-footer">
-                                <button type="button" className="btn btn-secondary" onClick={() => setShowAddModal(false)}>Close</button>
+                                <button type="button" className="btn btn-secondary" onClick={() => {
+                                    setShowAddModal(false);
+                                    // Reset form when manually closing
+                                    setNewSection({ name: '', status: 1 });
+                                }}>Close</button>
                                 <button type="button" className="btn btn-primary" onClick={handleAddSection}>Save</button>
                             </div>
                         </div>
@@ -237,6 +255,7 @@ export default function SettingsSections() {
                         width: '100vw', height: '100vh', 
                         zIndex: 1050 
                     }}
+                    key={`edit-modal-${editingSection.id}`}
                     >
                     <div className="modal-dialog">
                         <div className="modal-content">
@@ -250,8 +269,9 @@ export default function SettingsSections() {
                                     <input 
                                         type="text" 
                                         className="form-control" 
-                                        value={editingSection.name} 
+                                        value={editingSection?.name || ''} 
                                         onChange={(e) => setEditingSection({ ...editingSection, name: e.target.value })} 
+                                        key={`edit-section-name-${showEditModal}`}
                                     />
                                 </div>
                                 <div className="mb-3">

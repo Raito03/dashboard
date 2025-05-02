@@ -33,10 +33,12 @@ interface Competency {
     id: number;
     title: string; // JSON string: e.g. '{"en": "Science"}'
   }
-  
+  interface Level   { id: number; title: string; }
+
   export default function TeacherCompetencies() {
     const [competencies, setCompetencies] = useState<Competency[]>([]);
     const [subjects, setSubjects] = useState<Subject[]>([]);
+    const [levels, setLevels]           = useState<Level[]>([]);
     const [totalCount, setTotalCount] = useState<number>(0);
     const [filterSubject, setFilterSubject] = useState<string>('');
     const [filterStatus, setFilterStatus] = useState<string>(''); // "" means all
@@ -47,7 +49,11 @@ interface Competency {
     const [showEditModal, setShowEditModal] = useState<boolean>(false);
     const [showDeleteModal, setShowDeleteModal] = useState<boolean>(false);
     const [selectedCompetency, setSelectedCompetency] = useState<Competency | null>(null);
-  
+    const [loadingList, setLoadingList] = useState<boolean>(false);
+    const [isAdding, setIsAdding] = useState<boolean>(false);
+    const [isUpdating, setIsUpdating] = useState<boolean>(false);
+    const [isDeleting, setIsDeleting] = useState<boolean>(false);
+
     // Form state for Add / Edit
     const [formCompetency, setFormCompetency] = useState<{
       name: string;
@@ -66,6 +72,7 @@ interface Competency {
   
     // Fetch competencies and subjects using the updated endpoint
     const fetchCompetencies = async () => {
+      setLoadingList(true);
       try {
         const params = new URLSearchParams();
         if (filterSubject) params.append('la_subject_id', filterSubject);
@@ -85,11 +92,14 @@ interface Competency {
         }
       } catch (error) {
         console.error('Error fetching competencies:', error);
+      } finally {
+        setLoadingList(false);
       }
     };
   
     useEffect(() => {
       fetchCompetencies();
+      fetchLevels();
     }, [filterSubject, filterStatus, page]);
   
     // Helper function to parse JSON titles
@@ -100,6 +110,15 @@ interface Competency {
       } catch (error) {
         return jsonStr;
       }
+    };
+
+    const fetchLevels = async () => {
+      const res = await fetch(`${api_startpoint}/api/levels`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ page: 1 })
+      });
+      const levels = await res.json();
+      setLevels(levels);
     };
   
     // Handlers for filters
@@ -114,14 +133,18 @@ interface Competency {
       setPage(1);
       fetchCompetencies();
     };
-  
+    
+    // Form handlers
+    const handleFormChange = (field: string, value: any) => {
+      setFormCompetency(prev => ({ ...prev, [field]: value }));
+    };
     // Add competency
     const addCompetency = async () => {
       if (!(formCompetency.document instanceof File)) {
         alert('Please upload a document before saving.');
         return;
       }
-    
+      setIsAdding(true);
       const form = new FormData();
       form.append('name', formCompetency.name);
       form.append('la_subject_id', formCompetency.la_subject_id);
@@ -145,7 +168,7 @@ interface Competency {
         }
       } catch (error) {
         console.error('Error adding competency:', error);
-      }
+      } finally { setIsAdding(false); }
     };
     
   
@@ -165,6 +188,7 @@ interface Competency {
     // Update competency
     const updateCompetency = async () => {
       if (!selectedCompetency) return;
+      setIsUpdating(true);
       const form = new FormData();
       form.append('name', formCompetency.name);
       form.append('la_subject_id', formCompetency.la_subject_id);
@@ -176,7 +200,7 @@ interface Competency {
       try {
         const res = await fetch(`${api_startpoint}/admin/competencies/${selectedCompetency.id}`, {
           method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
+          // headers: { 'Content-Type': 'application/json' },
           body: form
         });
         const data = await res.json();
@@ -189,7 +213,7 @@ interface Competency {
         }
       } catch (error) {
         console.error('Error updating competency:', error);
-      }
+      } finally { setIsUpdating(false); }
     };
   
     // Open Delete modal
@@ -201,6 +225,7 @@ interface Competency {
     // Delete competency
     const deleteCompetency = async () => {
       if (!selectedCompetency) return;
+      setIsDeleting(true);
       try {
         const res = await fetch(`${api_startpoint}/admin/competencies/${selectedCompetency.id}`, {
           method: 'DELETE'
@@ -215,9 +240,9 @@ interface Competency {
         }
       } catch (error) {
         console.error('Error deleting competency:', error);
-      }
+      } finally { setIsDeleting(false); }
     };
-  
+    const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
     return (
       <div className={`page bg-body ${inter.className} font-sans`}>
         <Sidebar />
@@ -286,21 +311,31 @@ interface Competency {
                       </tr>
                     </thead>
                     <tbody>
-                      {competencies.map((comp) => (
+                    {loadingList ? (
+                      <tr><td colSpan={7} className="text-center py-8">
+                        <div className="animate-spin border-t-2 border-blue-500 rounded-full w-8 h-8 mx-auto"></div>
+                      </td></tr>
+                    ) : competencies.map((comp) => (
                         <tr key={comp.id}>
                           <td>{parseTitle(comp.subject_title)}</td>
                           <td>{parseTitle(comp.level_title)}</td>
                           <td>{comp.competency_title}</td>
                           <td>{comp.document_url ? (
-                              <a href={comp.document_url}
-                                target="_blank"
-                                rel="noopener"
-                                className="text-blue-600 underline">
-                                View
-                              </a>
-                            ) : (
-                              '—'
-                            )}
+                              /\.(jpe?g|png|gif)$/i.test(comp.document_url) ? (
+                                <>
+                                  <img
+                                    src={comp.document_url}
+                                    alt="doc"
+                                    className="w-16 h-16 object-cover rounded cursor-pointer transition-transform hover:scale-110"
+                                    onClick={() => setLightboxUrl(comp.document_url!)}
+                                  />
+                                </>
+                              ) : (
+                                <a href={comp.document_url} target="_blank" rel="noopener" className="text-blue-600 underline">
+                                  Download
+                                </a>
+                              )
+                            ) : '—'}
                           </td>
                           <td>{comp.status === 1 ? 'Active' : 'Inactive'}</td>
                           <td>{comp.created_at}</td>
@@ -358,16 +393,19 @@ interface Competency {
                       ))}
                     </select>
                   </div>
-                  <div className="mb-3">
-                    <label className="form-label">Level ID</label>
-                    <input
-                      type="text"
-                      className="form-control"
-                      value={formCompetency.la_level_id}
-                      onChange={(e) => setFormCompetency({ ...formCompetency, la_level_id: e.target.value })}
-                      placeholder="e.g., 1,2,3"
-                    />
-                  </div>
+                    <div className="mb-3">
+                      <label className="form-label">Level</label>
+                      <select
+                        className="form-select"
+                        value={formCompetency.la_level_id}
+                        onChange={e => handleFormChange('la_level_id', e.target.value)}
+                      >
+                        <option value="">Select Level</option>
+                        {levels.map(lvl => (
+                          <option key={lvl.id} value={lvl.id}>{parseTitle(lvl.title)}</option>
+                        ))}
+                      </select>
+                    </div>
                   <div className="mb-3">
                     <label className="form-label">Status</label>
                     <select
@@ -399,8 +437,13 @@ interface Competency {
                   <button className="btn btn-secondary" onClick={() => setShowAddModal(false)}>
                     Close
                   </button>
-                  <button className="btn btn-primary" onClick={addCompetency}>
-                    Save
+                  <button
+                    className="btn btn-primary flex items-center"
+                    onClick={addCompetency}
+                    disabled={isAdding}
+                  >
+                    {isAdding && <div className="animate-spin border-t-2 border-white rounded-full w-4 h-4 mr-2"></div>}
+                    {isAdding ? 'Saving...' : 'Save'}
                   </button>
                 </div>
               </div>
@@ -447,15 +490,17 @@ interface Competency {
                     </select>
                   </div>
                   <div className="mb-3">
-                    <label className="form-label">Level ID</label>
-                    <input
-                      type="text"
-                      className="form-control"
-                      value={formCompetency.la_level_id}
-                      onChange={(e) =>
-                        setFormCompetency({ ...formCompetency, la_level_id: e.target.value })
-                      }
-                    />
+                      <label className="form-label">Level</label>
+                      <select
+                        className="form-select"
+                        value={formCompetency.la_level_id}
+                        onChange={e => handleFormChange('la_level_id', e.target.value)}
+                      >
+                        <option value="">Select Level</option>
+                        {levels.map(lvl => (
+                          <option key={lvl.id} value={lvl.id}>{parseTitle(lvl.title)}</option>
+                        ))}
+                      </select>
                   </div>
                   <div className="mb-3">
                     <label className="form-label">Status</label>
@@ -491,8 +536,13 @@ interface Competency {
                   <button className="btn btn-secondary" onClick={() => setShowEditModal(false)}>
                     Cancel
                   </button>
-                  <button className="btn btn-primary" onClick={updateCompetency}>
-                    Save Changes
+                  <button
+                    className="btn btn-primary flex items-center"
+                    onClick={updateCompetency}
+                    disabled={isUpdating}
+                  >
+                    {isUpdating && <div className="animate-spin border-t-2 border-white rounded-full w-4 h-4 mr-2"></div>}
+                    {isUpdating ? 'Saving...' : 'Save Changes'}
                   </button>
                 </div>
               </div>
@@ -518,14 +568,43 @@ interface Competency {
                   <button className="btn btn-secondary" onClick={() => setShowDeleteModal(false)}>
                     Cancel
                   </button>
-                  <button className="btn btn-danger" onClick={deleteCompetency}>
-                    Delete
+                  <button
+                    className="btn btn-danger flex items-center"
+                    onClick={deleteCompetency}
+                    disabled={isDeleting}
+                  >
+                    {isDeleting && <div className="animate-spin border-t-2 border-white rounded-full w-4 h-4 mr-2"></div>}
+                    {isDeleting ? 'Deleting...' : 'Delete'}
                   </button>
                 </div>
               </div>
             </div>
           </div>
         )}
+
+                      {lightboxUrl && (
+                        <div
+                            className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 mt-0"
+                            onClick={() => setLightboxUrl(null)}
+                        >
+                            <div className="relative">
+                            <img
+                                src={lightboxUrl}
+                                alt="Enlarged Preview"
+                                className="max-w-[90vw] max-h-[90vh] rounded-lg shadow-lg"
+                            />
+                            <button
+                                className="absolute top-2 right-2 text-white bg-gray-900 rounded-full p-1"
+                                onClick={(e) => {
+                                e.stopPropagation(); // prevent closing when clicking the button itself
+                                setLightboxUrl(null);
+                                }}
+                            >
+                                ✕
+                            </button>
+                            </div>
+                        </div>
+                      )}
       </div>
     );
   }

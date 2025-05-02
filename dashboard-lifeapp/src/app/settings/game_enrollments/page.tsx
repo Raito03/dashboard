@@ -9,63 +9,86 @@ import { IconEdit, IconPlus, IconTrash } from '@tabler/icons-react';
 
 //const api_startpoint = 'https://lifeapp-api-vv1.vercel.app'
 const api_startpoint = 'http://152.42.239.141:5000'
-
+// const api_startpoint = 'http://127.0.0.1:5000'
 // Define TypeScript types for Enrollment
 type Enrollment = {
-    id: number;
-    enrollment_code: string;
-    type: number;      // 5 for "Jigyasa", 6 for "Pragya"
-    user_id: number;
-    unlock_enrollment_at: string | null;
-    created_at: string;
-    updated_at: string;
+  id: number;
+  enrollment_code: string;
+  type: number;      // 5 for "Jigyasa", 6 for "Pragya"
+  user_id: number;
+  unlock_enrollment_at: string | null;
+  created_at: string;
+  updated_at: string;
 };
 
 export default function SettingsGameEnrollments() {
-    // Enrollment list and loading state
-    const [enrollments, setEnrollments] = useState<Enrollment[]>([]);
-    const [loading, setLoading] = useState<boolean>(false);
 
-    // Pagination state (10 items per page)
-    const [currentPage, setCurrentPage] = useState<number>(1);
-    const itemsPerPage = 10;
+  // Enrollment list and loading state
+  const [enrollments, setEnrollments] = useState<Enrollment[]>([]);
+  const [loading, setLoading] = useState<boolean>(false);
 
-    // Modal states for add, edit, delete
-    const [showAddModal, setShowAddModal] = useState<boolean>(false);
-    const [showEditModal, setShowEditModal] = useState<boolean>(false);
-    const [showDeleteModal, setShowDeleteModal] = useState<boolean>(false);
-    const [enrollmentToEdit, setEnrollmentToEdit] = useState<Enrollment | null>(null);
-    const [enrollmentToDelete, setEnrollmentToDelete] = useState<Enrollment | null>(null);
+  // Pagination state (10 items per page)
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const itemsPerPage = 10;
 
-    // New enrollment state (for add modal)
-    const [newEnrollment, setNewEnrollment] = useState({
-        // Remove enrollment_code from here.
-        type: '5',         // default to "Jigyasa"
-        user_id: '',
-        unlock_enrollment_at: '',
-    });
+  // Modal states for add, edit, delete
+  const [showAddModal, setShowAddModal] = useState<boolean>(false);
+  const [showEditModal, setShowEditModal] = useState<boolean>(false);
+  const [showDeleteModal, setShowDeleteModal] = useState<boolean>(false);
+  const [enrollmentToEdit, setEnrollmentToEdit] = useState<Enrollment | null>(null);
+  const [enrollmentToDelete, setEnrollmentToDelete] = useState<Enrollment | null>(null);
+
+  // New enrollment state (for add modal)
+  const [newEnrollment, setNewEnrollment] = useState({
+      type: '5',         // default to "Jigyasa"
+      user_id: '',
+      unlock_enrollment_at: '',
+  });
+  
+  // Add state for notification messages
+  const [notification, setNotification] = useState<{message: string, type: 'success' | 'error'} | null>(null);
+
       
 
-    // Function to fetch enrollments
-    const fetchEnrollments = async () => {
-        setLoading(true);
-        try {
-        // GET endpoint for listing enrollments
-        const res = await fetch(`${api_startpoint}/api/enrollments`, {
-            method: 'GET',
-        });
-        const data = await res.json();
-        setEnrollments(data);
-        } catch (error) {
-        console.error("Error fetching enrollments:", error);
-        } finally {
-        setLoading(false);
-        }
-    };
+  // Function to fetch enrollments
+  const fetchEnrollments = async () => {
+    setLoading(true);
+    try {
+    // GET endpoint for listing enrollments
+    const res = await fetch(`${api_startpoint}/api/enrollments`, {
+        method: 'GET',
+    });
+    
+    if (!res.ok) {
+        throw new Error(`HTTP error! status: ${res.status}`);
+    }
+    
+    const data = await res.json();
+    setEnrollments(data);
+    } catch (error) {
+    console.error("Error fetching enrollments:", error);
+    setNotification({
+        message: `Failed to fetch enrollments: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        type: 'error'
+    });
+    } finally {
+    setLoading(false);
+    }
+  };
 
-    useEffect(() => {
-        fetchEnrollments();
-    }, []);
+  useEffect(() => {
+      fetchEnrollments();
+  }, []);
+
+  // Clear notification after 5 seconds
+  useEffect(() => {
+    if (notification) {
+        const timer = setTimeout(() => {
+            setNotification(null);
+        }, 5000);
+        return () => clearTimeout(timer);
+    }
+  }, [notification]);
 
     // Pagination calculations
     const indexOfLast = currentPage * itemsPerPage;
@@ -80,85 +103,134 @@ export default function SettingsGameEnrollments() {
         return type.toString();
     };
 
-    // Handlers for adding, editing, deleting enrollments
-
-    const handleAddEnrollment = async () => {
-        try {
-          const payload = {
-            // enrollment_code is not sent
-            type: newEnrollment.type,  // must be 5 or 6
-            user_id: newEnrollment.user_id,
-            unlock_enrollment_at: newEnrollment.unlock_enrollment_at || null,
-          };
-          const res = await fetch(`${api_startpoint}/api/enrollments`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload),
-          });
-          const data = await res.json();
-          if (data.success) {
-            setShowAddModal(false);
-            // Reset enrollment form
-            setNewEnrollment({ type: '5', user_id: '', unlock_enrollment_at: '' });
-            fetchEnrollments(); // refresh the table
-          }
-        } catch (error) {
-          console.error("Error adding enrollment:", error);
+   // Handlers for adding, editing, deleting enrollments
+   const handleAddEnrollment = async () => {
+      try {
+        const payload = {
+          enrollment_code: "7789", // Add temporary enrollment_code to satisfy database constraint
+          type: parseInt(newEnrollment.type),  // Convert string to number
+          user_id: parseInt(newEnrollment.user_id), // Convert string to number
+          unlock_enrollment_at: newEnrollment.unlock_enrollment_at || null,
+        };
+        
+        const res = await fetch(`${api_startpoint}/api/enrollments`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        
+        if (!res.ok) {
+          const errorData = await res.json();
+          throw new Error(errorData.error || `HTTP error! status: ${res.status}`);
         }
+        
+        const data = await res.json();
+        
+        setShowAddModal(false);
+        // Reset enrollment form
+        setNewEnrollment({ type: '5', user_id: '', unlock_enrollment_at: '' });
+        
+        // Show success notification
+        setNotification({
+          message: `Enrollment created successfully with code: ${data.enrollment_code}`,
+          type: 'success'
+        });
+        
+        fetchEnrollments(); // refresh the table
+      } catch (error) {
+        console.error("Error adding enrollment:", error);
+        setNotification({
+          message: `Failed to add enrollment: ${error instanceof Error ? error.message : 'Unknown error'}`,
+          type: 'error'
+        });
+      }
+  };
+        
+
+  const openEditModal = (enrollment: Enrollment) => {
+    setEnrollmentToEdit(enrollment);
+    setShowEditModal(true);
+  };
+
+  const handleUpdateEnrollment = async () => {
+      if (!enrollmentToEdit) return;
+      try {
+      const payload = {
+          enrollment_code: enrollmentToEdit.enrollment_code,
+          type: enrollmentToEdit.type,
+          user_id: enrollmentToEdit.user_id,
+          unlock_enrollment_at: enrollmentToEdit.unlock_enrollment_at,
       };
       
+      const res = await fetch(`${api_startpoint}/api/enrollments/${enrollmentToEdit.id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+      });
+      
+      if (!res.ok) {
+          const errorData = await res.json();
+          throw new Error(errorData.error || `HTTP error! status: ${res.status}`);
+      }
+      
+      const data = await res.json();
+      
+      setShowEditModal(false);
+      setEnrollmentToEdit(null);
+      
+      // Show success notification
+      setNotification({
+          message: "Enrollment updated successfully",
+          type: 'success'
+      });
+      
+      fetchEnrollments();
+      } catch (error) {
+      console.error("Error updating enrollment:", error);
+      setNotification({
+          message: `Failed to update enrollment: ${error instanceof Error ? error.message : 'Unknown error'}`,
+          type: 'error'
+      });
+      }
+  };
 
-    const openEditModal = (enrollment: Enrollment) => {
-        setEnrollmentToEdit(enrollment);
-        setShowEditModal(true);
-    };
+  const openDeleteModal = (enrollment: Enrollment) => {
+    setEnrollmentToDelete(enrollment);
+    setShowDeleteModal(true);
+  };
 
-    const handleUpdateEnrollment = async () => {
-        if (!enrollmentToEdit) return;
-        try {
-        const payload = {
-            enrollment_code: enrollmentToEdit.enrollment_code,
-            type: enrollmentToEdit.type,
-            user_id: enrollmentToEdit.user_id,
-            unlock_enrollment_at: enrollmentToEdit.unlock_enrollment_at,
-        };
-        const res = await fetch(`${api_startpoint}/api/enrollments/${enrollmentToEdit.id}`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload),
-        });
-        const data = await res.json();
-        if (data.message) {
-            setShowEditModal(false);
-            setEnrollmentToEdit(null);
-            fetchEnrollments();
-        }
-        } catch (error) {
-        console.error("Error updating enrollment:", error);
-        }
-    };
-
-    const openDeleteModal = (enrollment: Enrollment) => {
-        setEnrollmentToDelete(enrollment);
-        setShowDeleteModal(true);
-    };
-
-    const handleDeleteEnrollment = async () => {
-        if (!enrollmentToDelete) return;
-        try {
-        const res = await fetch(`${api_startpoint}/api/enrollments/${enrollmentToDelete.id}`, {
-            method: 'DELETE',
-        });
-        const data = await res.json();
-        if (data.message) {
-            setShowDeleteModal(false);
-            setEnrollmentToDelete(null);
-            fetchEnrollments();
-        }
-        } catch (error) {
-        console.error("Error deleting enrollment:", error);
-        }
-    };
+  const handleDeleteEnrollment = async () => {
+      if (!enrollmentToDelete) return;
+      try {
+      const res = await fetch(`${api_startpoint}/api/enrollments/${enrollmentToDelete.id}`, {
+          method: 'DELETE',
+      });
+      
+      if (!res.ok) {
+          const errorData = await res.json();
+          throw new Error(errorData.error || `HTTP error! status: ${res.status}`);
+      }
+      
+      const data = await res.json();
+      
+      setShowDeleteModal(false);
+      setEnrollmentToDelete(null);
+      
+      // Show success notification
+      setNotification({
+          message: "Enrollment deleted successfully",
+          type: 'success'
+      });
+      
+      fetchEnrollments();
+      } catch (error) {
+      console.error("Error deleting enrollment:", error);
+      setNotification({
+          message: `Failed to delete enrollment: ${error instanceof Error ? error.message : 'Unknown error'}`,
+          type: 'error'
+      });
+      }
+  };
 
     return (
         <div className={`page bg-body ${inter.className} font-sans`}>
@@ -178,6 +250,14 @@ export default function SettingsGameEnrollments() {
                             </button>
                         </div>
                         </div>
+                        
+                        {/* Notification Alert */}
+                        {notification && (
+                            <div className={`alert ${notification.type === 'success' ? 'alert-success' : 'alert-danger'} alert-dismissible`} role="alert">
+                                {notification.message}
+                                <button type="button" className="btn-close" onClick={() => setNotification(null)}></button>
+                            </div>
+                        )}
 
                         {/* Loading Animation */}
                         {loading ? (
@@ -203,57 +283,65 @@ export default function SettingsGameEnrollments() {
                                 </tr>
                                 </thead>
                                 <tbody>
-                                {paginatedEnrollments.map((enroll) => (
-                                    <tr key={enroll.id}>
-                                    <td>{enroll.id}</td>
-                                    <td>{enroll.enrollment_code}</td>
-                                    <td>{mapType(enroll.type)}</td>
-                                    <td>{enroll.user_id}</td>
-                                    <td>{enroll.unlock_enrollment_at || 'N/A'}</td>
-                                    <td>{enroll.created_at}</td>
-                                    <td>{enroll.updated_at}</td>
-                                    <td>
-                                        <button
-                                        className="btn btn-secondary btn-sm me-2"
-                                        onClick={() => openEditModal(enroll)}
-                                        >
-                                        <IconEdit /> Edit
-                                        </button>
-                                        <button
-                                        className="btn btn-danger btn-sm"
-                                        onClick={() => openDeleteModal(enroll)}
-                                        >
-                                        <IconTrash /> Delete
-                                        </button>
-                                    </td>
+                                {paginatedEnrollments.length > 0 ? (
+                                    paginatedEnrollments.map((enroll) => (
+                                        <tr key={enroll.id}>
+                                        <td>{enroll.id}</td>
+                                        <td>{enroll.enrollment_code}</td>
+                                        <td>{mapType(enroll.type)}</td>
+                                        <td>{enroll.user_id}</td>
+                                        <td>{enroll.unlock_enrollment_at || 'N/A'}</td>
+                                        <td>{enroll.created_at}</td>
+                                        <td>{enroll.updated_at}</td>
+                                        <td>
+                                            <button
+                                            className="btn btn-secondary btn-sm me-2"
+                                            onClick={() => openEditModal(enroll)}
+                                            >
+                                            <IconEdit /> Edit
+                                            </button>
+                                            <button
+                                            className="btn btn-danger btn-sm"
+                                            onClick={() => openDeleteModal(enroll)}
+                                            >
+                                            <IconTrash /> Delete
+                                            </button>
+                                        </td>
+                                        </tr>
+                                    ))
+                                ) : (
+                                    <tr>
+                                        <td colSpan={8} className="text-center">No enrollments found</td>
                                     </tr>
-                                ))}
+                                )}
                                 </tbody>
                             </table>
                             {/* Pagination Controls */}
-                            <div className="d-flex justify-content-between align-items-center mt-3">
-                                <button
-                                className="btn btn-secondary"
-                                onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
-                                disabled={currentPage === 1}
-                                >
-                                Previous
-                                </button>
-                                <span>
-                                Page {currentPage} of {totalPages || 1}
-                                </span>
-                                <button
-                                className="btn btn-secondary"
-                                onClick={() =>
-                                    setCurrentPage((prev) =>
-                                    prev < totalPages ? prev + 1 : prev
-                                    )
-                                }
-                                disabled={currentPage === totalPages}
-                                >
-                                Next
-                                </button>
-                            </div>
+                            {paginatedEnrollments.length > 0 && (
+                                <div className="d-flex justify-content-between align-items-center mt-3">
+                                    <button
+                                    className="btn btn-secondary"
+                                    onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
+                                    disabled={currentPage === 1}
+                                    >
+                                    Previous
+                                    </button>
+                                    <span>
+                                    Page {currentPage} of {totalPages || 1}
+                                    </span>
+                                    <button
+                                    className="btn btn-secondary"
+                                    onClick={() =>
+                                        setCurrentPage((prev) =>
+                                        prev < totalPages ? prev + 1 : prev
+                                        )
+                                    }
+                                    disabled={currentPage === totalPages}
+                                    >
+                                    Next
+                                    </button>
+                                </div>
+                            )}
                             </div>
                         </div>
                         )}
@@ -271,17 +359,6 @@ export default function SettingsGameEnrollments() {
                 <button type="button" className="btn-close" onClick={() => setShowAddModal(false)}></button>
               </div>
               <div className="modal-body">
-                {/* <div className="mb-3">
-                  <label className="form-label">Enrollment Code</label>
-                  <input
-                    type="text"
-                    className="form-control"
-                    value={newEnrollment.enrollment_code}
-                    onChange={(e) =>
-                      setNewEnrollment({ ...newEnrollment, enrollment_code: e.target.value })
-                    }
-                  />
-                </div> */}
                 <div className="mb-3">
                   <label className="form-label">User ID</label>
                   <input
@@ -291,6 +368,7 @@ export default function SettingsGameEnrollments() {
                     onChange={(e) =>
                       setNewEnrollment({ ...newEnrollment, user_id: e.target.value })
                     }
+                    required
                   />
                 </div>
                 <div className="mb-3">
@@ -319,7 +397,17 @@ export default function SettingsGameEnrollments() {
                 </div>
               </div>
               <div className="modal-footer">
-                <button className="btn btn-primary" onClick={handleAddEnrollment}>
+                <button 
+                  className="btn btn-secondary" 
+                  onClick={() => setShowAddModal(false)}
+                >
+                  Cancel
+                </button>
+                <button 
+                  className="btn btn-primary" 
+                  onClick={handleAddEnrollment}
+                  disabled={!newEnrollment.user_id}
+                >
                   Submit
                 </button>
               </div>
@@ -358,6 +446,7 @@ export default function SettingsGameEnrollments() {
                     onChange={(e) =>
                       setEnrollmentToEdit({ ...enrollmentToEdit, user_id: Number(e.target.value) })
                     }
+                    required
                   />
                 </div>
                 <div className="mb-3">
@@ -389,7 +478,17 @@ export default function SettingsGameEnrollments() {
                 </div>
               </div>
               <div className="modal-footer">
-                <button className="btn btn-primary" onClick={handleUpdateEnrollment}>
+                <button 
+                  className="btn btn-secondary" 
+                  onClick={() => setShowEditModal(false)}
+                >
+                  Cancel
+                </button>
+                <button 
+                  className="btn btn-primary" 
+                  onClick={handleUpdateEnrollment}
+                  disabled={!enrollmentToEdit.user_id}
+                >
                   Save Changes
                 </button>
               </div>
