@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 from pathlib import Path
 app = Flask(__name__)
 # Configure CORS to allow requests from http://localhost:3000 with credentials
-CORS(app, resources={r"/*": {"origins":"http://localhost:3000"}}, supports_credentials=True)
+CORS(app, resources={r"/*": {"origins":"*"}}, supports_credentials=True)
 
 import os
 from dotenv import load_dotenv
@@ -2038,15 +2038,15 @@ def search():
         sql += f"""
         AND (
             u.school_code IN ({placeholders})
-        OR u.school_id   IN ({placeholders})
+        
         )
         """
-
+        # OR u.school_id   IN ({placeholders})
         # 4a. Bind for u.school_code → cast each code to int()
         params.extend([int(c) for c in codes])
 
         # 4b. Bind for u.school_id   → use the raw codes (or ints if your IDs are numeric)
-        params.extend(codes)
+        # params.extend(codes)
 
         
     if mobile_no:
