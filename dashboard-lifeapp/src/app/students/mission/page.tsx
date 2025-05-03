@@ -1,14 +1,13 @@
 'use client'
 import '@tabler/core/dist/css/tabler.min.css';
 // import 'bootstrap/dist/css/bootstrap.min.css';
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import React from 'react';
 import { Inter } from 'next/font/google';
 const inter = Inter({ subsets: ['latin'] });
 import { Sidebar } from '@/components/ui/sidebar';
 import { IconSearch, IconBell, IconSettings, IconDownload, IconX } from '@tabler/icons-react';
-import { BarChart3, Download, Plus, Search, XCircle } from 'lucide-react';
-
+import { BarChart3, ChevronDown, Download, Plus, Search, XCircle } from 'lucide-react';
 
   
 // const api_startpoint = 'https://lifeapp-api-vv1.vercel.app'
@@ -22,11 +21,14 @@ export default function MissionPage() {
     const [selectedAssignedBy, setSelectedAssignBy] = useState("");
     const [tableData, setTableData] = useState<any[]>([]);
     const [totalPages, setTotalPages] = useState<number>(0);
+    const [totalRows, setTotalRows]     = useState(0);
     const [currentPage, setCurrentPage] = useState<number>(0);
     const rowsPerPage = 50;
     const [isTableLoading, setIsTableLoading] = useState(false);
     // Add two new state variables for the school ID and mobile no filters
-    const [selectedSchoolID, setSelectedSchoolID] = useState("");
+    const [inputCode, setInputCode] = useState("");
+    // Update existing state declaration
+    const [selectedSchoolCode, setSelectedSchoolCode] = useState<string[]>([]);
     const [selectedMobileNo, setSelectedMobileNo] = useState("");
     // lightbox
     const [lightboxUrl, setLightboxUrl] = useState<string|null>(null)
@@ -37,9 +39,9 @@ export default function MissionPage() {
             assigned_by: selectedAssignedBy,
             from_date: selectedFromDate, // Include the From Date filter
             to_date: selectedToDate,      // Include the To Date filter
-            school_id: selectedSchoolID,  // new filter
+            school_code: selectedSchoolCode.length > 0 ? selectedSchoolCode : undefined,  // new filter
             mobile_no: selectedMobileNo,  // new filter
-            page: currentPage + 1,
+            page: pageIndex + 1,
             per_page: rowsPerPage
         };
 
@@ -51,12 +53,25 @@ export default function MissionPage() {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(filters)
             });
-            const { data, pagination } = await res.json();
-            setTableData(data);
-            setTotalPages(pagination.total_pages);
-            setCurrentPage(pageIndex); // Reset to first page on new search
+            const result = await res.json();
+            // guard against bad shape
+            if (!result.data || !result.pagination) {
+                console.error("Invalid response:", result);
+                setTableData([]);
+                setTotalPages(0);
+                setTotalRows(0);
+                return;
+            }
+        
+            // 👍 safe to update
+            setTableData(result.data);
+            setTotalPages(result.pagination.total_pages);
+            setTotalRows(result.pagination.total);
+            setCurrentPage(pageIndex)
         } catch (error) {
             console.error("Search error:", error);
+            setTotalRows(0);
+            setTableData([]);
         } finally {
             setIsTableLoading(false); // Set loading to false when search completes (success or error)
         }
@@ -79,7 +94,7 @@ export default function MissionPage() {
         setSelectedFromDate(""); // Clear the From Date
         setSelectedToDate("");   // Clear the To Date
         // Clear other filters...
-        setSelectedSchoolID("");
+        setSelectedSchoolCode([]);
         setSelectedMobileNo("");
         setTableData([]);
         setCurrentPage(0);
@@ -164,26 +179,6 @@ export default function MissionPage() {
         <div className={`page bg-light ${inter.className} font-sans`}>
             <Sidebar />
             <div className="page-wrapper" style={{ marginLeft: '250px' }}>
-                {/* <header className="navbar navbar-expand-md navbar-light bg-white shadow-sm border-bottom mb-3">
-                    <div className="container-fluid">
-                        <div className="d-flex align-items-center w-full">
-                            <span className='font-bold text-xl text-black'>LifeAppDashboard</span>
-                            <div className='w-5/6 h-10'></div>
-                            <div className="d-flex gap-3 align-items-center">
-                                <a href="#" className="btn btn-light btn-icon">
-                                    <IconSearch size={20} className="text-muted"/>
-                                </a>
-                                <a href="#" className="btn btn-light btn-icon position-relative">
-                                    <IconBell size={20} className="text-muted"/>
-                                    <span className="badge bg-danger position-absolute top-0 end-0">3</span>
-                                </a>
-                                <a href="#" className="btn btn-light btn-icon">
-                                    <IconSettings size={20} className="text-muted"/>
-                                </a>
-                            </div>
-                        </div>
-                    </div>
-                </header> */}
 
                 <div className='page-body'>
                     <div className='container-xl pt-0 pb-4'>
@@ -225,14 +220,40 @@ export default function MissionPage() {
                                                 onChange={(e) => setSelectedToDate(e.target.value)}
                                             />
                                         </div>
-                                        <div className="col-12 col-md-6 col-lg-3">
-                                            <input
+                                        <div className="col-12 col-md-6 col-lg-4">
+                                            <div className="border rounded p-2 bg-white">
+                                                
+                                                <input
                                                 type="text"
-                                                placeholder="School ID"
-                                                className="form-control"
-                                                value={selectedSchoolID}
-                                                onChange={(e) => setSelectedSchoolID(e.target.value)}
-                                            />
+                                                placeholder="Search With School code (comma separated)"
+                                                className="form-control border-0 p-0"
+                                                value={inputCode}
+                                                onChange={(e) => setInputCode(e.target.value)}
+                                                onKeyDown={(e) => {
+                                                    if (['Enter', ',', ' '].includes(e.key)) {
+                                                    e.preventDefault();
+                                                    const code = inputCode.trim();
+                                                    if (code && !selectedSchoolCode.includes(code)) {
+                                                        setSelectedSchoolCode(prev => [...prev, code]);
+                                                    }
+                                                    setInputCode('');
+                                                    }
+                                                }}
+                                                />
+                                                <div className="d-flex flex-wrap gap-2 mt-2">
+                                                {selectedSchoolCode.map(code => (
+                                                    <span key={code} className="badge bg-purple text-white d-flex align-items-center">
+                                                    {code}
+                                                    <button 
+                                                        type="button" 
+                                                        className="btn-close btn-close-white ms-2" 
+                                                        onClick={() => setSelectedSchoolCode(prev => prev.filter(c => c !== code))}
+                                                        aria-label="Remove"
+                                                    ></button>
+                                                    </span>
+                                                ))}
+                                                </div>
+                                            </div>
                                         </div>
                                         <div className="col-12 col-md-6 col-lg-3">
                                             <input
@@ -279,7 +300,7 @@ export default function MissionPage() {
                             {/* Paginated Results Table */}
                             <div className="card shadow-sm border-0 mt-2">
                                 <div className="card-body overflow-x-scroll">
-                                    <h5 className="card-title mb-4">Results- {totalPages} Students found</h5>
+                                    <h5 className="card-title mb-4">Results- {totalRows} Students found</h5>
                                     {isTableLoading ? (
                                             <div className="text-center p-5">
                                                 <div className="spinner-border text-purple" role="status" style={{ width: "3rem", height: "3rem" }}>
@@ -302,7 +323,7 @@ export default function MissionPage() {
                                                             <th>Row ID</th>
                                                             <th>Mission ID</th>
                                                             <th>Student Name</th>
-                                                            <th>School ID</th>
+                                                            <th>School Code</th>
                                                             <th>School Name</th>
                                                             <th>Mission Title</th>
                                                             <th>Media</th>
@@ -339,7 +360,7 @@ export default function MissionPage() {
                                                                 <td>{row.Row_ID}</td>
                                                                 <td>{row.Mission_ID}</td>
                                                                 <td>{row.Student_Name}</td>
-                                                                <td>{row.School_ID}</td>
+                                                                <td>{row.school_code}</td>
                                                                 <td>{row.School_Name}</td>
                                                                 <td>{MissionTitle}</td>
                                                                 <td>

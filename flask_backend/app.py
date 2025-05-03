@@ -2504,7 +2504,7 @@ def mission_search():
                     END AS Assigned_By,
                     u.id AS Student_ID,
                     u.name AS Student_Name,
-                    u.school_id AS School_ID,
+                    u.school_code AS school_code,
                     s.name AS School_Name,
                     CASE 
                         WHEN mc.approved_at IS NOT NULL THEN 'Approved'
@@ -2559,10 +2559,28 @@ def mission_search():
         params.append(to_date)
 
     # NEW: Add filter for School ID and Mobile No.
-    school_id = filters.get('school_id')
-    if school_id:
-        sql += " AND cte.School_ID = %s"
-        params.append(school_id)
+    schoolCodes = filters.get('school_code')
+    if schoolCodes:
+        # 1. Make sure it’s a Python list
+        codes = schoolCodes if isinstance(schoolCodes, list) else [schoolCodes]
+
+        # 2. Create “%s,%s,…,%s” with one %s per code
+        placeholders = ",".join(["%s"] * len(codes))
+
+        # 3. Inject both IN‑lists into your SQL
+        sql += f"""
+        AND (
+            cte.school_code IN ({placeholders})
+        
+        )
+        """
+        # OR u.school_id   IN ({placeholders})
+        # 4a. Bind for u.school_code → cast each code to int()
+        params.extend([int(c) for c in codes])
+
+        # 4b. Bind for u.school_id   → use the raw codes (or ints if your IDs are numeric)
+        # params.extend(codes)
+        
     mobile_no = filters.get('mobile_no')
     if mobile_no:
         sql += " AND cte.mobile_no = %s"
