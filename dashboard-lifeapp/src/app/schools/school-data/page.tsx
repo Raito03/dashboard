@@ -172,7 +172,9 @@ export default function SchoolData() {
   const [selectedState, setSelectedState] = useState("");
   const [selectedCity, setSelectedCity] = useState("");
   const [filterName, setFilterName] = useState("");
-  const [filterCode, setFilterCode] = useState("");
+  const [inputCode, setInputCode] = useState("");
+  // Update existing state declaration
+  const [selectedSchoolCode, setSelectedSchoolCode] = useState<string[]>([]);
   const [filterDistrict, setFilterDistrict] = useState("");
   const [filterCluster, setFilterCluster] = useState("");
   const [filterBlock, setFilterBlock] = useState("");
@@ -196,12 +198,16 @@ export default function SchoolData() {
     app_visible: "No",
     is_life_lab: "No",
     status: "Inactive",
+    donor_name: "",   // ← new field
   });
 
   // Pagination state
-  const [currentPage, setCurrentPage] = useState<number>(0);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [perPage, setPerPage]       = useState(50);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalRows, setTotalRows]   = useState(0);
   const rowsPerPage = 50;
-  const paginatedData = tableData.slice(currentPage * rowsPerPage, (currentPage + 1) * rowsPerPage);
+  // const paginatedData = tableData.slice(currentPage * rowsPerPage, (currentPage + 1) * rowsPerPage);
 
   // ---------- Fetching Functions ----------
   const fetchSchools = async () => {
@@ -212,8 +218,10 @@ export default function SchoolData() {
       district: filterDistrict,
       block: filterBlock,
       cluster: filterCluster,
-      code: filterCode,
+      code: selectedSchoolCode.length > 0 ? selectedSchoolCode : undefined,
       status: filterStatus,
+      page: currentPage,
+      per_page: rowsPerPage,
     }
     setLoading(true);
     try {
@@ -227,47 +235,10 @@ export default function SchoolData() {
       if (!res.ok) {
         throw new Error(`API responded with status: ${res.status}`);
       }
-      const data = await res.json();
-      // Apply local filtering based on search fields:
-      // let filtered = data;
-      // if (filterName) {
-      //   filtered = filtered.filter((s: any) =>
-      //     s.name.toLowerCase().includes(filterName.toLowerCase())
-      //   );
-      // }
-      // if (filterCode) {
-      //   filtered = filtered.filter((s: any) =>
-      //     s.code 
-      //   );
-      // }
-      // if (filterDistrict) {
-      //   filtered = filtered.filter((s: any) =>
-      //     s.district.toLowerCase().includes(filterDistrict.toLowerCase())
-      //   );
-      // }
-      // if (filterBlock) {
-      //   filtered = filtered.filter((s: any) =>
-      //     s.block.toLowerCase().includes(filterBlock.toLowerCase())
-      //   );
-      // }
-      // if (filterCluster) {
-      //   filtered = filtered.filter((s: any) =>
-      //     s.cluster.toLowerCase().includes(filterCluster.toLowerCase())
-      //   );
-      // }
-      // if (filterStatus) {
-      //   filtered = filtered.filter((s: any) =>
-      //     s.status.toLowerCase() === filterStatus.toLowerCase()
-      //   );
-      // }
-      // if (selectedState) {
-      //   filtered = filtered.filter((s: any) => s.state === selectedState);
-      // }
-      // if (selectedCity) {
-      //   filtered = filtered.filter((s: any) => s.city === selectedCity);
-      // }
+      const { data, total, total_pages } = await res.json();
       setTableData(data);
-      setCurrentPage(0);
+      setTotalRows(total);
+      setTotalPages(total_pages);
     } catch (error) {
       console.error("Error fetching schools:", error);
     } finally {
@@ -306,7 +277,7 @@ export default function SchoolData() {
   useEffect(() => {
     fetchSchools();
     fetchStates();
-  }, []);
+  }, [currentPage, perPage]);
 
   useEffect(() => {
     if (selectedState) {
@@ -319,7 +290,7 @@ export default function SchoolData() {
 
   // ---------- Handlers ----------
   const handleEditClick = (school: any) => {
-    setEditSchoolData({ ...school });
+    setEditSchoolData({ ...school, donor_name: school.donor_name || ""  });
     setShowEditModal(true);
   };
 
@@ -384,6 +355,7 @@ export default function SchoolData() {
         app_visible: "No",
         is_life_lab: "No",
         status: "Inactive",
+        donor_name: "",   // ← reset it
       });
       fetchSchools();
     } catch (error) {
@@ -393,22 +365,32 @@ export default function SchoolData() {
 
   const handleClear = () => {
     setFilterName("");
-    setFilterCode("");
+    setSelectedSchoolCode([]);
     setFilterDistrict("");
     setFilterBlock("");
-    setFilterCode("");
+    setSelectedSchoolCode([]);
     setFilterStatus("");
     setSelectedState("");
     setSelectedCity("");
+    setCurrentPage(0);
     fetchSchools();
   };
 
-  const handlePrevPage = () => {
-    setCurrentPage(prev => Math.max(prev - 1, 0));
-  };
+  // const handlePrevPage = () => {
+  //   setCurrentPage(prev => Math.max(prev - 1, 0));
+  // };
 
-  const handleNextPage = () => {
-    setCurrentPage(prev => (prev + 1) * rowsPerPage < tableData.length ? prev + 1 : prev);
+  // const handleNextPage = () => {
+  //   setCurrentPage(prev => (prev + 1) * rowsPerPage < tableData.length ? prev + 1 : prev);
+  // };
+  // 3) Prev/Next handlers
+  const goPrev = () => setCurrentPage(p => Math.max(1, p - 1));
+  const goNext = () => setCurrentPage(p => Math.min(totalPages, p + 1));
+
+  // 4) Rows-per-page change
+  const onPerPageChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    setPerPage(Number(e.target.value));
+    setCurrentPage(1);
   };
 
   // Add this state near other modal states
@@ -445,7 +427,7 @@ export default function SchoolData() {
 
   // -------- CSV Template Download Setup --------
   const csvTemplate =
-    "school_name,state_name,city_name,district_name,block_name,cluster_name,pin_code,school_code,app_visible,is_life_lab\n";
+  "school_name,state_name,city_name,district_name,block_name,cluster_name,pin_code,school_code,donor_name,app_visible,is_life_lab,status\n";
   const downloadCsvTemplate = () => {
     const blob = new Blob([csvTemplate], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
@@ -499,14 +481,40 @@ export default function SchoolData() {
                       onChange={(e) => setFilterName(e.target.value)}
                     />
                   </div>
-                  <div className="col-12 col-md-6 col-lg-3">
-                    <input
-                      type="text"
-                      className="form-control"
-                      placeholder="Enter School Code"
-                      value={filterCode}
-                      onChange={(e) => setFilterCode(e.target.value)}
-                    />
+                  <div className="col-12 col-md-6 col-lg-4">
+                    <div className="border rounded p-2 bg-white">
+                        
+                        <input
+                        type="text"
+                        placeholder="Search With School code (comma separated)"
+                        className="form-control border-0 p-0"
+                        value={inputCode}
+                        onChange={(e) => setInputCode(e.target.value)}
+                        onKeyDown={(e) => {
+                            if (['Enter', ',', ' '].includes(e.key)) {
+                            e.preventDefault();
+                            const code = inputCode.trim();
+                            if (code && !selectedSchoolCode.includes(code)) {
+                                setSelectedSchoolCode(prev => [...prev, code]);
+                            }
+                            setInputCode('');
+                            }
+                        }}
+                        />
+                        <div className="d-flex flex-wrap gap-2 mt-2">
+                        {selectedSchoolCode.map(code => (
+                            <span key={code} className="badge bg-purple text-white d-flex align-items-center">
+                            {code}
+                            <button 
+                                type="button" 
+                                className="btn-close btn-close-white ms-2" 
+                                onClick={() => setSelectedSchoolCode(prev => prev.filter(c => c !== code))}
+                                aria-label="Remove"
+                            ></button>
+                            </span>
+                        ))}
+                        </div>
+                    </div>
                   </div>
                   <div className="col-12 col-md-6 col-lg-3">
                     <input
@@ -594,7 +602,7 @@ export default function SchoolData() {
             {/* TABLE OF SCHOOLS WITH PAGINATION */}
               <div className="card shadow-sm border-0 mt-2 mb-4">
                 <div className="card-body overflow-x-scroll">
-                  <h5 className="card-title">All Schools- {tableData.length} Schools found</h5>
+                  <h5 className="card-title">All Schools- {totalRows} Schools found</h5>
                   {loading ? (
                     <div className="text-center p-5">
                         <div className="spinner-border text-purple" role="status" style={{ width: "3rem", height: "3rem" }}>
@@ -616,6 +624,7 @@ export default function SchoolData() {
                             <th>Cluster</th>
                             <th>Pin Code</th>
                             <th>Code</th>
+                            <th>Donor Name</th>
                             <th>App Visible</th>
                             <th>Is Life Lab</th>
                             <th>Status</th>
@@ -623,7 +632,7 @@ export default function SchoolData() {
                           </tr>
                         </thead>
                         <tbody>
-                          {paginatedData.map((school) => (
+                          {tableData.map((school) => (
                             <tr key={school.id}>
                               <td>{school.id}</td>
                               <td>{school.name}</td>
@@ -634,6 +643,7 @@ export default function SchoolData() {
                               <td>{school.cluster}</td>
                               <td>{school.pin_code}</td>
                               <td>{school.code}</td>
+                              <td>{school.donor_name}</td>
                               <td>{school.app_visible}</td>
                               <td>{school.is_life_lab}</td>
                               <td>{school.status}</td>
@@ -651,16 +661,15 @@ export default function SchoolData() {
                       </table>
                       {/* Pagination Controls */}
                       <div className="d-flex justify-content-between align-items-center">
-                        <button className="btn btn-outline-secondary" onClick={handlePrevPage} disabled={currentPage === 0}>
+                        <button className="btn btn-outline-secondary" onClick={goPrev} disabled={currentPage === 1}>
                           Previous
                         </button>
                         <span>
-                          Page {currentPage + 1} of {Math.ceil(tableData.length / rowsPerPage)}
+                          Page {currentPage} of {totalPages} ({totalRows} rows)
                         </span>
                         <button
                           className="btn btn-outline-secondary"
-                          onClick={handleNextPage}
-                          disabled={(currentPage + 1) * rowsPerPage >= tableData.length}
+                          onClick={goNext} disabled={currentPage === totalPages}
                         >
                           Next
                         </button>
@@ -742,6 +751,20 @@ export default function SchoolData() {
                     <option value="Yes">Yes</option>
                     <option value="No">No</option>
                   </select>
+                </div>
+                <div className="mb-3">
+                  <label className="form-label">Donor Name</label>
+                  <input
+                    type="text"
+                    className="form-control"
+                    value={addSchoolData.donor_name}
+                    onChange={(e) =>
+                      setAddSchoolData({
+                        ...addSchoolData,
+                        donor_name: e.target.value,
+                      })
+                    }
+                  />
                 </div>
                 <div className="mb-3">
                   <label className="form-label">Status</label>
@@ -838,6 +861,20 @@ export default function SchoolData() {
                   </select>
                 </div>
                 <div className="mb-3">
+                  <label className="form-label">Donor Name</label>
+                  <input
+                    type="text"
+                    className="form-control"
+                    value={editSchoolData.donor_name || ""}
+                    onChange={(e) =>
+                      setEditSchoolData({
+                        ...editSchoolData,
+                        donor_name: e.target.value,
+                      })
+                    }
+                  />
+                </div>
+                <div className="mb-3">
                   <label className="form-label">Status</label>
                   <select
                     className="form-select"
@@ -907,7 +944,7 @@ export default function SchoolData() {
                   <div className="form-text">
                     CSV format (required columns):<br/>
                     school_name, state_name, city_name, district_name, block_name,<br/> 
-                    cluster_name, pin_code, school_code, app_visible, is_life_lab<br/>
+                    cluster_name, pin_code, school_code, donor_name, app_visible, is_life_lab, status<br/>
                     <small className="text-muted">
                       Note: app_visible and is_life_lab values should be - yes or no
                     </small>

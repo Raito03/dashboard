@@ -652,7 +652,7 @@ export default function MentorsDashboard() {
   };
   
   const mentorsCsvTemplate =
-  "name,email,mobile_no,pin,state,city,gender,dob (YYYY-MM-DD)\n";
+  "name,email,mobile_no,mentor_code\n";
 
   const downloadMentorsCsvTemplate = () => {
     const blob = new Blob([mentorsCsvTemplate], { type: 'text/csv' });
@@ -1045,7 +1045,7 @@ export default function MentorsDashboard() {
                           onChange={(e) => setCsvFile(e.target.files?.[0] || null)}
                         />
                         <div className="form-text">
-                          CSV format: name,email,mobile_no,pin,state,city,gender,dob
+                          CSV format: name,email,mobile_no,mentor_code
                         </div>
                       </div>
                       {uploadStatus && <div className="alert alert-info">{uploadStatus}</div>}

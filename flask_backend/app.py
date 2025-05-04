@@ -2672,35 +2672,47 @@ def update_mission_status():
 
 @app.route('/api/quiz_sessions', methods=['POST'])
 def get_quiz_sessions():
-    try:
-        data = request.get_json()
-        start_date = data.get('start_date')
-        end_date = data.get('end_date')
+    data = request.get_json() or {}
+    start_date = data.get('start_date')
+    end_date   = data.get('end_date')
+    la_subject_id  = data.get('la_subject_id')
+    la_level_id    = data.get('la_level_id')
+    la_topic_id    = data.get('la_topic_id')
 
-        connection = get_db_connection()
+    # ── Pagination params ──
+    try:
+        page     = max(int(data.get('page', 1)), 1)
+        per_page = min(int(data.get('per_page', 50)), 200)  # cap at 200
+    except (ValueError, TypeError):
+        page, per_page = 1, 50
+    offset = (page - 1) * per_page
+
+    connection = get_db_connection()
+    try:
         with connection.cursor() as cursor:
-            sql = """
+            # base query with filters
+            base_sql = """
                 SELECT 
                     laqg.id,
                     laqg.user_id,
-                    laqg.game_code AS game_id,
-                    las.title AS subject_title,
-                    lal.title AS level_title,
-                    lat.title AS topic_title,
-                    laqg.time AS time_taken,
+                    laqg.game_code     AS game_id,
+                    las.title          AS subject_title,
+                    lal.title          AS level_title,
+                    lat.title          AS topic_title,
+                    laqg.time          AS time_taken,
                     laqgr.total_questions,
                     laqgr.total_correct_answers,
                     laqgr.created_at,
                     laqgr.coins,
-                    u.name AS user_name,
-                    ls.name AS school_name,
+                    u.name             AS user_name,
+                    ls.name            AS school_name,
                     u.earn_coins,
                     u.heart_coins,
                     u.brain_coins
                 FROM lifeapp.la_quiz_games laqg
                 INNER JOIN lifeapp.la_quiz_game_results laqgr 
                     ON laqg.game_code = laqgr.la_quiz_game_id
-                    AND laqg.user_id = laqgr.user_id
+                    AND laqg.user_id   = laqgr.user_id
                 INNER JOIN lifeapp.users u 
                     ON u.id = laqg.user_id
                 INNER JOIN lifeapp.la_subjects las 
@@ -2713,24 +2725,90 @@ def get_quiz_sessions():
                     ON ls.id = u.school_id
                 WHERE 1=1
             """
-            
             params = []
+
             if start_date:
-                sql += " AND laqgr.created_at >= %s"
+                base_sql += " AND laqgr.created_at >= %s"
                 params.append(start_date)
             if end_date:
-                sql += " AND laqgr.created_at <= %s"
+                base_sql += " AND laqgr.created_at <= %s"
                 params.append(end_date)
 
-            cursor.execute(sql, params)
-            result = cursor.fetchall()
+            if la_subject_id:
+                base_sql += " AND laqg.la_subject_id = %s"
+                params.append(la_subject_id)
+            if la_level_id:
+                base_sql += " AND laqg.la_level_id = %s"
+                params.append(la_level_id)
+            if la_topic_id:
+                base_sql += " AND laqg.la_topic_id = %s"
+                params.append(la_topic_id)
+            # 1) total count
+            count_sql = f"SELECT COUNT(*) AS total FROM ({base_sql}) AS sub"
+            cursor.execute(count_sql, tuple(params))
+            total = cursor.fetchone()['total']
             
-        return jsonify(result), 200
+            # 2) unique users
+            user_sql = f"""
+                SELECT COUNT(DISTINCT laqg.user_id) AS unique_user_count
+                FROM lifeapp.la_quiz_games laqg
+                INNER JOIN lifeapp.la_quiz_game_results laqgr
+                    ON laqg.game_code = laqgr.la_quiz_game_id
+                    AND laqg.user_id   = laqgr.user_id
+                INNER JOIN lifeapp.users u
+                    ON u.id = laqg.user_id
+                WHERE 1=1
+                { ' AND laqgr.created_at >= %s' if start_date else '' }
+                { ' AND laqgr.created_at <= %s' if end_date else '' }
+                { ' AND laqg.la_subject_id = %s' if la_subject_id else '' }
+                { ' AND laqg.la_level_id = %s' if la_level_id else '' }
+                { ' AND laqg.la_topic_id = %s' if la_topic_id else '' }
+            """
+            cursor.execute(user_sql, tuple(params))
+            unique_user_count = cursor.fetchone()['unique_user_count']
+
+            # 3) unique schools
+            school_sql = f"""
+                SELECT COUNT(DISTINCT u.school_id) AS unique_school_count
+                FROM lifeapp.la_quiz_games laqg
+                INNER JOIN lifeapp.la_quiz_game_results laqgr
+                    ON laqg.game_code = laqgr.la_quiz_game_id
+                    AND laqg.user_id   = laqgr.user_id
+                INNER JOIN lifeapp.users u
+                    ON u.id = laqg.user_id
+                WHERE 1=1
+                { ' AND laqgr.created_at >= %s' if start_date else '' }
+                { ' AND laqgr.created_at <= %s' if end_date else '' }
+                { ' AND laqg.la_subject_id = %s' if la_subject_id else '' }
+                { ' AND laqg.la_level_id = %s' if la_level_id else '' }
+                { ' AND laqg.la_topic_id = %s' if la_topic_id else '' }
+            """
+            cursor.execute(school_sql, tuple(params))
+            unique_school_count = cursor.fetchone()['unique_school_count']
+
+
+            # 2) page of results
+            page_sql = base_sql + " ORDER BY laqgr.created_at DESC LIMIT %s OFFSET %s"
+            cursor.execute(page_sql, tuple(params) + (per_page, offset))
+            rows = cursor.fetchall()
+
+        return jsonify({
+            "page": page,
+            "per_page": per_page,
+            "total": total,
+            "total_pages": math.ceil(total / per_page),
+            "unique_user_count": unique_user_count,
+            "unique_school_count": unique_school_count,
+            "data": rows
+        }), 200
+
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return jsonify({"error": str(e)}), 500
+
     finally:
         connection.close()
 
+        
 @app.route('/api/game_questions', methods=['POST'])
 def get_game_questions():
     try:
@@ -3030,7 +3108,6 @@ def fetch_teacher_dashboard():
     filters = request.get_json() or {}
     state = filters.get('state')
     city = filters.get('city')
-    school_code = filters.get('school_code')  # School code filter
     is_life_lab = filters.get('is_life_lab')
     school = filters.get('school')
     from_date = filters.get('from_date')  # Starting date filter
@@ -3049,7 +3126,7 @@ def fetch_teacher_dashboard():
         SELECT 
             u.id, u.name, u.email,
             u.mobile_no, u.state, 
-            u.city, ls.name as school_name, u.school_id, 
+            u.city, ls.name as school_name, u.school_code, 
             cte.mission_assign_count,
             CASE 
                 WHEN ls.is_life_lab = 1 THEN 'Yes' 
@@ -3075,9 +3152,29 @@ def fetch_teacher_dashboard():
     if state and state.strip():
         sql += " AND u.state = %s"
         params.append(state)
-    if school_code and school_code.strip():
-        sql += " AND u.school_id = %s"
-        params.append(school_code)
+    # NEW: Add filter for School ID and Mobile No.
+    schoolCodes = filters.get('school_code')
+    if schoolCodes:
+        # 1. Make sure it’s a Python list
+        codes = schoolCodes if isinstance(schoolCodes, list) else [schoolCodes]
+
+        # 2. Create “%s,%s,…,%s” with one %s per code
+        placeholders = ",".join(["%s"] * len(codes))
+
+        # 3. Inject both IN‑lists into your SQL
+        sql += f"""
+        AND (
+            u.school_code IN ({placeholders})
+        
+        )
+        """
+        # OR u.school_id   IN ({placeholders})
+        # 4a. Bind for u.school_code → cast each code to int()
+        params.extend([int(c) for c in codes])
+
+        # 4b. Bind for u.school_id   → use the raw codes (or ints if your IDs are numeric)
+        # params.extend(codes)
+
     if city and city.strip():
         sql += " AND u.city = %s"
         params.append(city)
@@ -4806,86 +4903,117 @@ def delete_competency(competency_id):
 @app.route('/api/get_schools_data', methods=['POST'])
 def get_schools_data():
     """
-    Returns rows from lifeapp.schools with columns:
-    id, name, state, city, district, pin_code, app_visible, is_life_lab, status.
+    Returns paginated rows from lifeapp.schools with columns:
+    id, name, state, city, district, block, cluster, pin_code, code,
+    app_visible, is_life_lab, status.
     Numeric flags are converted to user-friendly text.
+    Accepts JSON body with optional filters *and* pagination params:
+      - page:        (int) 1-based page number, default=1
+      - per_page:    (int) rows per page, default=50
     """
     data = request.get_json() or {}
-    name = data.get('name')
-    state = data.get('state')
-    city = data.get('city')
+    # --- Filters ---
+    name     = data.get('name')
+    state    = data.get('state')
+    city     = data.get('city')
     district = data.get('district')
-    status = data.get('status')
-    cluster = data.get('cluster')
-    block = data.get('block')
-    code = data.get('code')
+    status   = data.get('status')
+    cluster  = data.get('cluster')
+    block    = data.get('block')
+    codes    = data.get('code')
+
+    # --- Pagination params ---
     try:
-        connection = get_db_connection()
-        with connection.cursor() as cursor:
-            sql = """
-                SELECT 
-                    id, 
-                    name, 
-                    state, 
-                    city, 
-                    district,
-                    block,
-                    cluster, 
-                    pin_code,
-                    code,
-                    app_visible,
-                    is_life_lab,
-                    status
-                FROM lifeapp.schools
-                WHERE deleted_at IS NULL
-            """
+        page     = max(int(data.get('page', 1)), 1)
+        per_page = min(int(data.get('per_page', 50)), 200)  # cap per_page to 200
+    except ValueError:
+        page, per_page = 1, 50
+
+    offset = (page - 1) * per_page
+
+    try:
+        conn = get_db_connection()
+        with conn.cursor() as cursor:
+            # Build base WHERE clause
+            where_clauses = ["deleted_at IS NULL"]
             params = []
+
             if status:
-                status_val = 1 if status == "Active" else 0
-                sql += " AND status = %s"
-                params.append(status_val)
+                where_clauses.append("status = %s")
+                params.append(1 if status == "Active" else 0)
 
             if district:
-                sql += " AND (district = %s OR district LIKE %s)"
+                where_clauses.append("(district = %s OR district LIKE %s)")
                 params.extend([district, f"%{district}%"])
-            
+
             if city:
-                sql += " AND city = %s"
+                where_clauses.append("city = %s")
                 params.append(city)
 
             if state:
-                sql += " AND state = %s"
+                where_clauses.append("state = %s")
                 params.append(state)
 
             if name:
-                sql += " AND (name = %s OR name LIKE %s)"
+                where_clauses.append("(name = %s OR name LIKE %s)")
                 params.extend([name, f"%{name}%"])
 
             if cluster:
-                sql += " AND (cluster = %s OR cluster LIKE %s)"
+                where_clauses.append("(cluster = %s OR cluster LIKE %s)")
                 params.extend([cluster, f"%{cluster}%"])
-            
-            if block:
-                sql += " AND (block = %s OR block LIKE %s)"
-                params.extend([block, f"%{block}%"])
-            
-            if code:
-                sql += " AND code = %s"
-                params.append(code)
 
-            # connection = get_db_connection()
-            sql += " ORDER BY id DESC"
-            cursor.execute(sql, tuple(params))
+            if block:
+                where_clauses.append("(block = %s OR block LIKE %s)")
+                params.extend([block, f"%{block}%"])
+
+            if codes:
+                # ensure list
+                code_list = codes if isinstance(codes, list) else [codes]
+                placeholders = ",".join(["%s"] * len(code_list))
+                where_clauses.append(f"code IN ({placeholders})")
+                # cast codes to int when needed
+                params.extend([int(c) for c in code_list])
+
+            where_sql = " AND ".join(where_clauses)
+
+            # 1) get total count
+            count_sql = f"SELECT COUNT(*) AS total FROM lifeapp.schools WHERE {where_sql}"
+            cursor.execute(count_sql, tuple(params))
+            total = cursor.fetchone()["total"]
+
+            # 2) fetch just this page
+            data_sql = f"""
+                SELECT
+                  id, name, state, city, district, block, cluster,
+                  pin_code, code, app_visible, is_life_lab, status, donor_name
+                FROM lifeapp.schools
+                WHERE {where_sql}
+                ORDER BY id DESC
+                LIMIT %s OFFSET %s
+            """
+            cursor.execute(data_sql, tuple(params) + (per_page, offset))
             rows = cursor.fetchall()
+
+            # convert flags
             for row in rows:
                 row["app_visible"] = "Yes" if row["app_visible"] == 1 else "No"
                 row["is_life_lab"] = "Yes" if row["is_life_lab"] == 1 else "No"
-                row["status"] = "Active" if row["status"] == 1 else "Inactive"
-            return jsonify(rows), 200
+                row["status"]      = "Active" if row["status"] == 1 else "Inactive"
+
+        # wrap in pagination envelope
+        return jsonify({
+            "page": page,
+            "per_page": per_page,
+            "total": total,
+            "total_pages": math.ceil(total / per_page),
+            "data": rows
+        }), 200
+
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
     finally:
-        connection.close()
+        conn.close()
 
 @app.route('/api/schools_data', methods=['POST'])
 def add_school_data():
@@ -4906,15 +5034,16 @@ def add_school_data():
             cluster = data.get('cluster')
             code = data.get('code')
             pin_code = data.get("pin_code")
+            donor_name = data.get("donor_name")  # ← new line
             app_visible_val = 1 if data.get("app_visible") == "Yes" else 0
             is_life_lab_val = 1 if data.get("is_life_lab") == "Yes" else 0
             status_val = 1 if data.get("status") == "Active" else 0
             sql = """
                 INSERT INTO lifeapp.schools 
-                (name, state, city, district, pin_code, app_visible, is_life_lab, status, created_at, updated_at, block, cluster, code)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, NOW(), NOW(), %s, %s, %s)
+                (name, state, city, district, pin_code, donor_name, app_visible, is_life_lab, status, created_at, updated_at, block, cluster, code)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, NOW(), NOW(), %s, %s, %s)
             """
-            cursor.execute(sql, (name, state, city, district, pin_code, app_visible_val, is_life_lab_val, status_val, block, cluster, code))
+            cursor.execute(sql, (name, state, city, district, pin_code, donor_name, app_visible_val, is_life_lab_val, status_val, block, cluster, code))
             connection.commit()
         return jsonify({"message": "School added successfully"}), 201
     except Exception as e:
@@ -4940,6 +5069,7 @@ def update_school_data(school_id):
             block = data.get('block')
             code = data.get('code')
             pin_code = data.get("pin_code")
+            donor_name = data.get("donor_name")  # ← new line
             app_visible_val = 1 if data.get("app_visible") == "Yes" else 0
             is_life_lab_val = 1 if data.get("is_life_lab") == "Yes" else 0
             status_val = 1 if data.get("status") == "Active" else 0
@@ -4957,10 +5087,11 @@ def update_school_data(school_id):
                     app_visible = %s,
                     is_life_lab = %s,
                     status = %s,
+                    donor_name = %s,     -- add this line
                     updated_at = NOW()
                 WHERE id = %s
             """
-            cursor.execute(sql, (name, state, city, district, cluster, block, pin_code, code, app_visible_val, is_life_lab_val, status_val, school_id))
+            cursor.execute(sql, (name, state, city, district, cluster, block, pin_code, code, app_visible_val, is_life_lab_val, status_val, donor_name, school_id))
             connection.commit()
         return jsonify({"message": "School updated successfully"}), 200
     except Exception as e:
@@ -5011,9 +5142,9 @@ def upload_schools_csv():
             sql = """
                 INSERT INTO lifeapp.schools 
                 (name, state, city, district, block, cluster, 
-                 pin_code, code, app_visible, is_life_lab, status, 
+                 pin_code, code, donor_name, app_visible, is_life_lab, status, 
                  created_at, updated_at)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW(), NOW())
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW(), NOW())
             """
             
             count = 0
@@ -5028,6 +5159,7 @@ def upload_schools_csv():
                     'cluster': row.get('cluster_name', '').strip(),
                     'pin_code': row.get('pin_code', '').strip(),
                     'code': row.get('school_code', '').strip(),
+                    'donor_name': row.get('donor_name', '').strip(),            # ← new
                     'app_visible': row.get('app_visible', 'No').strip().lower(),
                     'is_life_lab': row.get('is_life_lab', 'No').strip().lower(),
                     'status': row.get('status', 'Active').strip().lower()
@@ -5052,6 +5184,7 @@ def upload_schools_csv():
                     mapped_data['cluster'],
                     mapped_data['pin_code'],
                     mapped_data['code'],
+                    mapped_data['donor_name'],    # ← pass donor_name
                     app_visible_val,
                     is_life_lab_val,
                     status_val
@@ -5420,7 +5553,7 @@ def upload_mentors_csv():
     try:
         stream = io.StringIO(file.stream.read().decode("UTF8"), newline=None)
         reader = csv.DictReader(stream)
-        required = ['name', 'email', 'mobile_no', 'pin']
+        required = ['name', 'email', 'mobile_no', 'mentor_code']
 
         conn = get_db_connection()
         count = 0
@@ -5428,10 +5561,8 @@ def upload_mentors_csv():
             sql = """
                 INSERT INTO lifeapp.users
                   (name, email, mobile_no, pin,
-                   state, city, gender, dob,
                    `type`, created_at, updated_at)
                 VALUES (%s, %s, %s, %s,
-                        %s, %s, %s, %s,
                         4, NOW(), NOW())
             """
 
@@ -5449,24 +5580,23 @@ def upload_mentors_csv():
                 name      = row['name']
                 email     = row.get('email') or None
                 mobile_no = row['mobile_no']
-                pin       = row['pin']
+                pin       = row.get('pin') or row.get('mentor_code')
 
-                state = row.get('state') or None
-                city  = row.get('city') or None
+                # state = row.get('state') or None
+                # city  = row.get('city') or None
 
-                # gender: turn "0"/"1" into int, blank→None
-                raw = row.get('gender') 
-                raw = 0 if raw.lower() == 'male' else 1
-                try:
-                    gender = int(raw) if raw not in (None, '') else None
-                except ValueError:
-                    return jsonify({"error": f"Invalid gender value: {raw}"}), 400
+                # # gender: turn "0"/"1" into int, blank→None
+                # raw = row.get('gender') 
+                # raw = 0 if raw.lower() == 'male' else 1
+                # try:
+                #     gender = int(raw) if raw not in (None, '') else None
+                # except ValueError:
+                #     return jsonify({"error": f"Invalid gender value: {raw}"}), 400
 
-                dob = row.get('dob') or None
+                # dob = row.get('dob') or None
 
                 cursor.execute(sql, (
-                    name, email, mobile_no, pin,
-                    state, city, gender, dob
+                    name, email, mobile_no, pin
                 ))
                 count += 1
 

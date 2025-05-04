@@ -481,7 +481,9 @@ export default function TeachersDashboard() {
     }, []);
       
 
-    const [selectedSchoolCode, setSelectedSchoolCode] = useState<string>("");
+    const [inputCode, setInputCode] = useState("");
+    // Update existing state declaration
+    const [selectedSchoolCode, setSelectedSchoolCode] = useState<string[]>([]);
     const [selectedLifeLab, setSelectedLifeLab] = useState<string>("");
     const [tableData, setTableData] = useState<any[]>([]);
     const [currentPage, setCurrentPage] = useState<number>(0);
@@ -590,7 +592,7 @@ export default function TeachersDashboard() {
         const filters = {
             state: selectedState,
             city: selectedCity,
-            school_code: selectedSchoolCode,
+            school_code:  selectedSchoolCode.length > 0 ? selectedSchoolCode : undefined,
             is_life_lab: selectedLifeLab,
             school: selectedSchools,
             teacher_subject: selectedTeacherSubject, // Now sends subject ID      // New subject filter
@@ -650,7 +652,7 @@ export default function TeachersDashboard() {
         setSelectedState("");
         setSelectedCity("");
         setSelectedLifeLab("");
-        setSelectedSchoolCode("");
+        setSelectedSchoolCode([]);
         // Clear other filters...
         setSelectedSchools("");
         setSelectedFromDate(""); // Clear the From Date
@@ -1819,14 +1821,40 @@ export default function TeachersDashboard() {
                                         </select>
                                     </div>
 
-                                    <div className="col-12 col-md-6 col-lg-3">
-                                        <input 
-                                            type="text" 
-                                            className="form-control" 
-                                            placeholder="Enter School Code" 
-                                            value={selectedSchoolCode}
-                                            onChange={(e) => setSelectedSchoolCode(e.target.value)}
-                                        />
+                                    <div className="col-12 col-md-6 col-lg-4">
+                                        <div className="border rounded p-2 bg-white">
+                                            
+                                            <input
+                                            type="text"
+                                            placeholder="Search With School code (comma separated)"
+                                            className="form-control border-0 p-0"
+                                            value={inputCode}
+                                            onChange={(e) => setInputCode(e.target.value)}
+                                            onKeyDown={(e) => {
+                                                if (['Enter', ',', ' '].includes(e.key)) {
+                                                e.preventDefault();
+                                                const code = inputCode.trim();
+                                                if (code && !selectedSchoolCode.includes(code)) {
+                                                    setSelectedSchoolCode(prev => [...prev, code]);
+                                                }
+                                                setInputCode('');
+                                                }
+                                            }}
+                                            />
+                                            <div className="d-flex flex-wrap gap-2 mt-2">
+                                            {selectedSchoolCode.map(code => (
+                                                <span key={code} className="badge bg-purple text-white d-flex align-items-center">
+                                                {code}
+                                                <button 
+                                                    type="button" 
+                                                    className="btn-close btn-close-white ms-2" 
+                                                    onClick={() => setSelectedSchoolCode(prev => prev.filter(c => c !== code))}
+                                                    aria-label="Remove"
+                                                ></button>
+                                                </span>
+                                            ))}
+                                            </div>
+                                        </div>
                                     </div>
                                     
                                     <div className="col-12 col-md-6 col-lg-3">
@@ -1932,7 +1960,7 @@ export default function TeachersDashboard() {
                                                                 <th>City</th>
                                                                 <th>State</th>
                                                                 <th>School Name</th>
-                                                                <th>School ID</th>
+                                                                <th>School Code</th>
                                                                 <th>Mission Assign Count</th>
                                                                 <th>Is Life Lab</th>
                                                                 <th>Created At</th>
@@ -1954,7 +1982,7 @@ export default function TeachersDashboard() {
                                                                     <td>{row.city}</td>
                                                                     <td>{row.state}</td>
                                                                     <td>{row.school_name}</td>
-                                                                    <td>{row.school_id}</td>
+                                                                    <td>{row.school_code}</td>
                                                                     <td>{row.mission_assign_count}</td>
                                                                     <td>{row.is_life_lab}</td>
                                                                     <td>{row.created_at}</td>

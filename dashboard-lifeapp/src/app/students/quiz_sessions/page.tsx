@@ -156,15 +156,25 @@ export default function StudentRelatedQuizSessions() {
 
   const [quizData, setQuizData] = useState<QuizSession[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
-
+  const [error, setError]         = useState<string | null>(null);
   // Filter states
   const [selectedSubject, setSelectedSubject] = useState<string>('');
   const [selectedLevel, setSelectedLevel] = useState<string>('');
   const [selectedTopic, setSelectedTopic] = useState<string>('');
   
   // Pagination states
-  const [currentPage, setCurrentPage] = useState<number>(1);
-  const itemsPerPage = 50;
+  const [page, setPage]           = useState(1);
+  const [perPage] = useState(50);                // match backend default/cap
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalRows,setTotalRows] = useState(0)
+
+  const [selectedSubjectId, setSelectedSubjectId] = useState<number | null>(null);
+  const [selectedLevelId, setSelectedLevelId] = useState<number | null>(null);
+  const [topics, setTopics] = useState<{ id: number; title: string }[]>([]);
+  const [selectedTopicId,   setSelectedTopicId]   = useState<number | null>(null);
+  
+  const [uniqueUserCount, setUniqueUserCount]     = useState<number>(0);
+  const [uniqueSchoolCount, setUniqueSchoolCount] = useState<number>(0);
 
   // Fetch quiz sessions using the new API query
   useEffect(() => {
@@ -174,11 +184,24 @@ export default function StudentRelatedQuizSessions() {
         const res = await fetch(`${api_startpoint}/api/quiz_sessions`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ start_date: startDate, end_date: endDate }),
+          body: JSON.stringify({ 
+            start_date: startDate, 
+            end_date: endDate, 
+            la_subject_id:  selectedSubjectId,
+            la_level_id:    selectedLevelId,
+            la_topic_id:    selectedTopicId,
+            page: page,
+            per_page: perPage }),
         });
 
-        const data = await res.json();
-        setQuizData(data);
+        const json = await res.json();
+        if (!res.ok) throw new Error(json.error || res.statusText);
+        setQuizData(json.data);
+        setTotalPages(json.total_pages);
+        setTotalRows(json.total)
+        setUniqueUserCount(json.unique_user_count);
+        setUniqueSchoolCount(json.unique_school_count);
+
       } catch (err) {
         console.error("Failed to load quiz session data", err);
       } finally {
@@ -186,81 +209,144 @@ export default function StudentRelatedQuizSessions() {
       }
     };
     fetchData();
-  }, [startDate, endDate]);
+  }, [
+    startDate, 
+    endDate, 
+    selectedSubjectId,
+    selectedLevelId,
+    selectedTopicId,
+    page]);
 
   // Compute unique subjects
-  const subjects = useMemo(() => {
-    const uniq = new Set(quizData.map(q => JSON.parse(q.subject_title).en));
-    return Array.from(uniq);
-  }, [quizData]);
+  // const subjects = useMemo(() => {
+  //   const uniq = new Set(quizData.map(q => JSON.parse(q.subject_title).en));
+  //   return Array.from(uniq);
+  // }, [quizData]);
+
+  const [subjects, setSubjects] = useState<{id:number, title:string}[]>([])
+  useEffect(() => {
+    const fetchSubjects = async() => {
+      try {
+        const res = await fetch(`${api_startpoint}/api/subjects_list`, {
+          method: "POST",
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ status : '1' }),
+        })
+        const json = await res.json();
+        if (!res.ok) throw new Error(json.error || res.statusText);
+        setSubjects(json)
+      } catch (err) {
+        console.error("Failed to Load subjects data", err);
+      }
+    }
+    fetchSubjects()
+  }, [])
 
   // Compute levels available for the selected subject
-  const levels = useMemo(() => {
-    if (!selectedSubject) return [];
-    const filtered = quizData.filter(q => JSON.parse(q.subject_title).en === selectedSubject);
-    const uniq = new Set(filtered.map(q => JSON.parse(q.level_title).en));
-    return Array.from(uniq);
-  }, [quizData, selectedSubject]);
+  // const levels = useMemo(() => {
+  //   if (!selectedSubject) return [];
+  //   const filtered = quizData.filter(q => JSON.parse(q.subject_title).en === selectedSubject);
+  //   const uniq = new Set(filtered.map(q => JSON.parse(q.level_title).en));
+  //   return Array.from(uniq);
+  // }, [quizData, selectedSubject]);
+
+  const [levels, setLevels] = useState<{id:number, title:string}[]>([])
+  useEffect(() => {
+    const fetchLevels = async() => {
+      try {
+        const res = await fetch(`${api_startpoint}/api/levels`, {
+          method: "POST",
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({}),
+        })
+        const json = await res.json();
+        if (!res.ok) throw new Error(json.error || res.statusText);
+        setLevels(json)
+      } catch (err) {
+        console.error("Failed to Load subjects data", err);
+      }
+    }
+    fetchLevels()
+  }, [])
+
+
+
 
   // Compute topics available for the selected subject and level
-  const topics = useMemo(() => {
-    if (!selectedSubject || !selectedLevel) return [];
-    const filtered = quizData.filter(
-      q => JSON.parse(q.subject_title).en === selectedSubject && JSON.parse(q.level_title).en === selectedLevel
-    );
-    const uniq = new Set(filtered.map(q => JSON.parse(q.topic_title).en));
-    return Array.from(uniq);
-  }, [quizData, selectedSubject, selectedLevel]);
+  useEffect(() => {
+    // only fetch once both IDs are set
+    if (selectedSubjectId && selectedLevelId) {
+      fetch(`${api_startpoint}/api/topics`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          la_subject_id: selectedSubjectId,
+          la_level_id: selectedLevelId,
+          status: '1'           // or whatever you need
+        }),
+      })
+      .then(res => res.json())
+      .then(json => {
+        // assume API returns [ { id, title, ... } ]
+        // if title is JSON, parse it:
+        const parsed = json.map((t: any) => ({
+          id: t.id,
+          title: JSON.parse(t.title).en
+        }));
+        setTopics(parsed);
+      })
+      .catch(err => {
+        console.error('Failed to load topics', err);
+        setTopics([]);
+      });
+    } else {
+      setTopics([]);
+    }
+  }, [selectedSubjectId, selectedLevelId]);
+  
 
   // Filter table data based on selected filters
-  const filteredData = useMemo(() => {
-    let data = quizData;
-    if (selectedSubject) {
-      data = data.filter(q => JSON.parse(q.subject_title).en === selectedSubject);
-    }
-    if (selectedLevel) {
-      data = data.filter(q => JSON.parse(q.level_title).en === selectedLevel);
-    }
-    if (selectedTopic) {
-      data = data.filter(q => JSON.parse(q.topic_title).en === selectedTopic);
-    }
-    return data;
-  }, [quizData, selectedSubject, selectedLevel, selectedTopic]);
+  // const filteredData = useMemo(() => {
+  //   let data = quizData;
+  //   if (selectedSubject) {
+  //     data = data.filter(q => JSON.parse(q.subject_title).en === selectedSubject);
+  //   }
+  //   if (selectedLevel) {
+  //     data = data.filter(q => JSON.parse(q.level_title).en === selectedLevel);
+  //   }
+  //   if (selectedTopic) {
+  //     data = data.filter(q => JSON.parse(q.topic_title).en === selectedTopic);
+  //   }
+  //   return data;
+  // }, [quizData, selectedSubject, selectedLevel, selectedTopic]);
 
   // Pagination of filtered data
-  const indexOfLast = currentPage * itemsPerPage;
-  const indexOfFirst = indexOfLast - itemsPerPage;
-  const currentItems = filteredData.slice(indexOfFirst, indexOfLast);
-  const totalPages = Math.ceil(filteredData.length / itemsPerPage);
+  // const indexOfLast = currentPage * itemsPerPage;
+  // const indexOfFirst = indexOfLast - itemsPerPage;
+  // const currentItems = filteredData.slice(indexOfFirst, indexOfLast);
+  // const totalPages = Math.ceil(filteredData.length / itemsPerPage);
 
+  // controls
+  const goPrev = () => setPage(p => Math.max(1, p - 1));
+  const goNext = () => setPage(p => Math.min(totalPages, p + 1));
   // Handle filter resets when higher level changes
   const handleSubjectSelect = (subject: string) => {
     setSelectedSubject(subject);
     setSelectedLevel('');
     setSelectedTopic('');
-    setCurrentPage(1);
+    setPage(1);
   };
   const handleLevelSelect = (level: string) => {
     setSelectedLevel(level);
     setSelectedTopic('');
-    setCurrentPage(1);
+    setPage(1);
   };
   const handleTopicSelect = (topic: string) => {
     setSelectedTopic(topic);
-    setCurrentPage(1);
+    setPage(1);
   };
 
 
-  // Add these calculations in your component
-  const uniqueUserCount = useMemo(() => {
-    const uniqueUsers = new Set(filteredData.map(q => q.user_name));
-    return uniqueUsers.size;
-  }, [filteredData]);
-
-  const uniqueSchoolCount = useMemo(() => {
-    const uniqueSchools = new Set(filteredData.map(q => q.school_name));
-    return uniqueSchools.size;
-  }, [filteredData]);
 
   // Add this to your component's state
   const hasActiveFilters = selectedSubject || selectedLevel || selectedTopic;
@@ -272,12 +358,12 @@ export default function StudentRelatedQuizSessions() {
     setSelectedTopic('');
     setStartDate('');
     setEndDate('');
-    setCurrentPage(1);
+    setPage(1);
   };
   const exportToCSV = () => {
     const csvContent = [
-      Object.keys(filteredData[0]).join(','), // Header
-      ...filteredData.map(item => 
+      Object.keys(quizData[0]).join(','), // Header
+      ...quizData.map(item => 
         Object.values({
           ...item,
           subject_title: JSON.parse(item.subject_title).en,
@@ -311,13 +397,22 @@ export default function StudentRelatedQuizSessions() {
                 <div className="flex flex-wrap gap-2">
                   {subjects.map(subject => (
                     <div
-                      key={subject}
-                      onClick={() => handleSubjectSelect(subject)}
+                      key={subject.id}
+                      onClick={() => {
+                        setSelectedSubjectId(subject.id);
+                        setSelectedSubject(JSON.parse(subject.title).en);
+                        // reset lower‐level filters:
+                        setSelectedLevel('');
+                        setSelectedLevelId(null);
+                        setSelectedTopic('');
+                        setSelectedTopicId(null);
+                        setPage(1);
+                      }}
                       className={`cursor-pointer px-3 py-1 rounded border ${
-                        selectedSubject === subject ? 'bg-sky-800 text-white' : 'bg-gray-100 text-gray-800'
+                        selectedSubject === JSON.parse(subject.title).en ? 'bg-sky-800 text-white' : 'bg-gray-100 text-gray-800'
                       }`}
                     >
-                      {subject}
+                      {JSON.parse(subject.title).en}
                     </div>
                   ))}
                 </div>
@@ -329,13 +424,19 @@ export default function StudentRelatedQuizSessions() {
                   <div className="flex flex-wrap gap-2">
                     {levels.map(level => (
                       <div
-                        key={level}
-                        onClick={() => handleLevelSelect(level)}
+                        key={level.id}
+                        onClick={() => {
+                          setSelectedLevelId(level.id);
+                          setSelectedLevel(JSON.parse(level.title).en);
+                          setSelectedTopic('');
+                          setSelectedTopicId(null);
+                          setPage(1);
+                        }}
                         className={`cursor-pointer px-3 py-1 rounded border ${
-                          selectedLevel === level ? 'bg-green-600 text-white' : 'bg-gray-100 text-gray-800'
+                          selectedLevel === JSON.parse(level.title).en ? 'bg-green-600 text-white' : 'bg-gray-100 text-gray-800'
                         }`}
                       >
-                        {level}
+                        {JSON.parse(level.title).en}
                       </div>
                     ))}
                   </div>
@@ -347,18 +448,23 @@ export default function StudentRelatedQuizSessions() {
                   <div className="flex flex-wrap gap-2">
                     {topics.map(topic => (
                       <div
-                        key={topic}
-                        onClick={() => handleTopicSelect(topic)}
+                        key={topic.id}
+                        onClick={() => {
+                          setSelectedTopicId(topic.id);
+                          setSelectedTopic(topic.title);
+                          setPage(1);
+                        }}
                         className={`cursor-pointer px-3 py-1 rounded border ${
-                          selectedTopic === topic ? 'bg-indigo-800 text-white' : 'bg-gray-100 text-gray-800'
+                          selectedTopic === topic.title ? 'bg-indigo-800 text-white' : 'bg-gray-100 text-gray-800'
                         }`}
                       >
-                        {topic}
+                        {topic.title}
                       </div>
                     ))}
                   </div>
                 </div>
               )}
+
             </div>
             {/* Filters & Export Row */}
             <div className="flex flex-wrap items-center gap-4">
@@ -409,7 +515,7 @@ export default function StudentRelatedQuizSessions() {
               <div className="bg-white shadow rounded p-4 border border-gray-200">
                 <div className="text-xs text-gray-500 uppercase mb-1">Total Game Sessions</div>
                 <NumberFlow
-                  value={filteredData.length}
+                  value={totalRows}
                   className="text-2xl font-bold text-gray-800"
                   transformTiming={{ endDelay: 6, duration: 750, easing: 'cubic-bezier(0.42, 0, 0.58, 1)' }}
                 />
@@ -461,7 +567,7 @@ export default function StudentRelatedQuizSessions() {
                       </tr>
                     </thead>
                     <tbody className="text-sm text-gray-700">
-                      {currentItems.map((entry, index) => (
+                      {quizData.map((entry, index) => (
                         <tr key={`${entry.id}-${index}`} className="border-t">
                           <td>{entry.user_id}</td>
                           <td>{entry.game_id}</td>
@@ -503,19 +609,19 @@ export default function StudentRelatedQuizSessions() {
                 </div>
                 <div className="flex justify-between items-center mt-4">
                   <button
-                    onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
-                    disabled={currentPage === 1}
-                    className="px-4 py-1 bg-sky-950 text-white rounded disabled:opacity-50"
+                   onClick={goPrev}
+                   disabled={page === 1}
+                   className="px-4 py-1 bg-gray-200 rounded disabled:opacity-50"
                   >
                     Previous
                   </button>
                   <span className="text-sm">
-                    Page {currentPage} of {totalPages} ({filteredData.length} rows found)
+                    Page {page} of {totalPages} ({totalRows} total)
                   </span>
                   <button
-                    onClick={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))}
-                    disabled={currentPage === totalPages}
-                    className="px-4 py-1 bg-sky-950 text-white rounded disabled:opacity-50"
+                    onClick={goNext}
+                    disabled={page === totalPages}
+                    className="px-4 py-1 bg-gray-200 rounded disabled:opacity-50"
                   >
                     Next
                   </button>
