@@ -1,5 +1,5 @@
 'use client'
-import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef, ChangeEvent } from 'react';
 import { Inter } from 'next/font/google';
 import { Sidebar } from '@/components/ui/sidebar';
 import '@tabler/core/dist/css/tabler.min.css';
@@ -15,21 +15,21 @@ const api_startpoint = 'http://152.42.239.141:5000'
 // const api_startpoint = 'http://127.0.0.1:5000'
 
 
+interface Resource { resource_id: number; media_id: number; url: string; }
 interface Mission {
-    id: number;
-    title: string;
-    description: string;
-    question: string;
-    type: number;
-    allow_for: string;
-    subject_id: number;   // ← new
-    subject: string;
-    level_id: number;     // ← new
-    level: string;
-    status: number;
-
-    image_url?: string | null;
-  document_url?: string | null;
+  id: number;
+  title: string;
+  description: string;
+  question: string;
+  type: number;
+  allow_for: string;
+  subject_id: number;
+  subject: string;
+  level_id: number;
+  level: string;
+  status: number;
+  image_url?: string;
+  resources?: Resource[];
 }
 
 const typeOptions = [
@@ -40,6 +40,25 @@ const typeOptions = [
     { label: "Jigyasa", value: 5 },
     { label: "Pragya", value: 6 },
 ];
+
+
+type EditData = {
+  id: number;
+  subject: string;
+  level: string;
+  type: string;
+  allow_for: string;
+  status: string;
+  title: string;
+  description: string;
+  question: string;
+  // for new uploads
+  image?: File | null;
+  documents?: File[];
+  // from server
+  image_url?: string;
+  resources?: Resource[];
+};
 
 export default function StudentRelatedMission() {
     const [filterStatus, setFilterStatus] = useState('');
@@ -52,7 +71,8 @@ export default function StudentRelatedMission() {
     const [isAddLoading, setIsAddLoading] = useState(false);
 
     const [missions, setMissions] = useState<Mission[]>([]);
-    const [loading, setLoading] = useState(true);
+    const [loading, setLoading] = useState(false);
+    const [selectedResources, setSelectedResources] = useState<Resource[]|null>(null);
     const [currentPage, setCurrentPage] = useState(1);
     const [subjects, setSubjects] = useState<any[]>([]);
     const [levels, setLevels] = useState<any[]>([]);
@@ -65,8 +85,8 @@ export default function StudentRelatedMission() {
         title: '',
         description: '',
         question: '',
-        image: null,
-        document: null,
+        image: null as File | null,
+        documents: [] as File[],   // ← renamed
         status: ''
     });
 
@@ -74,6 +94,7 @@ export default function StudentRelatedMission() {
     
     
     const fetchMissions = async () => {
+        setLoading(true);
         try {
             const res = await fetch(`${api_startpoint}/api/missions_resource`, {
                 method: 'POST',
@@ -123,40 +144,53 @@ export default function StudentRelatedMission() {
   
     
 
-    const handleInputChange = (e: any) => {
-        const { name, value, files } = e.target;
-        setFormData(prev => ({ ...prev, [name]: files ? files[0] : value }));
+    // 2) Input handler
+    const handleInputChange = (e: ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
+        const { name, value, files } = e.target as HTMLInputElement;
+        if (name === 'documents' && files) {
+            // keep up to 4 files
+            setFormData(prev => ({ 
+            ...prev, 
+            documents: Array.from(files).slice(0, 4) 
+            }));
+        } else if (name === 'image' && files) {
+            setFormData(prev => ({ ...prev, image: files[0] }));
+        } else {
+            setFormData(prev => ({ ...prev, [name]: value }));
+        }
     };
     
     const handleSubmit = async () => {
-        setIsAddLoading(true);   // Start the loading spinner
-      
+        setIsAddLoading(true);
         try {
-          const form = new FormData();
-          Object.entries(formData).forEach(([key, val]) => {
-            if (val !== null && val !== undefined) {
-              form.append(key, val);
-            }
-          });
+          const fd = new FormData();
+          // text fields
+          ['subject','level','type','allow_for','title','description','question','status']
+            .forEach(key => {
+              const val = (formData as any)[key];
+              if (val !== '') fd.append(key, val);
+            });
+          // image
+          if (formData.image) fd.append('image', formData.image);
+          // documents (4)
+          formData.documents.forEach(file => fd.append('documents', file));
       
           const res = await fetch(`${api_startpoint}/api/add_mission`, {
             method: 'POST',
-            body: form
+            body: fd
           });
-      
           const result = await res.json();
-      
-          if (res.ok && result.id) {   // safer check: also check if ID is returned
-            await fetchMissions();     // Refresh the table
-            setOpenModal(false);       // Close the modal
+          if (res.ok && result.id) {
+            await fetchMissions();
+            setOpenModal(false);
           } else {
             alert('Error: ' + (result.error || 'Something went wrong.'));
           }
-        } catch (error) {
-          console.error('Submit error:', error);
+        } catch (err) {
+          console.error(err);
           alert('An unexpected error occurred.');
         } finally {
-          setIsAddLoading(false);   // Always stop the spinner
+          setIsAddLoading(false);
         }
     };
       
@@ -181,97 +215,72 @@ export default function StudentRelatedMission() {
     };
   
     const [showEditModal, setShowEditModal] = useState(false);
-    const [editData, setEditData] = useState<{
-        id: number;
-        title: string;
-        description: string;
-        question: string;
-        subject: string;
-        level: string;
-        type: string;
-        allow_for: string;
-        status: string;
-        image?: File | null;
-        document?: File | null;
-    } | null>(null);
+    const [editData, setEditData] = useState<EditData | null>(null);
       
 
-    const handleEditInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
-        const { name, value, files } = e.target as HTMLInputElement;
-        setEditData(prev => prev && ({
-          ...prev,
-          [name]: files ? files[0] : value
-        }));
+    const handleEditInputChange = (
+        e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
+      ) => {
+        if (!editData) return;
+        const target = e.target as HTMLInputElement;
+        const { name, value, files } = target;
+      
+        if (name === 'documents' && files) {
+          setEditData(prev => prev && ({
+            ...prev,
+            documents: Array.from(files).slice(0, 4)
+          }));
+        } else if (name === 'image' && files) {
+          setEditData(prev => prev && ({
+            ...prev,
+            image: files[0]
+          }));
+        } else {
+          setEditData(prev => prev && ({
+            ...prev,
+            [name]: value
+          }));
+        }
     };
       
     
 
     const handleEditSubmit = async () => {
-        // ① Guard: if there's no editData, bail out
         if (!editData) {
             console.warn("Nothing to save – editData is null");
             return;
         }
-        setIsEditLoading(true);  // Start spinner
-         // ② Now TS knows editData is non-null
-         try {
-        const {
-            id,
-            subject,
-            level,
-            type,
-            allow_for,
-            status,
-            title,
-            description,
-            question,
-            image,
-            document: docFile,
-        } = editData;
-        console.log('🔧 Submitting editData:', editData);
-        const form = new FormData();
-        form.append('id',         editData.id.toString());
-        form.append('subject',    editData.subject);    // this is the subject_id as a string
-        form.append('level',      editData.level);      // level_id as a string
-        form.append('type',       editData.type);       // type value (“1”, “5”, etc)
-        form.append('allow_for',  editData.allow_for);  // “1” or “2”
-        form.append('status',     editData.status);     // “1” or “0”
-        form.append('title',      editData.title);      // raw text, e.g. “My new title”
-        form.append('description',editData.description);
-        form.append('question',   editData.question);
-        // if you let users swap image or doc in the edit modal:
-        // 2) Only append if the user actually picked a new file
-        if (editData.image instanceof File) {
-            form.append('image', editData.image);
-        }
-        if (editData.document instanceof File) {
-            form.append('document', editData.document);
-        }
-
-        // peek at exactly what you’re sending:
-        console.log('📤 FormData entries:', [...form.entries()]);
-
+        setIsEditLoading(true);
+        try {
+          const fd = new FormData();
+          fd.append('id', editData.id.toString());
+          ['subject','level','type','allow_for','status','title','description','question']
+            .forEach(key => fd.append(key, (editData as any)[key]));
       
-        const res = await fetch(`${api_startpoint}/api/update_mission`, {
-          method: 'POST',
-        //   headers: { 'Content-Type': 'application/json' },
-          body: form,
-        });
+          if (editData.image instanceof File) {
+            fd.append('image', editData.image);
+          }
+          if (editData.documents?.length) {
+            editData.documents.forEach(file => fd.append('documents', file));
+          }
       
-        
-          const updated = await res.json();
-          if (updated.success) {
-            await fetchMissions();    // ← repopulate everything with the real JSON data
+          const res = await fetch(`${api_startpoint}/api/update_mission`, {
+            method: 'POST',
+            body: fd
+          });
+          const json = await res.json();
+          if (json.success) {
+            await fetchMissions();
             setShowEditModal(false);
           } else {
-            alert('Update failed: ' + updated.error);
+            alert('Update failed: ' + (json.error || 'Unknown error'));
           }
         } catch (err) {
-            console.error('Error submitting edit:', err);
-            alert('An unexpected error occurred');
-          } finally {
-            setIsEditLoading(false);  // End spinner
-          }
+          console.error(err);
+          alert('An unexpected error occurred');
+        } finally {
+          setIsEditLoading(false);
+        }
     };
     
     
@@ -434,14 +443,14 @@ export default function StudentRelatedMission() {
                                                 : '—'}
                                         </td>
                                         <td className="p-2 border">
-                                            {m.document_url
-                                                ? <a href={m.document_url!}
-                                                    target="_blank"
-                                                    rel="noopener noreferrer"
-                                                    className="text-blue-600 underline">
-                                                    View
-                                                </a>
-                                                : '—'}
+                                        {m.resources?.length ? (
+                                                <button
+                                                className="text-blue-600 underline"
+                                                onClick={() => setSelectedResources(m.resources!)}
+                                                >
+                                                View ({m.resources.length})
+                                                </button>
+                                            ) : '—'}
                                         </td>
                                         <td className="p-2 border">
                                         {typeOptions.find(opt => opt.value === m.type)?.label ?? m.type.toString()}
@@ -455,19 +464,24 @@ export default function StudentRelatedMission() {
                                             <IconEdit className="text-blue-500 cursor-pointer" 
                                                 onClick={() => {
                                                     setEditData({
-                                                        id: m.id,
-                                                        title:       JSON.parse(m.title).en,
-                                                        description: JSON.parse(m.description).en,
-                                                        question:    JSON.parse(m.question).en,
-                                                        // use the numeric IDs (as strings for the <select>)
-                                                        subject:     m.subject_id.toString(),
-                                                        level:       m.level_id.toString(),
-                                                        type:        m.type.toString(),
-                                                        allow_for:   m.allow_for === 'All' ? '1' : '2',
-                                                        status:      m.status.toString(),
-                                                        image:       null,
-                                                        document:    null,
-                                                    }); // `m` is your mission row
+                                                      id: m.id,
+                                                      title:       JSON.parse(m.title).en,
+                                                      description: JSON.parse(m.description).en,
+                                                      question:    JSON.parse(m.question).en,
+                                                      subject:     m.subject_id.toString(),
+                                                      level:       m.level_id.toString(),
+                                                      type:        m.type.toString(),
+                                                      allow_for:   m.allow_for === 'All' ? '1' : '2',
+                                                      status:      m.status.toString(),
+                                              
+                                                      // New upload slots left empty:
+                                                      image:       null,
+                                                      documents:   [],
+                                              
+                                                      // Existing values from API:
+                                                      image_url:   m.image_url,
+                                                      resources:   m.resources
+                                                    });
                                                     setShowEditModal(true);
                                                 }}
                                             />
@@ -567,14 +581,32 @@ export default function StudentRelatedMission() {
                                     <label className="block mt-2">Question</label>
                                     <textarea name="question" className="w-full border rounded p-2" onChange={handleInputChange} />
 
-                                    <label className="block mt-2">Image</label>
-                                    <input type="file" name="image" className="w-full" onChange={handleInputChange} />
+                                    <label className="block mt-2">Image (Thumbnail)</label>
+                                    <input
+                                        type="file"
+                                        name="image"
+                                        accept="image/*"
+                                        className="w-full"
+                                        onChange={handleInputChange}
+                                    />
 
-                                    <label className="block mt-2">Document</label>
-                                    <input type="file" name="document" className="w-full" onChange={handleInputChange} />
-
+                                    <label className="block mt-2">Documents (Up to 4 images)</label>
+                                    <input
+                                        type="file"
+                                        name="documents"               // ← changed
+                                        accept="image/*"
+                                        multiple                       // ← allow multiple
+                                        className="w-full"
+                                        onChange={handleInputChange}
+                                    />
+                                    {formData.documents.length > 0 && (
+                                        <p className="text-sm text-gray-600">
+                                        {formData.documents.length} file
+                                        {formData.documents.length > 1 ? 's' : ''} selected
+                                        </p>
+                                    )}
                                     <div className="mt-2 flex justify-between">
-                                    <button className="px-4 py-2 bg-gray-900 rounded" onClick={() => setOpenModal(false)}>Cancel</button>
+                                    <button className="px-4 py-2 bg-gray-900 text-white rounded" onClick={() => setOpenModal(false)}>Cancel</button>
                                     <button
                                         onClick={handleSubmit}
                                         className="px-4 py-1 bg-sky-950 text-white rounded flex items-center justify-center gap-2 disabled:opacity-50"
@@ -615,7 +647,7 @@ export default function StudentRelatedMission() {
                         )}
 
 
-                        {showEditModal && (
+                        {showEditModal  && editData  && (
                         <div className="fixed inset-0 bg-black bg-opacity-50 mt-0 flex justify-center items-center z-50">
                             <div className="bg-white rounded-xl shadow p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto">
                             <h2 className="text-xl font-semibold mb-4">Edit Mission</h2>
@@ -720,22 +752,53 @@ export default function StudentRelatedMission() {
                                 </select>
                                 
                                 {/* Image */}
-                                <label className="block mt-2">Image</label>
+                                <label className="block mt-4">Current Thumbnail</label>
+                                {editData.image_url && !editData.image && (
+                                    <img
+                                    src={editData.image_url}
+                                    alt="Thumbnail"
+                                    className="h-24 w-24 object-cover rounded mb-2"
+                                    />
+                                )}
                                 <input
-                                type="file"
-                                name="image"
-                                accept="image/*"
-                                onChange={handleEditInputChange}
+                                    type="file"
+                                    name="image"
+                                    accept="image/*"
+                                    onChange={handleEditInputChange}
+                                    className="block mb-4"
                                 />
-
+                                
+                                {/* Existing documents */}
+                                <label className="block">Current Documents</label>
+                                <div className="grid grid-cols-2 gap-2 mb-2">
+                                    {editData.resources?.map((r, i) => (
+                                    <img
+                                        key={i}
+                                        src={r.url}
+                                        alt={`Doc ${i+1}`}
+                                        className="h-24 object-cover rounded"
+                                    />
+                                    ))}
+                                </div>
                                 {/* Document */}
-                                <label className="block mt-2">Document</label>
+                                {/* Upload new docs (replaces existing if provided) */}
+                                <label className="block mt-2">Replace Documents (up to 4)</label>
                                 <input
-                                type="file"
-                                name="document"
-                                accept=".pdf,.doc,.docx"
-                                onChange={handleEditInputChange}
+                                    type="file"
+                                    name="documents"
+                                    accept="image/*"
+                                    multiple
+                                    onChange={handleEditInputChange}
+                                    className="block mb-1"
                                 />
+                                {editData.documents?.length ? (
+                                <p className="text-sm text-gray-600">
+                                    {editData.documents.length} file
+                                    {editData.documents.length > 1 ? 's' : ''} selected
+                                </p>
+                                ) : null}
+
+
                                 
                                 <div className="flex justify-end gap-4 mt-4">
                                 <button
@@ -784,6 +847,28 @@ export default function StudentRelatedMission() {
                             </button>
                             </div>
                         </div>
+                        )}
+                        
+                        {/* Resources Modal */}
+                        {selectedResources && (
+                            <div className="fixed inset-0 bg-black bg-opacity-50 mt-0 flex items-center justify-center z-50">
+                            <div className="bg-white rounded-lg p-4 max-h-[90vh] overflow-y-auto w-3/5">
+                                <div className="flex justify-between items-center mb-4">
+                                <h2 className="text-lg font-semibold">Documents</h2>
+                                <button onClick={() => setSelectedResources(null)}>Close</button>
+                                </div>
+                                <div className="space-y-4">
+                                {selectedResources.map((r, i) => (
+                                    <img
+                                    key={i}
+                                    src={r.url}
+                                    alt={`Resource ${i + 1}`}
+                                    className="w-full object-contain rounded"
+                                    />
+                                ))}
+                                </div>
+                            </div>
+                            </div>
                         )}
 
                     </div>

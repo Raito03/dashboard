@@ -5925,30 +5925,30 @@ def get_missions_resource():
         connection = get_db_connection()
         with connection.cursor() as cursor:
             base_query = """
-                SELECT 
-                    lam.id, 
-                    lam.title, 
-                    lam.description, 
+                SELECT
+                    lam.id,
+                    lam.title,
+                    lam.description,
                     lam.question,
                     lam.type,
-                    CASE 
-                        WHEN lam.allow_for = 1 THEN 'All'
-                        ELSE 'Teacher'
-                    END AS allow_for,
-                    lam.la_subject_id   AS subject_id,    -- new
-                    las.title AS subject,
-                    lam.la_level_id     AS level_id,      -- new
-                    lal.title AS level,
-                    lam.status As status,
-                    JSON_UNQUOTE(JSON_EXTRACT(lam.image, '$.en'))    AS image_id,
-                    JSON_UNQUOTE(JSON_EXTRACT(lam.document, '$.en')) AS document_id,
-                    mimg.path           AS image_path,
-                    mdoc.path           AS document_path
+                    CASE WHEN lam.allow_for=1 THEN 'All' ELSE 'Teacher' END AS allow_for,
+                    lam.la_subject_id AS subject_id,
+                    las.title         AS subject,
+                    lam.la_level_id   AS level_id,
+                    lal.title         AS level,
+                    lam.status        AS status,
+                    JSON_UNQUOTE(JSON_EXTRACT(lam.image, '$.en'))         AS image_id,
+                    mimg.path         AS image_path,
+                    lamr.id 		  AS resource_id,
+                    document.id       AS media_id,
+                    document.path     AS resource_path,
+                    lamr.`index`      AS idx
                 FROM lifeapp.la_missions lam
-                INNER JOIN lifeapp.la_subjects las ON las.id = lam.la_subject_id 
-                INNER JOIN lifeapp.la_levels lal ON lal.id = lam.la_level_id
-                LEFT JOIN lifeapp.media mimg ON mimg.id = JSON_EXTRACT(lam.image,    '$.en')
-                LEFT JOIN lifeapp.media mdoc ON mdoc.id = JSON_EXTRACT(lam.document, '$.en')
+                JOIN lifeapp.la_subjects las ON las.id = lam.la_subject_id
+                JOIN lifeapp.la_levels   lal ON lal.id = lam.la_level_id
+                LEFT JOIN lifeapp.media mimg ON mimg.id = JSON_UNQUOTE(JSON_EXTRACT(lam.image, '$.en'))
+                LEFT JOIN lifeapp.la_mission_resources lamr ON lamr.la_mission_id = lam.id
+                LEFT JOIN lifeapp.media document ON document.id = lamr.media_id
                 WHERE 1=1
             """
 
@@ -5969,16 +5969,43 @@ def get_missions_resource():
                 base_query += " AND lam.la_level_id = %s"
                 params.append(filters['level'])
 
+             # Order by mission then resource index
+            base_query += " ORDER BY lam.id, lamr.`index`"
             cursor.execute(base_query, params)
-            data = cursor.fetchall()
+            rows = cursor.fetchall() 
+            # cursor.execute(base_query, params)
+            # data = cursor.fetchall()
             # Build full URLs
             base_url = os.getenv('BASE_URL', '')  # e.g. 'https://cdn.example.com'
-            for r in data:
-                # if path is None or empty, result stays None
-                r['image_url'] = f"{base_url}/{r['image_path']}" if r.get('image_path') else None
-                r['document_url'] = f"{base_url}/{r['document_path']}" if r.get('document_path') else None
+            missions = {}
+            for row in rows:
+                mid = row['id']
+                if mid not in missions:
+                    missions[mid] = {
+                        'id':           row['id'],
+                        'title':        row['title'],
+                        'description':  row['description'],
+                        'question':     row['question'],
+                        'type':         row['type'],
+                        'allow_for':    row['allow_for'],
+                        'subject_id':   row['subject_id'],
+                        'subject':      row['subject'],
+                        'level_id':     row['level_id'],
+                        'level':        row['level'],
+                        'status':       row['status'],
+                        'image_id':     row['image_id'],
+                        'image_url':    f"{base_url}/{row['image_path']}" if row.get('image_path') else None,
+                        'resources':    []
+                    }
+                # Append resource if exists
+                if row.get('resource_id'):
+                    missions[mid]['resources'].append({
+                        'resource_id': row['resource_id'],
+                        'media_id':    row['media_id'],
+                        'url':         f"{base_url}/{row['resource_path']}"
+                    })
 
-            return jsonify(data), 200
+            return jsonify(list(missions.values())), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500
     finally:
@@ -6017,10 +6044,10 @@ def add_mission():
                 image_json = json.dumps({"en": media['id']})
 
             # Handle document upload
-            doc_file = request.files.get('document')
-            if doc_file and doc_file.filename:
-                media = upload_media(doc_file)
-                document_json = json.dumps({"en": media['id']})
+            # doc_file = request.files.get('document')
+            # if doc_file and doc_file.filename:
+            #     media = upload_media(doc_file)
+            document_json = json.dumps({"en": None})
 
             # Prepare SQL
             sql = """
@@ -6043,9 +6070,21 @@ def add_mission():
             )
 
             cursor.execute(sql, params)
+            mission_id = cursor.lastrowid
+
+            files = request.files.getlist('documents')
+            for idx, file in enumerate(files[:4], start=1):
+                media = upload_media(file)
+                cursor.execute("""
+                    INSERT INTO lifeapp.la_mission_resources
+                      (la_mission_id, title, media_id, `index`, created_at, updated_at, locale)
+                    VALUES (%s, %s, %s, %s, NOW(), NOW(), %s)
+                """, (mission_id, file.filename, media['id'], idx, 'en'))
+
+            
             connection.commit()
 
-            return jsonify({"id": cursor.lastrowid}), 201
+            return jsonify({"id": mission_id}), 201
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -6063,7 +6102,21 @@ def delete_mission():
             if not mission_id:
                 return jsonify({'error': 'Missing mission id'}), 400
 
-            # 1. Fetch the media IDs associated with this mission
+            # 1) Delete all resource‐media rows
+            cursor.execute(
+              "SELECT media_id FROM lifeapp.la_mission_resources WHERE la_mission_id = %s",
+              (mission_id,)
+            )
+            for row in cursor.fetchall():
+                rid = row.get('media_id')
+                if rid:
+                    cursor.execute("DELETE FROM lifeapp.media WHERE id = %s", (rid,))
+            cursor.execute(
+              "DELETE FROM lifeapp.la_mission_resources WHERE la_mission_id = %s",
+              (mission_id,)
+            )
+
+            # 2) Delete thumbnail media
             cursor.execute("""
                 SELECT 
                     JSON_UNQUOTE(JSON_EXTRACT(image, '$.en')) AS image_id,
@@ -6077,13 +6130,13 @@ def delete_mission():
                 return jsonify({'error': 'Mission not found'}), 404
 
             image_id = mission.get('image_id')
-            document_id = mission.get('document_id')
+            # document_id = mission.get('document_id')
 
-            # 2. Delete associated media entries
+            # 2.a. Delete associated media entries
             if image_id:
                 cursor.execute("DELETE FROM lifeapp.media WHERE id = %s", (image_id,))
-            if document_id:
-                cursor.execute("DELETE FROM lifeapp.media WHERE id = %s", (document_id,))
+            # if document_id:
+            #     cursor.execute("DELETE FROM lifeapp.media WHERE id = %s", (document_id,))
 
             # 3. Delete the mission itself
             cursor.execute("DELETE FROM lifeapp.la_missions WHERE id = %s", (mission_id,))
@@ -6120,6 +6173,11 @@ def update_mission():
             description_json = json.dumps({"en": raw_desc})
             question_json    = json.dumps({"en": raw_ques})
 
+            # 2) Fetch old image_id so we can delete it if replaced
+            cursor.execute(
+              "SELECT image FROM lifeapp.la_missions WHERE id = %s", (mission_id,)
+            )
+            old_img = cursor.fetchone().get('image')
             # # Handle image upload
             # image_file = request.files.get('image')
             # if image_file:
@@ -6163,17 +6221,46 @@ def update_mission():
                 media = upload_media(image_file)
                 update_sql += ", image = %s"
                 params.append(json.dumps({'en': media['id']}))
+                if old_img:
+                    cursor.execute("DELETE FROM lifeapp.media WHERE id = JSON_UNQUOTE(JSON_EXTRACT(%s, '$.en'))", (old_img,))
 
-            doc_file = request.files.get('document')
-            if doc_file and doc_file.filename:
-                media = upload_media(doc_file)
-                update_sql += ", document = %s"
-                params.append(json.dumps({'en': media['id']}))
 
             update_sql += " WHERE id = %s"
             params.append(mission_id)
 
             cursor.execute(update_sql, tuple(params))
+
+            # doc_file = request.files.get('document')
+            # if doc_file and doc_file.filename:
+            #     media = upload_media(doc_file)
+            #     update_sql += ", document = %s"
+            #     params.append(json.dumps({'en': media['id']}))
+
+            files = request.files.getlist('documents')
+            if files:
+                # fetch & delete old document media
+                cursor.execute(
+                  "SELECT media_id FROM lifeapp.la_mission_resources WHERE la_mission_id = %s",
+                  (mission_id,)
+                )
+                for row in cursor.fetchall():
+                    old_res_mid = row.get('media_id')
+                    if old_res_mid:
+                        cursor.execute("DELETE FROM lifeapp.media WHERE id = %s", (old_res_mid,))
+                # delete old resource rows
+                cursor.execute(
+                  "DELETE FROM lifeapp.la_mission_resources WHERE la_mission_id = %s",
+                  (mission_id,)
+                )
+                # insert new ones
+                for idx, file in enumerate(files[:4], start=1):
+                    media = upload_media(file)
+                    cursor.execute("""
+                        INSERT INTO lifeapp.la_mission_resources
+                          (la_mission_id, title, media_id, `index`, created_at, updated_at, locale)
+                        VALUES (%s, %s, %s, %s, NOW(), NOW(), 'en')
+                    """, (mission_id, file.filename, media['id'], idx))
+
             connection.commit()
 
             return jsonify({"success": True}), 200
