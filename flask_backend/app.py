@@ -3,7 +3,7 @@ from binascii import Error
 import csv
 import io
 import math
-from flask import Flask, json, jsonify, request
+from flask import Flask, Response, json, jsonify, request
 from flask_cors import CORS
 import pymysql.cursors
 from datetime import datetime, timedelta
@@ -2663,6 +2663,106 @@ def update_mission_status():
     finally:
         connection.close()
 
+###################################################################################
+###################################################################################
+######################## STUDENT/ VISION APIs ####################################
+###################################################################################
+###################################################################################
+
+# 5. Fetch Vision Session Answers with Pagination & Filters
+@app.route('/api/vision_sessions', methods=['GET'])
+def fetch_vision_sessions():
+    # Query params: page, per_page, question_type, assigned_by ('teacher'|'self'), date_start, date_end
+    qs = request.args
+    page        = int(qs.get('page', 1))
+    per_page    = int(qs.get('per_page', 25))
+    offset      = (page - 1) * per_page
+    qtype       = qs.get('question_type')      # mcq|reflection|image
+    assigned_by = qs.get('assigned_by')        # 'teacher'|'self'
+    date_start  = qs.get('date_start')         # YYYY-MM-DD
+    date_end    = qs.get('date_end')           # YYYY-MM-DD
+
+    conn = get_db_connection()
+    try:
+        with conn.cursor() as cursor:
+            base_sql = '''
+            SELECT
+              a.id AS answer_id,
+              v.title AS vision_title,
+              JSON_UNQUOTE(JSON_EXTRACT(q.question, '$.en')) AS question_title,
+              u.name    AS user_name,
+              COALESCE(t.name, 'self') AS teacher_name,
+              a.answer_text,
+              a.answer_option,
+              m.id      AS media_id,
+              m.path    AS media_path,
+              a.score,
+              a.answer_type,
+              a.created_at
+            FROM vision_question_answers a
+            JOIN visions v          ON v.id = a.vision_id
+            JOIN vision_questions q ON q.id = a.question_id
+            JOIN users u            ON u.id = a.user_id
+            LEFT JOIN vision_assigns vs ON vs.vision_id = a.vision_id AND vs.student_id = a.user_id
+            LEFT JOIN users t       ON t.id = vs.teacher_id
+            LEFT JOIN media m       ON m.id = a.media_id
+            WHERE 1=1
+            '''
+            params = []
+            if qtype:
+                base_sql += ' AND a.answer_type = %s'
+                params.append(qtype)
+            if assigned_by == 'teacher':
+                base_sql += ' AND vs.teacher_id IS NOT NULL'
+            elif assigned_by == 'self':
+                base_sql += ' AND vs.teacher_id IS NULL'
+            if date_start:
+                base_sql += ' AND DATE(a.created_at) >= %s'
+                params.append(date_start)
+            if date_end:
+                base_sql += ' AND DATE(a.created_at) <= %s'
+                params.append(date_end)
+            # pagination
+            base_sql += ' ORDER BY a.created_at DESC LIMIT %s OFFSET %s'
+            params.extend([per_page, offset])
+
+            cursor.execute(base_sql, params)
+            rows = cursor.fetchall()
+            # build full media_url
+            base_url = os.getenv('BASE_URL', '')
+            for r in rows:
+                r['media_url'] = f"{base_url}/{r['media_path']}" if r.get('media_path') else None
+            return jsonify({
+                'page': page,
+                'per_page': per_page,
+                'data': rows
+            }), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        conn.close()
+
+# 6. Update Score Endpoint
+@app.route('/api/vision_sessions/<int:answer_id>/score', methods=['PUT'])
+def update_vision_session_score(answer_id):
+    data = request.get_json() or {}
+    if 'score' not in data:
+        return jsonify({'error': 'Missing score'}), 400
+    score = data['score']
+
+    conn = get_db_connection()
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute(
+                "UPDATE vision_question_answers SET score = %s, updated_at = NOW() WHERE id = %s",
+                (score, answer_id)
+            )
+            conn.commit()
+        return jsonify({'success': True}), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        conn.close()
 
 ###################################################################################
 ###################################################################################
@@ -6617,6 +6717,103 @@ def delete_quiz_question(question_id):
     finally:
         connection.close()
 
+@app.route('/api/download_quiz_template', methods=['GET'])
+def download_quiz_template():
+    # a simple 2‑row example; you can expand it if you like
+    csv_content = """questions,option1,option2,option3,option4,answer
+how are you?,good,bad,worst,ok,option1
+how old are you?,ten,eleven,twelve,thirteen,option3
+"""
+    return Response(
+        csv_content,
+        mimetype='text/csv',
+        headers={'Content-Disposition': 'attachment; filename=quiz_template.csv'}
+    )
+
+@app.route('/api/import_quiz_questions_csv', methods=['POST'])
+def import_quiz_questions_csv():
+    subject_id = request.form.get('subject_id')
+    level_id   = request.form.get('level_id')
+    topic_id   = request.form.get('topic_id')
+    f          = request.files.get('file')
+    if not (subject_id and level_id and topic_id and f):
+        return jsonify({'error':'Missing subject_id, level_id, topic_id or file'}),400
+
+    # read CSV
+    stream = io.StringIO(f.stream.read().decode('utf‑8'))
+    reader = csv.DictReader(stream)
+    inserted = 0
+    now = datetime.now().strftime('%Y‑%m‑%d %H:%M:%S')
+
+    conn = get_db_connection()
+    try:
+        with conn.cursor() as cursor:
+            for row in reader:
+                q_text = row.get('questions','').strip()
+                if not q_text:
+                    continue
+
+                # 1) insert question
+                q_json = json.dumps({'en': q_text})
+                cursor.execute("""
+                    INSERT INTO lifeapp.la_questions
+                      (title, la_subject_id, la_level_id, la_topic_id,
+                       created_by, question_type, `type`, status,
+                       created_at, updated_at)
+                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                """, (
+                    q_json,
+                    subject_id,
+                    level_id,
+                    topic_id,
+                    1,      # created_by
+                    1,      # question_type = Text
+                    2,      # game_type = Quiz
+                    1,      # status = Active
+                    now,
+                    now
+                ))
+                qid = cursor.lastrowid
+
+                # 2) insert options
+                answer_key = row.get('answer','').strip().lower()  # e.g. 'option1'
+                correct_idx = None
+                if answer_key.startswith('option'):
+                    try:
+                        correct_idx = int(answer_key.replace('option','')) - 1
+                    except:
+                        correct_idx = None
+
+                answer_option_id = None
+                for idx, col in enumerate(['option1','option2','option3','option4']):
+                    txt = row.get(col,'').strip()
+                    opt_json = json.dumps({'en': txt})
+                    cursor.execute("""
+                        INSERT INTO lifeapp.la_question_options
+                          (question_id, title, created_at, updated_at)
+                        VALUES (%s,%s,%s,%s)
+                    """, (qid, opt_json, now, now))
+                    oid = cursor.lastrowid
+                    if correct_idx is not None and idx == correct_idx:
+                        answer_option_id = oid
+
+                # 3) link correct answer
+                if answer_option_id:
+                    cursor.execute("""
+                        UPDATE lifeapp.la_questions
+                           SET answer_option_id = %s
+                         WHERE id = %s
+                    """, (answer_option_id, qid))
+
+                inserted += 1
+
+            conn.commit()
+        return jsonify({'success': True, 'inserted': inserted}), 200
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        conn.close()
 
 @app.route('/api/updated_today', methods=['POST'])
 def get_questions_updated_today():
@@ -6757,6 +6954,212 @@ def delete_today_questions_and_options():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+    finally:
+        conn.close()
+
+###################################################################################
+###################################################################################
+############## RESOURCES/STUDENT_RELATED/VISIONS APIs ######################
+###################################################################################
+###################################################################################
+# 1. Fetch Visions + Questions (with filters)
+@app.route('/api/visions', methods=['GET'])
+def fetch_visions():
+    # URL query params: status, subject_id, level_id, question_type
+    qs = request.args
+    status = qs.get('status')          # '1','0' or None
+    subject = qs.get('subject_id')     # id string or None
+    level   = qs.get('level_id')
+    qtype   = qs.get('question_type')  # 'mcq','reflection','image'
+
+    conn = get_db_connection()
+    try:
+        with conn.cursor() as cursor:
+            # join visions -> subjects, levels -> vision_questions
+            sql = '''
+            SELECT
+              v.id            AS vision_id,
+              JSON_UNQUOTE(JSON_EXTRACT(v.title, '$.en'))       AS title,
+              JSON_UNQUOTE(JSON_EXTRACT(v.description, '$.en')) AS description,
+              v.youtube_url,
+              v.allow_for,
+              s.id            AS subject_id,
+              JSON_UNQUOTE(JSON_EXTRACT(s.title, '$.en'))       AS subject,
+              l.id            AS level_id,
+              JSON_UNQUOTE(JSON_EXTRACT(l.title, '$.en'))       AS level,
+              v.status,
+              q.id            AS question_id,
+              JSON_UNQUOTE(JSON_EXTRACT(q.question, '$.en'))    AS question,
+              q.question_type,
+              q.options,
+              q.correct_answer
+            FROM lifeapp.visions v
+            LEFT JOIN lifeapp.la_subjects s ON s.id = v.la_subject_id
+            LEFT JOIN lifeapp.la_levels   l ON l.id = v.la_level_id
+            LEFT JOIN lifeapp.vision_questions q ON q.vision_id = v.id
+            WHERE 1=1
+            '''
+            params = []
+            if status in ('0','1'):
+                sql += ' AND v.status = %s'
+                params.append(int(status))
+            if subject:
+                sql += ' AND v.la_subject_id = %s'
+                params.append(subject)
+            if level:
+                sql += ' AND v.la_level_id = %s'
+                params.append(level)
+            if qtype:
+                sql += ' AND q.question_type = %s'
+                params.append(qtype)
+            sql += ' ORDER BY v.id DESC'
+
+            cursor.execute(sql, params)
+            rows = cursor.fetchall()
+            return jsonify(rows), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        conn.close()
+
+# 2. Add Vision + Question
+@app.route('/api/visions', methods=['POST'])
+def add_vision():
+    data = request.get_json() or {}
+    # required:
+    for f in ['title','description','allow_for','subject_id','level_id','status','question','question_type']:
+        if f not in data:
+            return jsonify({'error': f'Missing field {f}'}), 400
+
+    raw_title  = data['title']
+    raw_desc   = data['description']
+    you_url    = data.get('youtube_url')
+    allow_for  = int(data['allow_for'])
+    subj_id    = data['subject_id']
+    lvl_id     = data['level_id']
+    status     = int(data['status'])
+    raw_q      = data['question']
+    qtype      = data['question_type']
+    options    = json.dumps(data['options']) if data.get('options') else None
+    corr_ans   = data.get('correct_answer')
+    now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+
+    conn = get_db_connection()
+    try:
+        with conn.cursor() as cursor:
+            # 1) insert into visions
+            cursor.execute(
+                '''INSERT INTO lifeapp.visions
+                  (title, description, youtube_url, allow_for,
+                   la_subject_id, la_level_id, status,
+                   created_at, updated_at)
+                   VALUES (%s, %s, %s, %s,
+                           %s, %s, %s,
+                           %s, %s)''',
+                (
+                  json.dumps({'en': raw_title}),
+                  json.dumps({'en': raw_desc}),
+                  you_url, allow_for, subj_id, lvl_id, status,
+                  now, now
+                )
+            )
+            vid = cursor.lastrowid
+
+            # 2) insert into vision_questions (omit `index`, default used)
+            cursor.execute(
+                '''INSERT INTO lifeapp.vision_questions
+                   (vision_id, question, question_type,
+                    options, correct_answer,
+                    created_at, updated_at)
+                   VALUES (%s, %s, %s,
+                           %s, %s,
+                           %s, %s)''',
+                (
+                  vid,
+                  json.dumps({'en': raw_q}),
+                  qtype,
+                  options,
+                  corr_ans,
+                  now,
+                  now
+                )
+            )
+            conn.commit()
+            return jsonify({'vision_id': vid}), 201
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        conn.close()
+
+# 3. Update Vision + Question
+@app.route('/api/visions/<int:vision_id>', methods=['PUT'])
+def update_vision(vision_id):
+    data = request.get_json() or {}
+    conn = get_db_connection()
+    now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    try:
+        with conn.cursor() as cursor:
+            # 1) update visions
+            fields = []
+            params = []
+            if 'title' in data:
+                fields.append('title=%s')
+                params.append(json.dumps({'en': data['title']}))
+            if 'description' in data:
+                fields.append('description=%s')
+                params.append(json.dumps({'en': data['description']}))
+            if 'youtube_url' in data:
+                fields.append('youtube_url=%s')
+                params.append(data['youtube_url'])
+            if 'allow_for' in data:
+                fields.append('allow_for=%s')
+                params.append(data['allow_for'])
+            if 'subject_id' in data:
+                fields.append('la_subject_id=%s')
+                params.append(data['subject_id'])
+            if 'level_id' in data:
+                fields.append('la_level_id=%s')
+                params.append(data['level_id'])
+            if 'status' in data:
+                fields.append('status=%s')
+                params.append(data['status'])
+            if fields:
+                sql = f"UPDATE lifeapp.visions SET {','.join(fields)}, updated_at=%s WHERE id=%s"
+                params.extend([now, vision_id])
+                cursor.execute(sql, params)
+            # 2) update vision_questions
+            q_fields=[]; q_params=[]
+            if 'question' in data:
+                q_fields.append('question=%s'); q_params.append(json.dumps({'en':data['question']}))
+            if 'question_type' in data:
+                q_fields.append('question_type=%s'); q_params.append(data['question_type'])
+            if 'options' in data:
+                q_fields.append('options=%s'); q_params.append(json.dumps(data['options']))
+            if 'correct_answer' in data:
+                q_fields.append('correct_answer=%s'); q_params.append(data['correct_answer'])
+            if q_fields:
+                sqlq = f"UPDATE lifeapp.vision_questions SET {','.join(q_fields)}, updated_at=%s WHERE vision_id=%s"
+                q_params.extend([now, vision_id])
+                cursor.execute(sqlq, q_params)
+
+            conn.commit()
+            return jsonify({'success':True}), 200
+    except Exception as e:
+        return jsonify({'error':str(e)}),500
+    finally:
+        conn.close()
+
+# 4. Delete Vision (cascade deletes questions)
+@app.route('/api/visions/<int:vision_id>', methods=['DELETE'])
+def delete_vision(vision_id):
+    conn = get_db_connection()
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute("DELETE FROM lifeapp.visions WHERE id=%s", (vision_id,))
+            conn.commit()
+            return jsonify({'success':True}),200
+    except Exception as e:
+        return jsonify({'error':str(e)}),500
     finally:
         conn.close()
 

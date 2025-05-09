@@ -1,5 +1,5 @@
 'use client'
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, ChangeEvent } from 'react';
 import { Inter } from 'next/font/google';
 import '@tabler/core/dist/css/tabler.min.css';
 import { IconPlus, IconTrash, IconEdit } from '@tabler/icons-react';
@@ -451,6 +451,39 @@ export default function StudentRelatedQuiz() {
     }
   }, [newQuestion.subject_id, newQuestion.level_id, newQuestion.status]);
   
+
+  // CSV Import modal state
+  const [showCsvModal, setShowCsvModal]       = useState(false);
+  const [csvSubject, setCsvSubject]           = useState('');
+  const [csvLevel, setCsvLevel]               = useState('');
+  const [csvTopic, setCsvTopic]               = useState('');
+  const [csvFile, setCsvFile]                 = useState<File|null>(null);
+  const [csvTopics, setCsvTopics]             = useState<Topic[]>([]);
+  const [csvTopicsLoading, setCsvTopicsLoading] = useState(false);
+  const [csvUploadLoading, setCsvUploadLoading] = useState(false);
+
+  // When subject+level change, fetch topics for CSV modal (status=1 assumed)
+  useEffect(() => {
+    if (csvSubject && csvLevel) {
+      setCsvTopicsLoading(true);
+      fetch(`${api_startpoint}/api/topics`, {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({
+          la_subject_id: csvSubject,
+          la_level_id:   csvLevel,
+          status:        '1'
+        })
+      })
+        .then(res => res.json())
+        .then((data: Topic[]) => setCsvTopics(Array.isArray(data)?data:[]))
+        .catch(console.error)
+        .finally(() => setCsvTopicsLoading(false));
+    } else {
+      setCsvTopics([]);
+    }
+  }, [csvSubject, csvLevel]);
+
   return (
     <div className={`page bg-body ${inter.className} font-sans`}>
       <Sidebar />
@@ -474,6 +507,15 @@ export default function StudentRelatedQuiz() {
                   <IconPlus className="me-2" /> Add New Set/Topic
                 </button> */}
               </div>
+              <div className="d-flex gap-2">
+                <button
+                  className="btn btn-info d-flex align-items-center"
+                  onClick={() => setShowCsvModal(true)}
+                >
+                  <IconPlus className="me-2" /> Upload via CSV
+                </button>
+              </div>
+
             </div>
 
             {/* Filter Steps */}
@@ -787,6 +829,150 @@ export default function StudentRelatedQuiz() {
               <div className="modal-footer">
                 <button className="btn btn-secondary" onClick={() => setConfirmDeleteQuiz(false)}>Cancel</button>
                 <button className="btn btn-danger" onClick={handleDeleteQuestion}>Delete</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showCsvModal && (
+        <div className="modal d-block bg-black bg-opacity-50" tabIndex={-1}>
+          <div className="modal-dialog">
+            <div className="modal-content">
+
+              {/* header */}
+              <div className="modal-header">
+                <h5 className="modal-title">Import Questions via CSV</h5>
+                <button
+                  type="button"
+                  className="btn-close"
+                  onClick={() => setShowCsvModal(false)}
+                />
+              </div>
+
+              {/* body */}
+              <div className="modal-body space-y-3">
+                {/* Subject */}
+                <div>
+                  <label className="form-label">Subject</label>
+                  <select
+                    className="form-select"
+                    value={csvSubject}
+                    onChange={e => setCsvSubject(e.target.value)}
+                  >
+                    <option value="">Select Subject</option>
+                    {subjects.map(s => (
+                      <option key={s.id} value={s.id.toString()}>
+                        {s.title}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Level */}
+                <div>
+                  <label className="form-label">Level</label>
+                  <select
+                    className="form-select"
+                    value={csvLevel}
+                    onChange={e => setCsvLevel(e.target.value)}
+                  >
+                    <option value="">Select Level</option>
+                    {levels.map(l => (
+                      <option key={l.id} value={l.id.toString()}>
+                        {JSON.parse(l.title).en}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Topic */}
+                <div>
+                  <label className="form-label">Topic/Set</label>
+                  {csvTopicsLoading ? (
+                    <div>Loading topics…</div>
+                  ) : (
+                    <select
+                      className="form-select"
+                      value={csvTopic}
+                      onChange={e => setCsvTopic(e.target.value)}
+                    >
+                      <option value="">Select Topic</option>
+                      {csvTopics.map(t => (
+                        <option key={t.id} value={t.id.toString()}>
+                          {JSON.parse(t.title).en}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                </div>
+
+                {/* CSV file */}
+                <div>
+                  <label className="form-label">CSV File</label>
+                  <input
+                    type="file"
+                    accept=".csv"
+                    className="form-control"
+                    onChange={e => setCsvFile(e.target.files?.[0] ?? null)}
+                  />
+                </div>
+
+                {/* download template link */}
+                <div>
+                  <a
+                    href={`${api_startpoint}/api/download_quiz_template`}
+                    download="quiz_template.csv"
+                    className="btn btn-outline-secondary"
+                  >
+                    Download CSV Template
+                  </a>
+                </div>
+              </div>
+
+              {/* footer */}
+              <div className="modal-footer">
+                <button
+                  className="btn btn-secondary"
+                  onClick={() => setShowCsvModal(false)}
+                >
+                  Cancel
+                </button>
+                <button
+                  className="btn btn-primary"
+                  disabled={
+                    !csvSubject ||
+                    !csvLevel ||
+                    !csvTopic   ||
+                    !csvFile
+                  }
+                  onClick={async () => {
+                    setCsvUploadLoading(true);
+                    const fd = new FormData();
+                    fd.append('subject_id', csvSubject);
+                    fd.append('level_id',   csvLevel);
+                    fd.append('topic_id',   csvTopic);
+                    fd.append('file',       csvFile!);
+
+                    const res = await fetch(
+                      `${api_startpoint}/api/import_quiz_questions_csv`,
+                      { method:'POST', body: fd }
+                    );
+                    const json = await res.json();
+                    if (res.ok) {
+                      setCsvUploadLoading(false);
+                      alert(`Imported ${json.inserted} questions.`);
+                      setShowCsvModal(false);
+                      fetchData();  // refresh the list
+                    } else {
+                      setCsvUploadLoading(false);
+                      alert('Error: ' + (json.error || 'Import failed'));
+                    }
+                  }}
+                >
+                  {csvUploadLoading && <div className='animate-spin rounded-full w-4 h-4 border-white border-t-4 mr-2'></div>}
+                  {csvUploadLoading? 'Uploading..':'Upload'}
+                </button>
               </div>
             </div>
           </div>

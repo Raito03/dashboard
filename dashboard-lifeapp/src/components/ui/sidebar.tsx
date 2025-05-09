@@ -179,6 +179,7 @@ export function Sidebar() {
             <NavItem href="/students/mission" label="Mission" isNested />
             <NavItem href="/students/coupons_redeemed" label="Coupon Redeemed" isNested />
             <NavItem href="/students/quiz_sessions" label="Quiz Sessions" isNested />
+            <NavItem href="/students/vision" label="Vision" isNested/>
             {/* <NavItem href="/students/quiz" label="Quiz" isNested /> */}
             
             {/* <NavItem
