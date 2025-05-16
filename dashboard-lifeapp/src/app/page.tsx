@@ -58,7 +58,8 @@ const teacherGroupings = ['daily', 'weekly', 'monthly', 'quarterly', 'yearly', '
 // import Sidebar from './sidebar';
 import { title } from 'process';
 import { Sidebar } from '@/components/ui/sidebar';
-import { Inter } from 'next/font/google';
+import { Content, Inter } from 'next/font/google';
+// import { headers } from 'next/headers';
 const inter = Inter({ subsets: ['latin'] });
 
 //const api_startpoint = 'https://lifeapp-api-vv1.vercel.app'
@@ -4198,7 +4199,8 @@ export default function UserAnalyticsDashboard() {
   const chartRef16 = useRef<ReactECharts | null>(null);
   const chartRef17 = useRef<ReactECharts | null>(null);
   const chartRef18 = useRef<ReactECharts | null>(null);
-
+  const chartRef19 = useRef<ReactECharts | null> (null);
+  const chartRef20 = useRef<ReactECharts | null> (null);
   const handleDownloadChart = (
       chartRef: React.RefObject<ReactECharts | null>,
       filename: string
@@ -4285,6 +4287,155 @@ export default function UserAnalyticsDashboard() {
       .catch(err => console.error(err));
   }, []);
 
+  // ################################ VISIONS ##############################
+  interface StatRowVision { period: string; count: number; }
+  interface LevelDataVision { level: string; count: number; subjects: { subject: string; count: number; }[]; }
+  interface PeriodDataVision { period: string; levels: LevelDataVision[]; }
+  interface Subject { id: number; title: string; }
+  const [statsVision, setStatsVision]           = useState<PeriodDataVision[]>([]);
+  const [groupingVision, setGroupingVision]     = useState('daily');
+  const [subjectList, setSubjectList] = useState<any[]>([]);
+  const [subjectId, setSubjectId]   = useState<number | null>(null);
+  const [assignedBy, setAssignedBy] = useState<'all' | 'teacher' | 'self'>('all');
+  const [visionLoading, setVisionLoading]= useState(false);
+  // Fetch subjects
+  useEffect(() => {
+    fetch(`${api_startpoint}/api/subjects_list`, {method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: 1 })})
+      .then(res => res.json())
+      .then(data => setSubjectList(data));
+  }, []);
+
+  // Fetch stats whenever filters change
+  useEffect(() => {
+    setVisionLoading(true);
+    const params = new URLSearchParams({
+      grouping: groupingVision,
+      assigned_by: assignedBy !== 'all' ? assignedBy : undefined,
+      subject_id: subjectId ? subjectId.toString() : undefined,
+    } as any);
+  
+    fetch(`${api_startpoint}/api/vision-completion-stats?${params}`)
+      .then(res => res.json())
+      .then(json => {
+        setStatsVision(json.data);
+        setVisionLoading(false);
+      })
+      .catch(err => {
+        console.error("Failed to fetch vision stats:", err);
+        setVisionLoading(false);
+      });
+  }, [groupingVision, subjectId, assignedBy]);
+  
+  const periodsVision = statsVision.map(d => d.period);
+  const levelsVision  = Array.from(new Set(statsVision.flatMap(d => d.levels.map(l => l.level))));
+  // series per level
+  const seriesVision: any[] = levelsVision.map(level => ({
+    name: level,
+    type: 'bar',
+    stack: 'total',
+    data: statsVision.map(d => {
+      const lvl = d.levels.find(l => l.level===level);
+      return lvl ? lvl.count : 0;
+    })
+  }));
+
+  // compute totals per period
+  const totalsVision = statsVision.map(d =>
+    d.levels.reduce((sum, lvl) => sum + lvl.count, 0)
+  );
+
+  // invisible series for total labels
+  seriesVision.push({
+    name: 'Total',
+    type: 'bar',
+    stack: 'total',
+    data: totalsVision,
+    itemStyle: { opacity: 0 },
+    emphasis: { itemStyle: { opacity: 0 } },
+    label: {
+      show: true,
+      position: 'top',
+      formatter: '{c}'
+    }
+  });
+  // tooltip formatter
+  const tooltipVision = {
+    trigger: 'axis',
+    axisPointer: { type: 'shadow' },
+    formatter: (params: any[]) => {
+      const idx = params[0].dataIndex;
+      const pd = statsVision[idx];
+      let txt = `${pd.period}<br/>`;
+      pd.levels.forEach(lvl => {
+        txt += `<b>${lvl.level} :</b> ${lvl.count}<br/>`;
+        lvl.subjects.forEach(sub => {
+          txt += `&nbsp;&nbsp;* ${sub.subject} : ${sub.count}<br/>`;
+        });
+      });
+      return txt;
+    }
+  };
+  // Prepare chart option with invisible bar for labels
+  const optionVision = {
+    title: { text: 'Vision Submitted Over Time', left: 'center' },
+    tooltip: tooltipVision,
+    legend: { data: levelsVision, bottom: 0 },
+    xAxis: {
+      type: 'category',
+      data: periodsVision,
+      axisLabel: { rotate: groupingVision === 'daily' ? 45 : 0 }
+    },
+    yAxis: { type: 'value', name: 'Users Completed' },
+    dataZoom: [
+      { type: 'inside', start: 0, end: 100 },
+      { type: 'slider', start: 0, end: 100 }
+    ],
+    series: seriesVision
+  };
+
+  // ----------------- vision score ------------------
+  interface ScoreRow { period: string; total_score: number; }
+  const [groupingVisionScore, setGroupingVisionScore] = useState<'daily'|'weekly'|'monthly'|'quarterly'|'yearly'|'lifetime'>('daily');
+  const [VisionScore, setVisionScore] = useState<ScoreRow[]>([]);
+  const [VisionScoreLoading, setVisionScoreLoading] = useState(false)
+  useEffect(() => {
+    setVisionScoreLoading(true)
+    const params = new URLSearchParams({ grouping: groupingVisionScore });
+    fetch(`${api_startpoint}/api/vision-score-stats?${params}`)
+      .then(res => res.json())
+      .then(json => {setVisionScore(json.data);
+        setVisionScoreLoading(false)
+      })
+      .catch(err => {
+        console.error("Failed to fetch vision scores stats:", err);
+        setVisionScoreLoading(false);
+      });
+  }, [grouping]);
+
+  const periodsVisionScore = VisionScore.map(d => d.period);
+  const scoresVisionScore  = VisionScore.map(d => d.total_score);
+
+  const optionVisionScore = {
+    title: { text: 'Vision Score Over Time', left: 'center' },
+    tooltip: { trigger: 'axis', axisPointer: { type: 'line' } },
+    xAxis: { type: 'category', data: periodsVisionScore, axisLabel: { rotate: groupingVisionScore === 'daily' ? 45 : 0 } },
+    yAxis: { type: 'value', name: 'Score' },
+    series: [
+      { name: 'Score', type: 'line', data: scoresVisionScore, smooth: true, label: { show: true, position: 'top', formatter: '{c}' } }
+    ]
+  };
+
+  //----------------------- vision count card ----------------------
+  const [totalVisionScore, setTotalVisionScore] = useState<number>(0);
+  const [totalVisionSubmitted, setTotalVisionSubmitted] = useState<number>(0);
+  useEffect(() => {
+    fetch(`${api_startpoint}/api/vision-answer-summary`)
+      .then(res => res.json())
+      .then(json => {setTotalVisionScore(json.total_score); setTotalVisionSubmitted(json.total_vision_answers)});
+
+  },[])
   return (
     <div className={`page bg-light ${inter.className} font-sans`}>
       {/* Fixed Sidebar */}
@@ -4360,6 +4511,9 @@ export default function UserAnalyticsDashboard() {
                 { title: 'Quiz Participation Rate', value: quizParticipationRate, icon: <IconPercentage />, color: 'bg-sky-900', suffix: '%'},
                 { title: 'Jigyasa Participation Rate', value: jigyasaParticipationRate, icon: <IconPercentage />, color: 'bg-sky-900', suffix: '%'},
                 { title: 'Pragya Participation Rate', value: pragyaParticipationRate, icon: <IconPercentage />, color: 'bg-sky-900', suffix: '%'},
+                { title: 'Total Vision Completes', value: totalVisionSubmitted, icon: <IconPercentage />, color: 'bg-sky-900', },
+                { title: 'Total Vision Score Earned', value: totalVisionScore, icon: <IconPercentage />, color: 'bg-sky-900', },
+
               ].map((metric, index) => (
                 <div className="col-sm-6 col-lg-3" key={index}>
                   <div className="card">
@@ -4839,7 +4993,70 @@ export default function UserAnalyticsDashboard() {
                     )}
                   </div>
                 </div>
-                
+
+                {/* Histogram Suject assigned by Vision Cmpleted Wise */}
+                <div className="col-12 col-xl-6">
+                  <div className="card shadow-sm border-0 h-100">
+                    <div className="card-header bg-transparent py-3">
+                        <h3 className="card-title mb-0 fw-semibold">Vision Submitted</h3>
+                        {/* Download button */}
+                      <button
+                        onClick={() => handleDownloadChart(chartRef19,'vision_completed_graph')}
+                        className="ml-2 inline-flex items-center gap-1 px-3 py-1.5 bg-sky-600 text-white text-xs font-medium rounded-md hover:bg-sky-700 transition-colors duration-200"
+                      >
+                        <svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          strokeWidth={1.5}
+                          stroke="currentColor"
+                          className="w-4 h-4"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M7.5 12l4.5 4.5m0 0l4.5-4.5m-4.5 4.5V3"
+                          />
+                        </svg>
+                        Download
+                      </button>
+                    </div>
+                    <div style={{ marginBottom: '20px' }}>
+                      <select value={groupingVision} onChange={e => setGroupingVision(e.target.value)}>
+                        <option value="daily">Daily</option>
+                        <option value="weekly">Weekly</option>
+                        <option value="monthly">Monthly</option>
+                        <option value="quarterly">Quarterly</option>
+                        <option value="yearly">Yearly</option>
+                        <option value="lifetime">Lifetime</option>
+                      </select>
+
+                      <select
+                        value={subjectId ?? ''}
+                        onChange={e => setSubjectId(e.target.value ? Number(e.target.value) : null)}
+                      >
+                        <option value="">All Subjects</option>
+                        {subjectList.map(s => (
+                          <option key={s.id} value={s.id}>{JSON.parse(s.title).en}</option>
+                        ))}
+                      </select>
+
+                      <select value={assignedBy} onChange={e => setAssignedBy(e.target.value as any)}>
+                        <option value="all">All Assignments</option>
+                        <option value="self">Self Assigned</option>
+                        <option value="teacher">By Teacher</option>
+                      </select>
+                      {visionLoading ? (
+                        <div className="text-center">
+                          <div className="spinner-border text-purple" role="status" style={{ width: '8rem', height: '8rem' }}></div>
+                        </div>
+                      ) : (
+                        <ReactECharts ref={chartRef19} option={optionVision} style={{ height: '400px', width: '100%' }} />
+                      )}
+                    </div> 
+                  </div>
+                </div>
+
                 {/* Mission Coins Earned Over Time */}
                 <div className="col-12 col-xl-6">
                   <div className="card shadow-sm border-0 h-100">
@@ -5025,6 +5242,50 @@ export default function UserAnalyticsDashboard() {
                             <div className="spinner-border text-purple" role="status" style={{ width: '8rem', height: '8rem' }}></div>
                           </div>
                         : <ReactECharts ref={chartRef14}option={pointsPragyaChartOption} style={{ height: 400 }} />}
+                      </div>
+                  </div>
+                </div>
+                {/* Vision Score Earned Over Time */}
+                <div className="col-12 col-xl-6">
+                  <div className="card shadow-sm border-0 h-100">
+                      <div className="card-header bg-transparent py-3">
+                          <h3 className="card-title mb-0 fw-semibold">Vision Score Earned Over Time</h3>
+                          {/* Download button */}
+                          <button
+                            onClick={() => handleDownloadChart(chartRef20,'vision_score_earned_graph')}
+                            className="ml-2 inline-flex items-center gap-1 px-3 py-1.5 bg-sky-600 text-white text-xs font-medium rounded-md hover:bg-sky-700 transition-colors duration-200"
+                          >
+                            <svg
+                              xmlns="http://www.w3.org/2000/svg"
+                              fill="none"
+                              viewBox="0 0 24 24"
+                              strokeWidth={1.5}
+                              stroke="currentColor"
+                              className="w-4 h-4"
+                            >
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M7.5 12l4.5 4.5m0 0l4.5-4.5m-4.5 4.5V3"
+                              />
+                            </svg>
+                            Download
+                          </button>
+                      </div>
+                      <div style={{ marginBottom: '20px' }}> 
+                        <select value={groupingVisionScore} onChange={e => setGroupingVisionScore(e.target.value as any)}>
+                          <option value="daily">Daily</option>
+                          <option value="weekly">Weekly</option>
+                          <option value="monthly">Monthly</option>
+                          <option value="quarterly">Quarterly</option>
+                          <option value="yearly">Yearly</option>
+                          <option value="lifetime">Lifetime</option>
+                        </select>
+                        {VisionScoreLoading
+                        ? <div className="text-center">
+                            <div className="spinner-border text-purple" role="status" style={{ width: '8rem', height: '8rem' }}></div>
+                          </div>
+                        : <ReactECharts ref={chartRef20}option={optionVisionScore} style={{ height: 400 }} />}
                       </div>
                   </div>
                 </div>

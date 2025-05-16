@@ -1848,7 +1848,177 @@ def get_total_PBLsubmissions():
 
     return jsonify(total=total)
     
+@app.route('/api/vision-completion-stats', methods=['GET'])
+def vision_completion_stats():
+    # Query params
+    grouping    = request.args.get('grouping', 'daily')
+    subject_id  = request.args.get('subject_id', type=int)
+    assigned_by = request.args.get('assigned_by')  # 'teacher' or 'self'
 
+    # Map grouping to SQL
+    fmt_map = {
+        'daily':     "DATE(a.created_at)",
+        'weekly':    "DATE_FORMAT(a.created_at, '%x-%v')",
+        'monthly':   "DATE_FORMAT(a.created_at, '%Y-%m')",
+        'quarterly': "CONCAT(YEAR(a.created_at), '-Q', QUARTER(a.created_at))",
+        'yearly':    "YEAR(a.created_at)",
+        'lifetime':  "'lifetime'"
+    }
+    period_expr = fmt_map.get(grouping, fmt_map['daily'])
+
+    conn = get_db_connection()
+    try:
+        with conn.cursor() as cursor:
+            # Fetch counts grouped by period, level, subject
+            sql = f"""
+            SELECT
+              {period_expr} AS period,
+              JSON_UNQUOTE(JSON_EXTRACT(l.title, '$.en')) AS level_title,
+              JSON_UNQUOTE(JSON_EXTRACT(s.title, '$.en')) AS subject_title,
+              COUNT(DISTINCT a.user_id) AS user_count
+            FROM vision_question_answers a
+            JOIN visions v      ON v.id = a.vision_id
+            JOIN la_levels l    ON l.id = v.la_level_id
+            JOIN la_subjects s  ON s.id = v.la_subject_id
+            LEFT JOIN vision_assigns vs
+              ON vs.vision_id = a.vision_id AND vs.student_id = a.user_id
+            WHERE 1=1
+            """
+            params = []
+
+            if subject_id:
+                sql += " AND v.la_subject_id = %s"; params.append(subject_id)
+            if assigned_by == 'teacher':
+                sql += " AND vs.teacher_id IS NOT NULL"
+            elif assigned_by == 'self':
+                sql += " AND vs.teacher_id IS NULL"
+
+            sql += " GROUP BY period, l.title, s.title ORDER BY period"
+            cursor.execute(sql, params)
+            rows = cursor.fetchall()
+
+        # Nest data per period
+        data = {}
+        for r in rows:
+            period = r['period']
+            lvl    = r['level_title']
+            subj   = r['subject_title']
+            cnt    = r['user_count']
+            data.setdefault(period, {}).setdefault(lvl, {'count': 0, 'subjects': {}})
+            data[period][lvl]['count'] += cnt
+            data[period][lvl]['subjects'][subj] = cnt
+
+        # Format array
+        formatted = []
+        for period, levels in data.items():
+            formatted.append({
+                'period': period,
+                'levels': [
+                    {
+                      'level': lvl,
+                      'count': info['count'],
+                      'subjects': [{'subject': sub, 'count': c} for sub, c in info['subjects'].items()]
+                    }
+                    for lvl, info in levels.items()
+                ]
+            })
+        return jsonify({'data': formatted}), 200
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+    finally:
+        conn.close()
+
+@app.route('/api/vision-score-stats', methods=['GET'])
+def vision_score_stats():
+    # Query params
+    grouping = request.args.get('grouping', 'daily')  # daily, weekly, monthly, quarterly, yearly, lifetime
+
+    # Map grouping to SQL
+    fmt_map = {
+        'daily':     "DATE(a.created_at)",
+        'weekly':    "DATE_FORMAT(a.created_at, '%x-%v')",
+        'monthly':   "DATE_FORMAT(a.created_at, '%Y-%m')",
+        'quarterly': "CONCAT(YEAR(a.created_at), '-Q', QUARTER(a.created_at))",
+        'yearly':    "YEAR(a.created_at)",
+        'lifetime':  "'lifetime'"
+    }
+    period_expr = fmt_map.get(grouping, fmt_map['daily'])
+
+    conn = get_db_connection()
+    try:
+        with conn.cursor() as cursor:
+            sql = f"""
+            SELECT
+              {period_expr} AS period,
+              COALESCE(SUM(a.score), 0) AS total_score
+            FROM vision_question_answers a
+            WHERE a.score IS NOT NULL
+            GROUP BY period
+            ORDER BY period
+            """
+            cursor.execute(sql)
+            rows = cursor.fetchall()
+
+        data = [{'period': r['period'], 'total_score': r['total_score']} for r in rows]
+        return jsonify({'data': data}), 200
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+    finally:
+        conn.close()
+
+@app.route('/api/vision-answer-summary', methods=['GET'])
+def vision_answer_summary():
+    conn = get_db_connection()
+    try:
+        with conn.cursor() as cursor:
+            # Total sum of scores (ignore NULLs)
+            cursor.execute("SELECT COALESCE(SUM(score),0) AS total_score FROM vision_question_answers")
+            total_score = cursor.fetchone()['total_score']
+
+            # Total number of rows
+            cursor.execute("SELECT COUNT(*) AS total_answers FROM vision_question_answers")
+            total_answers = cursor.fetchone()['total_answers']
+
+        return jsonify({
+            'total_score': int(total_score),
+            'total_vision_answers': total_answers
+        }), 200
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+    finally:
+        conn.close()
+
+@app.route('/api/vision-teacher-completions-summary', methods=['GET'])
+def vision_teacher_completions_summary():
+    conn = get_db_connection()
+    try:
+        with conn.cursor() as cursor:
+            # Count only answers where there was a teacher assignment
+            sql = '''
+                SELECT COUNT(*) AS teacher_assigned_completions
+                FROM lifeapp.vision_question_answers a
+                JOIN lifeapp.vision_assigns vs
+                  ON vs.vision_id = a.vision_id
+                 AND vs.student_id = a.user_id
+                WHERE vs.teacher_id IS NOT NULL
+            '''
+            cursor.execute(sql)
+            total = cursor.fetchone()['teacher_assigned_completions']
+
+        return jsonify({'total_teacher_assigned_completions': total}), 200
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+    finally:
+        conn.close()
+        
 ###################################################################################
 ###################################################################################
 ######################## STUDENT/ DASHBOARD APIs ##################################
@@ -2672,73 +2842,94 @@ def update_mission_status():
 # 5. Fetch Vision Session Answers with Pagination & Filters
 @app.route('/api/vision_sessions', methods=['GET'])
 def fetch_vision_sessions():
-    # Query params: page, per_page, question_type, assigned_by ('teacher'|'self'), date_start, date_end
-    qs = request.args
+    # Query params
+    qs          = request.args
     page        = int(qs.get('page', 1))
     per_page    = int(qs.get('per_page', 25))
     offset      = (page - 1) * per_page
-    qtype       = qs.get('question_type')      # mcq|reflection|image
-    assigned_by = qs.get('assigned_by')        # 'teacher'|'self'
-    date_start  = qs.get('date_start')         # YYYY-MM-DD
-    date_end    = qs.get('date_end')           # YYYY-MM-DD
+    qtype       = qs.get('question_type')       # mcq|reflection|image
+    assigned_by = qs.get('assigned_by')         # 'teacher'|'self'
+    date_start  = qs.get('date_start')          # YYYY-MM-DD
+    date_end    = qs.get('date_end')            # YYYY-MM-DD
+    school_codes = qs.getlist('school_codes')   # gets ?school_codes=123&school_codes=456
+
+    base_sql = '''
+    SELECT
+      a.id AS answer_id,
+      v.title AS vision_title,
+      JSON_UNQUOTE(JSON_EXTRACT(q.question, '$.en')) AS question_title,
+      u.name    AS user_name,
+      COALESCE(t.name, 'self') AS teacher_name,
+      a.answer_text,
+      a.answer_option,
+      m.id      AS media_id,
+      m.path    AS media_path,
+      a.score,
+      a.answer_type,
+      a.created_at
+    FROM vision_question_answers a
+    JOIN visions v          ON v.id = a.vision_id
+    JOIN vision_questions q ON q.id = a.question_id
+    JOIN users u            ON u.id = a.user_id
+    LEFT JOIN vision_assigns vs 
+      ON vs.vision_id = a.vision_id 
+     AND vs.student_id = a.user_id
+    LEFT JOIN users t       ON t.id = vs.teacher_id
+    LEFT JOIN media m       ON m.id = a.media_id
+    LEFT JOIN lifeapp.schools s ON s.id = u.school_id
+    WHERE 1=1
+    '''
+    params = []
+
+    # question type filter
+    if qtype:
+        base_sql += ' AND a.answer_type = %s'
+        params.append(qtype)
+
+    # assigned_by filter
+    if assigned_by == 'teacher':
+        base_sql += ' AND vs.teacher_id IS NOT NULL'
+    elif assigned_by == 'self':
+        base_sql += ' AND vs.teacher_id IS NULL'
+
+    # date filters
+    if date_start:
+        base_sql += ' AND DATE(a.created_at) >= %s'
+        params.append(date_start)
+    if date_end:
+        base_sql += ' AND DATE(a.created_at) <= %s'
+        params.append(date_end)
+
+    # school_codes IN-clause
+    if school_codes:
+        placeholders = ','.join(['%s'] * len(school_codes))
+        base_sql += f' AND u.school_code IN ({placeholders})'
+        params.extend(school_codes)
+
+    # pagination
+    base_sql += ' ORDER BY a.created_at DESC LIMIT %s OFFSET %s'
+    params.extend([per_page, offset])
 
     conn = get_db_connection()
     try:
         with conn.cursor() as cursor:
-            base_sql = '''
-            SELECT
-              a.id AS answer_id,
-              v.title AS vision_title,
-              JSON_UNQUOTE(JSON_EXTRACT(q.question, '$.en')) AS question_title,
-              u.name    AS user_name,
-              COALESCE(t.name, 'self') AS teacher_name,
-              a.answer_text,
-              a.answer_option,
-              m.id      AS media_id,
-              m.path    AS media_path,
-              a.score,
-              a.answer_type,
-              a.created_at
-            FROM vision_question_answers a
-            JOIN visions v          ON v.id = a.vision_id
-            JOIN vision_questions q ON q.id = a.question_id
-            JOIN users u            ON u.id = a.user_id
-            LEFT JOIN vision_assigns vs ON vs.vision_id = a.vision_id AND vs.student_id = a.user_id
-            LEFT JOIN users t       ON t.id = vs.teacher_id
-            LEFT JOIN media m       ON m.id = a.media_id
-            WHERE 1=1
-            '''
-            params = []
-            if qtype:
-                base_sql += ' AND a.answer_type = %s'
-                params.append(qtype)
-            if assigned_by == 'teacher':
-                base_sql += ' AND vs.teacher_id IS NOT NULL'
-            elif assigned_by == 'self':
-                base_sql += ' AND vs.teacher_id IS NULL'
-            if date_start:
-                base_sql += ' AND DATE(a.created_at) >= %s'
-                params.append(date_start)
-            if date_end:
-                base_sql += ' AND DATE(a.created_at) <= %s'
-                params.append(date_end)
-            # pagination
-            base_sql += ' ORDER BY a.created_at DESC LIMIT %s OFFSET %s'
-            params.extend([per_page, offset])
-
             cursor.execute(base_sql, params)
             rows = cursor.fetchall()
-            # build full media_url
-            base_url = os.getenv('BASE_URL', '')
-            for r in rows:
-                r['media_url'] = f"{base_url}/{r['media_path']}" if r.get('media_path') else None
-            return jsonify({
-                'page': page,
-                'per_page': per_page,
-                'data': rows
-            }), 200
+
+        # build full media_url
+        base_url = os.getenv('BASE_URL', '').rstrip('/')
+        for r in rows:
+            r['media_url'] = f"{base_url}/{r['media_path']}" if r.get('media_path') else None
+
+        return jsonify({
+            'page': page,
+            'per_page': per_page,
+            'data': rows
+        }), 200
+
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
     finally:
         conn.close()
 
@@ -3608,6 +3799,43 @@ def get_grades_list():
     finally:
         connection.close()
 
+@app.route('/api/vision-teacher-completion-rate', methods=['GET'])
+def vision_teacher_completion_rate():
+    conn = get_db_connection()
+    try:
+        with conn.cursor() as cursor:
+            # Total number of visions assigned by teachers
+            cursor.execute(
+                "SELECT COUNT(*) AS total_assigned FROM vision_assigns WHERE teacher_id IS NOT NULL"
+            )
+            total_assigned = cursor.fetchone()['total_assigned'] or 0
+
+            # Count how many of these assignments have at least one answer (i.e., completed)
+            cursor.execute(
+                '''
+                SELECT COUNT(DISTINCT a.vision_id, a.user_id) AS completed_count
+                FROM vision_question_answers a
+                JOIN vision_assigns vs
+                  ON vs.vision_id = a.vision_id
+                 AND vs.student_id = a.user_id
+                WHERE vs.teacher_id IS NOT NULL
+                '''
+            )
+            completed_count = cursor.fetchone()['completed_count'] or 0
+
+        # Calculate percentage
+        percentage = (completed_count / total_assigned * 100) if total_assigned > 0 else 0
+        return jsonify({
+            'total_assigned': total_assigned,
+            'completed_count': completed_count,
+            'percentage': round(percentage, 2)
+        }), 200
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+    finally:
+        conn.close()
 
 ###################################################################################
 ###################################################################################

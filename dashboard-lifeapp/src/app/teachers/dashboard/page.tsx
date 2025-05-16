@@ -7,7 +7,7 @@ import React from 'react';
 import { Inter } from 'next/font/google';
 const inter = Inter({ subsets: ['latin'] });
 import { Sidebar } from '@/components/ui/sidebar';
-import { IconSearch, IconBell, IconSettings, IconUserFilled, IconUserExclamation, IconUser, IconUserScan, IconMapPin, IconSchool, IconEdit, IconTrash } from '@tabler/icons-react';
+import { IconSearch, IconBell, IconSettings, IconUserFilled, IconUserExclamation, IconUser, IconUserScan, IconMapPin, IconSchool, IconEdit, IconTrash, IconTrophy } from '@tabler/icons-react';
 
 
 import {
@@ -1500,6 +1500,160 @@ export default function TeachersDashboard() {
             }
             fetchTmcAssignedByTeacher()
     }, [])
+
+    // ################################ VISIONS ##############################
+    interface StatRowVision { period: string; count: number; }
+    interface LevelDataVision { level: string; count: number; subjects: { subject: string; count: number; }[]; }
+    interface PeriodDataVision { period: string; levels: LevelDataVision[]; }
+    interface Subject { id: number; title: string; }
+    const [statsVision, setStatsVision]           = useState<PeriodDataVision[]>([]);
+    const [groupingVision, setGroupingVision]     = useState('daily');
+    const [subjectList, setSubjectList] = useState<any[]>([]);
+    const [subjectId, setSubjectId]   = useState<number | null>(null);
+    const [assignedBy, setAssignedBy] = useState<'all' | 'teacher' | 'self'>('teacher');
+    const [visionLoading, setVisionLoading]= useState(false);
+    const [visionCompleteModal, setVisionCompleteModal] = useState(false);
+    // Fetch subjects
+    useEffect(() => {
+        fetch(`${api_startpoint}/api/subjects_list`, {method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 1 })})
+        .then(res => res.json())
+        .then(data => setSubjectList(data));
+    }, []);
+
+    // Fetch stats whenever filters change
+    useEffect(() => {
+        setVisionLoading(true);
+        const params = new URLSearchParams({
+        grouping: groupingVision,
+        assigned_by: assignedBy !== 'all' ? assignedBy : undefined,
+        subject_id: subjectId ? subjectId.toString() : undefined,
+        } as any);
+    
+        fetch(`${api_startpoint}/api/vision-completion-stats?${params}`)
+        .then(res => res.json())
+        .then(json => {
+            setStatsVision(json.data);
+            setVisionLoading(false);
+        })
+        .catch(err => {
+            console.error("Failed to fetch vision stats:", err);
+            setVisionLoading(false);
+        });
+    }, [groupingVision, subjectId, assignedBy]);
+    
+    const periodsVision = statsVision.map(d => d.period);
+    const levelsVision  = Array.from(new Set(statsVision.flatMap(d => d.levels.map(l => l.level))));
+    // series per level
+    const seriesVision: any[] = levelsVision.map(level => ({
+        name: level,
+        type: 'bar',
+        stack: 'total',
+        data: statsVision.map(d => {
+        const lvl = d.levels.find(l => l.level===level);
+        return lvl ? lvl.count : 0;
+        })
+    }));
+
+    // compute totals per period
+    const totalsVision = statsVision.map(d =>
+        d.levels.reduce((sum, lvl) => sum + lvl.count, 0)
+    );
+
+    // invisible series for total labels
+    seriesVision.push({
+        name: 'Total',
+        type: 'bar',
+        stack: 'total',
+        data: totalsVision,
+        itemStyle: { opacity: 0 },
+        emphasis: { itemStyle: { opacity: 0 } },
+        label: {
+        show: true,
+        position: 'top',
+        formatter: '{c}'
+        }
+    });
+    // tooltip formatter
+    const tooltipVision = {
+        trigger: 'axis',
+        axisPointer: { type: 'shadow' },
+        formatter: (params: any[]) => {
+        const idx = params[0].dataIndex;
+        const pd = statsVision[idx];
+        let txt = `${pd.period}<br/>`;
+        pd.levels.forEach(lvl => {
+            txt += `<b>${lvl.level} :</b> ${lvl.count}<br/>`;
+            lvl.subjects.forEach(sub => {
+            txt += `&nbsp;&nbsp;* ${sub.subject} : ${sub.count}<br/>`;
+            });
+        });
+        return txt;
+        }
+    };
+    // Prepare chart option with invisible bar for labels
+    const optionVision = {
+        title: { text: 'Vision Submitted Over Time', left: 'center' },
+        tooltip: tooltipVision,
+        legend: { data: levelsVision, bottom: 0 },
+        xAxis: {
+        type: 'category',
+        data: periodsVision,
+        axisLabel: { rotate: groupingVision === 'daily' ? 45 : 0 }
+        },
+        yAxis: { type: 'value', name: 'Users Completed' },
+        dataZoom: [
+        { type: 'inside', start: 0, end: 100 },
+        { type: 'slider', start: 0, end: 100 }
+        ],
+        series: seriesVision
+    };
+    //----------------------- vision count card ----------------------
+    const [totalVisionScore, setTotalVisionScore] = useState<number>(0);
+    const [totalVisionSubmitted, setTotalVisionSubmitted] = useState<number>(0);
+    useEffect(() => {
+        fetch(`${api_startpoint}/api/vision-answer-summary`)
+        .then(res => res.json())
+        .then(json => {setTotalVisionScore(json.total_score); setTotalVisionSubmitted(json.total_vision_answers)});
+
+    },[])
+    const [totalTeacherAssignedVisionCompletes, setTotalTeacherAssignedVisionCompletes] = useState<number>(0);
+    useEffect(() => {
+        fetch(`${api_startpoint}/api/vision-teacher-completions-summary`)
+        .then(res => res.json())
+        .then(json => setTotalTeacherAssignedVisionCompletes(json.total_teacher_assigned_completions));
+    }, [])
+
+    const [teacherAssignedVisionCompletesRate, setTeacherAssignedVisionCompletesRate] = useState<number>(0);
+    useEffect(() => {
+        fetch(`${api_startpoint}/api/vision-teacher-completion-rate`)
+        .then(res => res.json())
+        .then(json => setTeacherAssignedVisionCompletesRate(json.percentage));
+    }, [])
+
+
+//     const chartRef19 = useRef<reactEc_new | null>(null);
+//   const chartRef20 = useRef<reactEc_new | null>(null);
+//   // Fetch data when modal opens or when the selected level changes
+
+//     const handleDownloadChart = (
+//         chartRef: React.RefObject<reactEc_new | null>,
+//         filename: string
+//     ) => {
+//         if (chartRef.current) {
+//         const echartsInstance = chartRef.current.getEchartsInstance();
+//         const imgData = echartsInstance.getDataURL({
+//             type: 'png',
+//             pixelRatio: 2,
+//             backgroundColor: '#fff'
+//         });
+//         const link = document.createElement('a');
+//         link.href = imgData;
+//         link.download = filename;
+//         link.click();
+//         }
+//     };
     return (
         <div className={`page bg-light ${inter.className} font-sans`}>
             <Sidebar />
@@ -1519,6 +1673,11 @@ export default function TeachersDashboard() {
                                 { title: 'Total Number of Schools', value: schoolCount, icon: <IconUserScan />, color: 'bg-blue', suffix: '' },
                                 { title: 'Total number of resources downloaded', value: 165, icon: <IconUserScan />, color: 'bg-blue', suffix: '' },
                                 { title: 'Teacher Assign Mission Completes', value: tmcAssignedByTeacher, icon: <IconUserScan />, color: 'bg-sky-900',},
+                                { title: 'Total Teacher Assigned Vision Completes', value: totalTeacherAssignedVisionCompletes, icon: <IconUser />, color: 'bg-blue', suffix:''},
+                                { title: 'Total Vision Completes', value: totalVisionSubmitted, icon: <IconUser />, color: 'bg-sky-900', },
+                                { title: 'Total Vision Score Earned', value: totalVisionScore, icon: <IconUser />, color: 'bg-sky-900', suffix: ''},
+                                { title: 'Teacher Assigned Vision Completion Rate', value: teacherAssignedVisionCompletesRate, icon: <IconUser />, color: 'bg-sky-900', suffix: '%'},
+                                
                             ].map((metric, index) => (
                                 <div className="col-sm-6 col-lg-3" key={index}>
                                     <div className="card">
@@ -1589,6 +1748,21 @@ export default function TeachersDashboard() {
                                             <div>
                                                 <div className="subheader">View Teachers Graph Distribution </div>
                                                 <div className="text-muted">Click to expand detailed grade and section and subject distribution</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div className="col-sm-4 col-lg-4" onClick={() => setVisionCompleteModal(true)}>
+                                <div className="card cursor-pointer hover:shadow-lg transition-shadow">
+                                    <div className="card-body">
+                                        <div className="d-flex align-items-center">
+                                            <div className="bg-gray-950 rounded-circle p-3 text-white me-3">
+                                                <IconTrophy size={24} />
+                                            </div>
+                                            <div>
+                                                <div className="subheader">Vision Completes</div>
+                                                <div className="text-muted">Click to see Teacher Assigned Vision Completes Over Time</div>
                                             </div>
                                         </div>
                                     </div>
@@ -1752,6 +1926,61 @@ export default function TeachersDashboard() {
                             </div>
                             </div>
                         </div>
+                        )}
+
+                        {visionCompleteModal && (
+                            <div className="fixed inset-0 flex items-center justify-center z-50 bg-black bg-opacity-50">
+                                <div className="bg-white p-6 rounded-lg shadow-lg w-3/4 relative">
+                                    <button 
+                                    type="button" 
+                                    className="btn-close" 
+                                    onClick={() => setVisionCompleteModal(false)}
+                                    ></button>
+                                    <div className="col-12 col-xl-12">
+                                        <div className="card shadow-sm border-0 h-100">
+                                            <div className="card-header bg-transparent py-3">
+                                                <h3 className="card-title mb-0 fw-semibold">Vision Completes Over Time</h3>
+                                                {/* Download button */}
+                                                
+                                            </div>
+                                            <div style={{ marginBottom: '20px' }}> 
+                                                <select value={groupingVision} onChange={e => setGroupingVision(e.target.value)}>
+                                                    <option value="daily">Daily</option>
+                                                    <option value="weekly">Weekly</option>
+                                                    <option value="monthly">Monthly</option>
+                                                    <option value="quarterly">Quarterly</option>
+                                                    <option value="yearly">Yearly</option>
+                                                    <option value="lifetime">Lifetime</option>
+                                                </select>
+
+                                                <select
+                                                    value={subjectId ?? ''}
+                                                    onChange={e => setSubjectId(e.target.value ? Number(e.target.value) : null)}
+                                                >
+                                                    <option value="">All Subjects</option>
+                                                    {subjectList.map(s => (
+                                                    <option key={s.id} value={s.id}>{JSON.parse(s.title).en}</option>
+                                                    ))}
+                                                </select>
+
+                                                <select value={assignedBy} onChange={e => setAssignedBy(e.target.value as any)}>
+                                                    <option value="all">All Assignments</option>
+                                                    <option value="self">Self Assigned</option>
+                                                    <option value="teacher">By Teacher</option>
+                                                </select>
+                                                {visionLoading ? (
+                                                    <div className="text-center">
+                                                    <div className="spinner-border text-purple" role="status" style={{ width: '8rem', height: '8rem' }}></div>
+                                                    </div>
+                                                ) : (
+                                                    <ReactECharts  option={optionVision} style={{ height: '400px', width: '100%' }} />
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            
+                            </div>
                         )}
                         <div className="card shadow-sm border-0 mb-4">
                             <div className="card-body">

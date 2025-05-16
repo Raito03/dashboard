@@ -44,13 +44,39 @@ function AddEditModal({
   const [subj, setSubj]   = useState(initial?.subject_id?.toString() || '');
   const [lvl, setLvl]     = useState(initial?.level_id?.toString() || '');
   const [stat, setStat]   = useState(initial?.status.toString() || '1');
-
+  const [questionType, setQuestionType] = useState<'mcq'|'reflection'|'image'>(initial?.questions?.[0]?.question_type || 'mcq');
+  
   // question states
   const [mcqQ, setMcqQ]       = useState('');
   const [mcqOpts, setMcqOpts] = useState({ a: '', b: '', c: '', d: '' });
   const [mcqAns, setMcqAns]   = useState('');
   const [refQ, setRefQ]       = useState('');
   const [imgQ, setImgQ]       = useState('');
+
+  // MCQ questions list
+  const initialMcq = isEdit
+    ? initial?.questions
+        .filter(q => q.question_type === 'mcq')
+        .map(q => ({ question: q.question, options: q.options ?? {a:'',b:'',c:'',d:''}, correct_answer: q.correct_answer ?? '' }))
+    : [{ question: '', options: {a:'',b:'',c:'',d:''}, correct_answer: '' }];
+  const [mcqList, setMcqList] = useState(initialMcq || [{ question: '', options: {a:'',b:'',c:'',d:''}, correct_answer: '' }]);
+
+  
+  // Reflection/Image question
+  const initialSingle = isEdit
+    ? initial?.questions.find(q => q.question_type !== 'mcq')?.question ?? ''
+    : '';
+  const [singleQ, setSingleQ] = useState(initialSingle);
+
+  // add or remove MCQ entries
+  const addMcq = () => {
+    if (mcqList.length < 5) {
+      setMcqList([...mcqList, { question: '', options: {a:'',b:'',c:'',d:''}, correct_answer: '' }]);
+    }
+  };
+  const removeMcq = (idx: number) => {
+    setMcqList(mcqList.filter((_, i) => i !== idx));
+  };
 
   // dropdown data
   const [subjects, setSubjects] = useState<any[]>([]);
@@ -94,28 +120,14 @@ function AddEditModal({
     setLoading(true);
 
     const questions: QuestionPayload[] = [];
-    if (mcqQ && Object.values(mcqOpts).some(o => o)) {
-      questions.push({
-        question_id:     initial?.questions.find(q => q.question_type==='mcq')?.question_id,
-        question_type:   'mcq',
-        question:        mcqQ,
-        options:         mcqOpts,
-        correct_answer:  mcqAns
+    if (questionType === 'mcq') {
+      mcqList.forEach(q => {
+        if (q.question) {
+          questions.push({ question_type: 'mcq', question: q.question, options: q.options, correct_answer: q.correct_answer });
+        }
       });
-    }
-    if (refQ) {
-      questions.push({
-        question_id:     initial?.questions.find(q => q.question_type==='reflection')?.question_id,
-        question_type:   'reflection',
-        question:        refQ
-      });
-    }
-    if (imgQ) {
-      questions.push({
-        question_id:     initial?.questions.find(q => q.question_type==='image')?.question_id,
-        question_type:   'image',
-        question:        imgQ
-      });
+    } else {
+      questions.push({ question_type: questionType, question: singleQ });
     }
 
     if (!subj || !lvl || !title || !desc) {
@@ -189,38 +201,80 @@ function AddEditModal({
           <option value="0">Inactive</option>
         </select>
 
-        {/* MCQ */}
-        <div className="border p-3 rounded mb-4">
-          <div className="font-semibold mb-1">MCQ Question</div>
-          <textarea value={mcqQ} onChange={e=>setMcqQ(e.target.value)} className="w-full border p-2 rounded mb-2" />
-          {(['a','b','c','d'] as const).map(k => (
-            <input
-              key={k}
-              placeholder={`Option ${k.toUpperCase()}`}
-              value={mcqOpts[k]}
-              onChange={e=>setMcqOpts({ ...mcqOpts, [k]: e.target.value })}
-              className="w-full border p-2 rounded mb-1"
-            />
-          ))}
-          <select value={mcqAns} onChange={e=>setMcqAns(e.target.value)} className="w-full border p-2 rounded">
-            <option value="">Select Correct Answer</option>
-            {(['a','b','c','d'] as const).map(k => (
-              <option key={k} value={k}>{k.toUpperCase()}</option>
+        <select value={questionType} onChange={e=>setQuestionType(e.target.value as any)} className="w-full border p-2 rounded mb-4">
+          <option value="mcq">MCQ</option>
+          <option value="reflection">Reflection</option>
+          <option value="image">Image</option>
+        </select>
+
+        {questionType === 'mcq' && (
+          <div className="border p-3 rounded mb-4">
+            {mcqList.map((q, idx) => (
+              <div key={idx} className="mcq-entry">
+                <textarea
+                  value={q.question}
+                  onChange={e => {
+                    const updated = [...mcqList];
+                    updated[idx].question = e.target.value;
+                    setMcqList(updated);
+                  }}
+                  placeholder={`Question ${idx+1}`}
+                  className="w-full border p-2 rounded mb-2"
+                />
+                {(['a','b','c','d'] as const).map(opt => (
+                  <input
+                    key={opt}
+                    placeholder={`Option ${opt}`}
+                    value={q.options[opt]}
+                    onChange={e => {
+                      const updated = [...mcqList];
+                      updated[idx].options[opt] = e.target.value;
+                      setMcqList(updated);
+                    }}
+                    className="w-full border p-2 rounded mb-1"
+                  />
+                ))}
+                <select
+                  value={q.correct_answer}
+                  onChange={e => {
+                    const updated = [...mcqList];
+                    updated[idx].correct_answer = e.target.value;
+                    setMcqList(updated);
+                  }}
+                  className="w-full border p-2 rounded"
+                >
+                  <option value="">Select Correct</option>
+                  {['a','b','c','d'].map(opt => <option key={opt} value={opt}>{opt.toUpperCase()}</option>)}
+                </select>
+                {mcqList.length > 1 && (
+                  <button onClick={() => removeMcq(idx)}><IconTrash /></button>
+                )}
+              </div>
             ))}
-          </select>
-        </div>
+            {mcqList.length < 5 && (
+              <button onClick={addMcq} className="add-btn"><IconPlus /> Add another question</button>
+            )}
+          </div>
+        )}
 
-        {/* Reflection */}
-        <div className="border p-3 rounded mb-4">
-          <div className="font-semibold mb-1">Reflection Question</div>
-          <textarea value={refQ} onChange={e=>setRefQ(e.target.value)} className="w-full border p-2 rounded" />
-        </div>
+        {questionType === 'reflection' && (
+          <textarea
+            value={singleQ}
+            onChange={e=>setSingleQ(e.target.value)}
+            placeholder="Reflection question"
+            className="w-full border p-2 mb-2 rounded"
+          />
+        )}
 
-        {/* Image */}
-        <div className="border p-3 rounded mb-4">
-          <div className="font-semibold mb-1">Image‑based Question</div>
-          <textarea value={imgQ} onChange={e=>setImgQ(e.target.value)} className="w-full border p-2 rounded" />
-        </div>
+        {questionType === 'image' && (
+          <input
+            type="text"
+            value={singleQ}
+            onChange={e=>setSingleQ(e.target.value)}
+            placeholder="Image question URL or prompt"
+            className="w-full border p-2 mb-2 rounded"
+          />
+        )}
 
         {/* buttons */}
         <div className="flex justify-end gap-2">
@@ -323,7 +377,7 @@ export default function VisionsPage() {
                             <div className="card-body">
                                 <div className="d-flex align-items-center">
                                     <div>
-                                        <div className="subheader">Total Questions</div>
+                                        <div className="subheader">Total Visions</div>
                                         <div className="h1 mb-3">
                                             <NumberFlow
                                             value={totalCount}
@@ -371,7 +425,7 @@ export default function VisionsPage() {
 
                             <button onClick={() => setShowAdd(true)}
                                     className="ml-auto bg-sky-600 text-white px-4 py-2 rounded">
-                            Add Vision Question
+                            Add Vision
                             </button>
                         </div>
                         {/* Table */}

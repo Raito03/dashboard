@@ -3,6 +3,7 @@ import React, { useEffect, useState, ChangeEvent, FormEvent } from 'react';
 import { Inter } from 'next/font/google';
 import '@tabler/core/dist/css/tabler.min.css';
 import { Sidebar } from '@/components/ui/sidebar';
+import { Download, Search, XCircle } from 'lucide-react';
 
 const inter = Inter({ subsets: ['latin'] });
 // const api_startpoint = 'https://lifeapp-api-vv1.vercel.app'
@@ -11,17 +12,20 @@ const api_startpoint = 'http://152.42.239.141:5000'
 
 
 interface SessionRow {
-    answer_id:       number;
-    vision_title:    string;
-    question_title:  string;
-    user_name:       string;
-    teacher_name:    string;
-    answer_text:     string | null;
-    answer_option:   string | null;
-    media_url:       string | null;
-    score:           number | null;
-    answer_type:     'text' | 'option' | 'image';
-    created_at:      string;
+    [key: string]: any;
+    answer_id: number;
+    vision_title: string;
+    question_title: string;
+    user_name: string;
+    teacher_name: string;
+    answer_text: string;
+    answer_option: string;
+    media_id: number | null;
+    media_path: string | null;
+    score: number | null;
+    answer_type: string;
+    created_at: string;
+    media_url?: string;
 }
 
 export default function VisionSessionsPage() {
@@ -34,26 +38,52 @@ export default function VisionSessionsPage() {
     const [dateEnd, setDateEnd] = useState('');
     const [loading, setLoading] = useState(false);
     const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
-  
+    const [inputCode, setInputCode] = useState("");
+    // Update existing state declaration
+    const [selectedSchoolCode, setSelectedSchoolCode] = useState<string[]>([]);
+
     const fetchSessions = async () => {
-      setLoading(true);
-      const params = new URLSearchParams();
-      params.set('page', page.toString());
-      params.set('per_page', perPage.toString());
-      if (qtype) params.set('question_type', qtype);
-      if (assignedBy) params.set('assigned_by', assignedBy);
-      if (dateStart) params.set('date_start', dateStart);
-      if (dateEnd) params.set('date_end', dateEnd);
+        setLoading(true);
+        const params = new URLSearchParams();
+        params.set('page', page.toString());
+        params.set('per_page', perPage.toString());
+        if (qtype) params.set('question_type', qtype);
+        if (assignedBy) params.set('assigned_by', assignedBy);
+        if (dateStart) params.set('date_start', dateStart);
+        if (dateEnd) params.set('date_end', dateEnd);
+        // append each code separately
+        selectedSchoolCode.forEach(code => params.append('school_codes', code));
   
-      const res = await fetch(`${api_startpoint}/api/vision_sessions?${params}`);
-      const result = await res.json();
-        // Ensure data is an array
-        const sessions = Array.isArray(result.data) ? result.data : [];
-        setRows(sessions);
-      setLoading(false);
+        const res = await fetch(`${api_startpoint}/api/vision_sessions?${params}`);
+        const result = await res.json();
+            // Ensure data is an array
+            const sessions = Array.isArray(result.data) ? result.data : [];
+            setRows(sessions);
+        setLoading(false);
     };
   
-    useEffect(() => { fetchSessions(); }, [page, qtype, assignedBy, dateStart, dateEnd]);
+    // Trigger fetch on filters change
+    useEffect(() => {
+        fetchSessions();
+    }, [page, qtype, assignedBy, dateStart, dateEnd, selectedSchoolCode]);
+
+    // Called when "Search" button clicked
+    const handleSearch = () => {
+        setPage(1);
+        fetchSessions();
+    };
+
+    // Reset all filters
+    const handleClear = () => {
+        setQtype('');
+        setAssignedBy('');
+        setDateStart('');
+        setDateEnd('');
+        setSelectedSchoolCode([]);
+        setInputCode('');
+        setPage(1);
+        fetchSessions();
+    };
   
     const handleScoreBlur = async (id: number, value: string) => {
       const newScore = Number(value);
@@ -66,30 +96,145 @@ export default function VisionSessionsPage() {
         fetchSessions();
       }
     };
+
+
+    const exportToCSV = () => {
+        // Return early if there's no data to export
+        if (rows.length === 0) {
+        alert("No data to export. Please perform a search first.");
+        return;
+        }
+    
+        try {
+        // Get all the headers (keys) from the first data row
+        const headers = Object.keys(rows[0]);
+        
+        // Create CSV header row
+        let csvContent = headers.join(',') + '\n';
+        
+        // Add data rows
+        rows.forEach(row => {
+            const values = headers.map(header => {
+            const cellValue = row[header] === null || row[header] === undefined ? '' : row[header];
+            
+            // Handle values that contain commas, quotes, or newlines
+            const escapedValue = String(cellValue).replace(/"/g, '""');
+            
+            // Wrap in quotes to handle special characters
+            return `"${escapedValue}"`;
+            });
+            
+            csvContent += values.join(',') + '\n';
+        });
+        
+        // Create a blob and download link
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        
+        // Create a temporary link element and trigger the download
+        const link = document.createElement('a');
+        link.setAttribute('href', url);
+        link.setAttribute('download', `vision_sessions_data_export_${new Date().toISOString().slice(0,10)}.csv`);
+        link.style.visibility = 'hidden';
+        
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        } catch (error) {
+        console.error("Error exporting CSV:", error);
+        alert("An error occurred while exporting data. Please try again.");
+        }
+    };
     return (
         <div className={`page bg-body ${inter.className} font-sans`}>
             <Sidebar />
             <div className="page-wrapper" style={{ marginLeft: '250px' }}>
                 <div className="page-body">
-                    <div className="container-xl pt-4 pb-4 space-y-4">
-                        <div className="flex gap-4">
-                            <select value={qtype} onChange={(e) => setQtype(e.target.value)}
-                                    className="border p-2 rounded">
-                                <option value="">All Types</option>
-                                <option value="option">MCQ</option>
-                                <option value="text">Reflection</option>
-                                <option value="image">Image</option>
-                            </select>
-                            <select value={assignedBy} onChange={e => setAssignedBy(e.target.value)}
-                                    className="border p-2 rounded">
-                                <option value="">All</option>
-                                <option value="teacher">Assigned by Teacher</option>
-                                <option value="self">Self-assigned</option>
-                            </select>
-                            <input type="date" value={dateStart} onChange={e=>setDateStart(e.target.value)}
-                                className="border p-2 rounded" />
-                            <input type="date" value={dateEnd} onChange={e=>setDateEnd(e.target.value)}
-                                className="border p-2 rounded" />
+                    <div className="container-xl pt-4 pb-4 space-y-2">
+                        <div className="card shadow-sm border-0 mb-2">
+                            <div className="card-body">
+                                <div className="row g-3">
+                                    <div className="col-12 col-md-6 col-lg-3">
+                                        <select value={qtype} onChange={(e) => setQtype(e.target.value)}
+                                                className="border p-2 rounded">
+                                            <option value="">All Types</option>
+                                            <option value="option">MCQ</option>
+                                            <option value="text">Reflection</option>
+                                            <option value="image">Image</option>
+                                        </select>
+                                    </div>
+                                    <div className="col-12 col-md-6 col-lg-3">
+                                        <select value={assignedBy} onChange={e => setAssignedBy(e.target.value)}
+                                                className="border p-2 rounded">
+                                            <option value="">All</option>
+                                            <option value="teacher">Assigned by Teacher</option>
+                                            <option value="self">Self-assigned</option>
+                                        </select>
+                                    </div>
+                                    <div className="col-12 col-md-6 col-lg-3">
+                                        <input type="date" value={dateStart} onChange={e=>setDateStart(e.target.value)}
+                                            className="border p-2 rounded" />
+                                    </div>
+                                    <div className="col-12 col-md-6 col-lg-3">
+                                        <input type="date" value={dateEnd} onChange={e=>setDateEnd(e.target.value)}
+                                            className="border p-2 rounded" />
+                                    </div>
+                                    <div className="col-12 col-md-6 col-lg-4">
+                                        <div className="border rounded p-2 bg-white">
+                                            
+                                            <input
+                                            type="text"
+                                            placeholder="Search With School code (comma separated)"
+                                            className="form-control border-0 p-0"
+                                            value={inputCode}
+                                            onChange={(e) => setInputCode(e.target.value)}
+                                            onKeyDown={(e) => {
+                                                if (['Enter', ',', ' '].includes(e.key)) {
+                                                e.preventDefault();
+                                                const code = inputCode.trim();
+                                                if (code && !selectedSchoolCode.includes(code)) {
+                                                    setSelectedSchoolCode(prev => [...prev, code]);
+                                                }
+                                                setInputCode('');
+                                                }
+                                            }}
+                                            />
+                                            <div className="d-flex flex-wrap gap-2 mt-2">
+                                            {selectedSchoolCode.map(code => (
+                                                <span key={code} className="badge bg-purple text-white d-flex align-items-center">
+                                                {code}
+                                                <button 
+                                                    type="button" 
+                                                    className="btn-close btn-close-white ms-2" 
+                                                    onClick={() => setSelectedSchoolCode(prev => prev.filter(c => c !== code))}
+                                                    aria-label="Remove"
+                                                ></button>
+                                                </span>
+                                            ))}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                {/* Action Buttons */}
+                                <div className="d-flex flex-wrap gap-2 mt-4">
+                                    <button className="btn btn-success d-inline-flex align-items-center" onClick={handleSearch}>
+                                        <Search className="me-2" size={16} />
+                                        Search
+                                    </button>
+                                    
+                                    <button className="btn btn-warning d-inline-flex align-items-center text-dark" onClick={handleClear}>
+                                        <XCircle className="me-2" size={16} />
+                                        Clear
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        {/* Action Buttons */}
+                        <div className="d-flex flex-wrap gap-2">
+                            <button className="btn btn-purple d-inline-flex align-items-center text-white" style={{ backgroundColor: '#6f42c1' }} onClick={exportToCSV}>
+                                <Download className="me-2" size={16} />
+                                Export
+                            </button> 
                         </div>
                         {/* Table */}
                         {loading ? <div className='w-8 h-8 border-t-2 border-sky-700 animate-spin rounded-full'></div> : (
@@ -139,8 +284,28 @@ export default function VisionSessionsPage() {
                             ))}
                             </tbody>
                         </table>
+                        
                         )}
+                        {/* Pagination Controls */}
+                        <div className="d-flex justify-content-between align-items-center p-3">
+                            <button
+                            className="btn btn-primary"
+                            onClick={() => setPage(prev => Math.max(prev - 1, 1))}
+                            disabled={page === 1}
+                            >
+                            Previous
+                            </button>
 
+                            <span>Page {page}</span>
+
+                            <button
+                            className="btn btn-primary"
+                            onClick={() => setPage(prev => prev + 1)}
+                            disabled={rows.length < perPage}
+                            >
+                            Next
+                            </button>
+                        </div>
                         {/* Lightbox Modal */}
                         {lightboxUrl && (
                             <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
