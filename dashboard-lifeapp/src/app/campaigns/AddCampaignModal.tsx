@@ -21,7 +21,7 @@ interface PropTypes {
     id: number;
     game_type: number;
     reference_id: number;
-    title: string;
+    campaign_title: string;
     description: string;
     scheduled_for: string;
   };
@@ -32,7 +32,7 @@ export default function AddCampaignModal({
   mode, initial, onClose
 }: PropTypes) : ReactPortal {
   const isEdit = mode === 'edit';
-  const [title, setTitle]           = useState(initial?.title   ?? '');
+  const [title, setTitle]           = useState(initial?.campaign_title   ?? '');
   const [description, setDescription] = useState(initial?.description ?? '');
   const [gameType, setGameType]     = useState(initial?.game_type ?? 1);
   const [subjectId, setSubjectId]   = useState<number>(0);

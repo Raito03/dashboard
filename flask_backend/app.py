@@ -8956,25 +8956,83 @@ def delete_coupon(id):
 
 @app.route('/api/campaigns', methods=['GET'])
 def list_campaigns():
+    qs       = request.args
+    page     = int(qs.get('page', 1))
+    per_page = int(qs.get('per_page', 25))
+    offset   = (page - 1) * per_page
+
     conn = get_db_connection()
     try:
         with conn.cursor() as cursor:
-            cursor.execute("""
-                SELECT id, game_type, reference_id, title, description,
-                       scheduled_for, created_at, updated_at
-                  FROM la_campaigns
-                 ORDER BY scheduled_for DESC
-            """)
+            # 1) total count
+            cursor.execute("SELECT COUNT(*) AS total FROM la_campaigns")
+            total = cursor.fetchone()['total']
+
+            # 2) paginated fetch with conditional joins
+            sql = """
+            SELECT
+              c.id,
+              c.game_type,
+              CASE 
+                WHEN c.game_type = 1
+                    THEN 'Mission'
+                WHEN c.game_type = 2
+                    THEN 'Quiz'
+                ELSE 'Vision'
+              END AS game_type_title,
+              c.reference_id,
+
+              -- pull the right title from the right table:
+              COALESCE(
+                JSON_UNQUOTE(JSON_EXTRACT(m.title, '$.en')),                -- mission title
+                JSON_UNQUOTE(JSON_EXTRACT(q.title, '$.en')),                -- quiz question title
+                JSON_UNQUOTE(JSON_EXTRACT(v.title,'$.en'))  -- vision title (your JSON column)
+              ) AS reference_title,
+
+              c.title        AS campaign_title,
+              c.description,
+              c.scheduled_for,
+              c.created_at,
+              c.updated_at
+            FROM la_campaigns c
+
+            -- only join missions when game_type=1
+            LEFT JOIN lifeapp.la_missions m
+              ON c.game_type = 1
+             AND m.id        = c.reference_id
+
+            -- only join quiz questions when game_type=2
+            LEFT JOIN lifeapp.la_questions q
+              ON c.game_type = 2
+             AND q.id        = c.reference_id
+
+            -- only join visions when game_type=7
+            LEFT JOIN lifeapp.visions v
+              ON c.game_type = 7
+             AND v.id        = c.reference_id
+
+            ORDER BY c.scheduled_for DESC
+            LIMIT %s OFFSET %s
+            """
+            cursor.execute(sql, (per_page, offset))
             camps = cursor.fetchall()
-        return jsonify(camps), 200
+
+        return jsonify({
+            'page': page,
+            'per_page': per_page,
+            'total': total,
+            'data': camps
+        }), 200
+
     finally:
         conn.close()
+
 
 @app.route('/api/campaigns', methods=['POST'])
 def create_campaign():
     data = request.get_json() or {}
     sql = """
-        INSERT INTO la_campaigns
+        INSERT INTO lifeapp.la_campaigns
           (game_type, reference_id, title, description, scheduled_for, created_at, updated_at)
         VALUES (%s, %s, %s, %s, %s, NOW(), NOW())
     """
@@ -8998,7 +9056,7 @@ def create_campaign():
 def update_campaign(id):
     data = request.get_json() or {}
     sql = """
-      UPDATE la_campaigns
+      UPDATE lifeapp.la_campaigns
          SET game_type=%s,
              reference_id=%s,
              title=%s,
@@ -9029,7 +9087,7 @@ def delete_campaign(id):
     conn = get_db_connection()
     try:
         with conn.cursor() as cursor:
-            cursor.execute("DELETE FROM la_campaigns WHERE id=%s", (id,))
+            cursor.execute("DELETE FROM lifeapp.la_campaigns WHERE id=%s", (id,))
             conn.commit()
         return jsonify({'success': True}), 200
     finally:

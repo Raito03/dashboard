@@ -20,8 +20,10 @@ const api_startpoint = 'http://152.42.239.141:5000'
 interface Campaign {
   id: number;
   game_type: number;
+  game_type_title?:string;
   reference_id: number;
-  title: string;
+  reference_title: string;
+  campaign_title: string;
   description: string;
   scheduled_for: string;
   created_at: string;
@@ -35,12 +37,16 @@ export default function Campaigns() {
     const [modal, setModal] = useState<
       false | { mode: 'add' | 'edit'; campaign?: Campaign }
     >(false);
-  
-    const fetchCampaigns = async () => {
+    const [page, setPage] = useState<number>(0)
+    const[total, setTotal] = useState<number>(0)
+    const fetchCampaigns = async (page = 1) => {
       setLoading(true);
-      const res = await fetch(`${api_startpoint}/api/campaigns`);
-      const data = await res.json();
-      setCampaigns(data);
+      const qs = new URLSearchParams({ page: page.toString(), per_page: '25' });
+      const res = await fetch(`${api_startpoint}/api/campaigns?${qs}`);
+      const result = await res.json();
+      setCampaigns(result.data);
+      setTotal(result.total);
+      setPage(result.page);
       setLoading(false);
     };
   
@@ -87,22 +93,23 @@ export default function Campaigns() {
                 <table className="table table-striped table-hover">
                   <thead>
                     <tr>
-                    {['ID','Type','Ref ID','Title','Desc','Scheduled','Created','Updated','Actions']
+                    {['ID','Type', 'Ref Title','Title','Desc','Scheduled','Created','Updated','Actions']
                   .map(h => <th key={h}>{h}</th>)}
                     </tr>
                   </thead>
                   <tbody>
                     {campaigns.map((c, index) => (
-                      <tr key={c.id}>
-                        <td>{c.id}</td>
-                        <td>{c.game_type}</td>
-                        <td>{c.reference_id}</td>
-                        <td>{c.title}</td>
-                        <td>{c.description}</td>
-                        <td>{c.scheduled_for}</td>
-                        <td>{c.created_at}</td>
-                        <td>{c.updated_at}</td>
-                        <td className="flex gap-2">
+                      <tr key={c.id} className="h-12">
+                        <td className="overflow-hidden whitespace-nowrap text-ellipsis">{c.id}</td>
+                        <td className="overflow-hidden whitespace-nowrap text-ellipsis">{c.game_type_title}</td>
+                        {/* <td className="overflow-hidden whitespace-nowrap text-ellipsis">{c.reference_id}</td> */}
+                        <td className="overflow-hidden whitespace-nowrap text-ellipsis">{c.reference_title}</td>
+                        <td className="overflow-hidden whitespace-nowrap text-ellipsis">{c.campaign_title}</td>
+                        <td className="overflow-hidden whitespace-nowrap text-ellipsis">{c.description}</td>
+                        <td className="overflow-hidden whitespace-nowrap text-ellipsis">{c.scheduled_for}</td>
+                        <td className="overflow-hidden whitespace-nowrap text-ellipsis">{c.created_at}</td>
+                        <td className="overflow-hidden whitespace-nowrap text-ellipsis">{c.updated_at}</td>
+                        <td className="flex gap-2 overflow-hidden whitespace-nowrap text-ellipsis">
                           <IconEdit
                             className="cursor-pointer"
                             onClick={() => openEdit(c)}
@@ -118,6 +125,26 @@ export default function Campaigns() {
                 </table>
                 {/* Pagination Controls (if needed) */}
                 {/* You may want to add buttons for Previous and Next pages here */}
+                <div className="flex items-center gap-2 mt-4">
+                  <button
+                    className="btn"
+                    disabled={page <= 1}
+                    onClick={() => fetchCampaigns(page - 1)}
+                  >
+                    Previous
+                  </button>
+
+                  <span>Page {page} of {Math.ceil(total / 25)}</span>
+
+                  <button
+                    className="btn"
+                    disabled={page * 25 >= total}
+                    onClick={() => fetchCampaigns(page + 1)}
+                  >
+                    Next
+                  </button>
+                </div>
+
               </div>
             )}
           </div>
