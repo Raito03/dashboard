@@ -8954,210 +8954,132 @@ def delete_coupon(id):
 ###################################################################################
 ###################################################################################
 
-@app.route('/admin/push-notification-campaigns', methods=['GET'])
-def list_push_notification_campaigns():
-    page    = int(request.args.get('page', 1))
-    per     = int(request.args.get('per_page', 50))
-    offset  = (page-1)*per
-
-    conn = get_db_connection()
-    with conn.cursor() as cur:
-        cur.execute("""
-          SELECT p.*, s.name AS school_name, m.path AS media_path
-            FROM lifeapp.push_notification_campaigns p
-            JOIN lifeapp.schools s ON p.school_id = s.id
-            LEFT JOIN lifeapp.media m ON p.media_id = m.id
-           ORDER BY p.id DESC
-           LIMIT %s OFFSET %s
-        """, (per, offset))
-        rows = cur.fetchall()
-    conn.close()
-
-    # build full media_url
-    base = os.getenv("BASE_URL","")
-    for r in rows:
-        r['media_url'] = base + "/" + r['media_path'] if r.get('media_path') else None
-
-    return jsonify({"campaigns": rows}), 200
-
-# -------------------------
-# Endpoint: Add Campaign
-# -------------------------
-@app.route('/admin/push-notification-campaigns', methods=['POST'])
-def add_push_notification_campaign():
-    try:
-        # Extract form data with proper validation
-        form = request.form
-        
-        # Validate required fields
-        required_fields = ['name', 'title', 'body', 'school_id']
-        for field in required_fields:
-            if not form.get(field):
-                return jsonify({'error': f'Missing required field: {field}'}), 400
-        
-        # Handle file upload
-        file = request.files.get('media')
-        media_id = None
-        if file and file.filename:
-            try:
-                media = upload_media(file)
-                media_id = media['id']
-            except Exception as e:
-                app.logger.error(f"File upload error: {str(e)}")
-                return jsonify({'error': f'File upload failed: {str(e)}'}), 500
-
-        # Make sure school_id is valid
-        try:
-            school_id = int(form.get('school_id'))
-        except (TypeError, ValueError):
-            return jsonify({'error': 'Invalid school_id format'}), 400
-
-        # Prepare empty JSON arrays for the JSON columns
-        empty_json = json.dumps([])
-        
-        now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        conn = get_db_connection()
-        try:
-            with conn.cursor() as cur:
-                cur.execute("""
-                  INSERT INTO lifeapp.push_notification_campaigns
-                    (id, name, title, body, media_id, school_id, city, state, scheduled_date,
-                     users, success_users, failed_users, created_by, created_at, updated_at)
-                  VALUES (NULL, %s, %s, %s, %s, %s, %s, %s, %s,
-                          %s, %s, %s, %s, %s, %s)
-                """, (
-                  form['name'], 
-                  form['title'], 
-                  form['body'], 
-                  media_id,
-                  school_id,
-                  form.get('city', ''),
-                  form.get('state', ''),
-                  form.get('scheduled_date') if form.get('scheduled_date') else None,
-                  empty_json, empty_json, empty_json,        # Properly formatted JSON arrays
-                  form.get('created_by', 1),
-                  now, now
-                ))
-                cid = cur.lastrowid
-            conn.commit()
-            return jsonify({"message":"Campaign added successfully","campaign_id":cid}), 201
-        except Exception as e:
-            conn.rollback()
-            app.logger.error(f"Database error: {str(e)}")
-            return jsonify({'error': f'Database error: {str(e)}'}), 500
-        finally:
-            conn.close()
-    except Exception as e:
-        app.logger.error(f"Unexpected error: {str(e)}")
-        return jsonify({'error': f'Unexpected error: {str(e)}'}), 500
-    
-# -------------------------
-# Endpoint: Update Campaign
-# -------------------------
-@app.route('/admin/push-notification-campaigns/<int:cid>', methods=['PUT'])
-def update_push_notification_campaign(cid):
-    form = request.form
-    file = request.files.get('media')
-    new_mid = None
-
-    # if new file, upload & plan to delete old later
-    if file and file.filename:
-        m = upload_media(file)
-        new_mid = m['id']
-
-    now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+@app.route('/api/campaigns', methods=['GET'])
+def list_campaigns():
     conn = get_db_connection()
     try:
-        # if replacing media: grab old record first
-        if new_mid is not None:
-            with conn.cursor(pymysql.cursors.DictCursor) as cur:
-                cur.execute("""
-                  SELECT media_id, m.path AS media_path
-                    FROM lifeapp.push_notification_campaigns p
-                    LEFT JOIN media m ON p.media_id=m.id
-                   WHERE p.id=%s
-                """, (cid,))
-                old = cur.fetchone()
-            # delete old media row + S3
-            if old and old['media_id']:
-                with conn.cursor() as cur:
-                    cur.execute("DELETE FROM media WHERE id=%s", (old['media_id'],))
-                delete_s3_object(old['media_path'])
-
-        # build update
-        if new_mid is not None:
-            sql = """
-              UPDATE lifeapp.push_notification_campaigns
-                 SET name=%s, title=%s, body=%s, media_id=%s,
-                     school_id=%s, city=%s, state=%s,
-                     scheduled_date=%s, updated_at=%s
-               WHERE id=%s
-            """
-            params = (
-              form['name'], form['title'], form['body'], new_mid,
-              form.get('school_id'), form.get('city'), form.get('state'),
-              form.get('scheduled_date'), now, cid
-            )
-        else:
-            sql = """
-              UPDATE lifeapp.push_notification_campaigns
-                 SET name=%s, title=%s, body=%s,
-                     school_id=%s, city=%s, state=%s,
-                     scheduled_date=%s, updated_at=%s
-               WHERE id=%s
-            """
-            params = (
-              form['name'], form['title'], form['body'],
-              form.get('school_id'), form.get('city'), form.get('state'),
-              form.get('scheduled_date'), now, cid
-            )
-
-        with conn.cursor() as cur:
-            cur.execute(sql, params)
-        conn.commit()
-        return jsonify({"message":"Campaign updated","campaign_id":cid}), 200
-
-    except Exception as e:
-        conn.rollback()
-        return jsonify({'error':str(e)}), 500
+        with conn.cursor() as cursor:
+            cursor.execute("""
+                SELECT id, game_type, reference_id, title, description,
+                       scheduled_for, created_at, updated_at
+                  FROM la_campaigns
+                 ORDER BY scheduled_for DESC
+            """)
+            camps = cursor.fetchall()
+        return jsonify(camps), 200
     finally:
         conn.close()
 
-# -------------------------
-# Endpoint: Delete Campaign
-# -------------------------
-@app.route('/admin/push-notification-campaigns/<int:cid>', methods=['DELETE'])
-def delete_push_notification_campaign(cid):
+@app.route('/api/campaigns', methods=['POST'])
+def create_campaign():
+    data = request.get_json() or {}
+    sql = """
+        INSERT INTO la_campaigns
+          (game_type, reference_id, title, description, scheduled_for, created_at, updated_at)
+        VALUES (%s, %s, %s, %s, %s, NOW(), NOW())
+    """
+    params = (
+        data['game_type'],
+        data['reference_id'],
+        data['title'],
+        data['description'],
+        data['scheduled_for']
+    )
     conn = get_db_connection()
     try:
-        # fetch media_id & path
-        with conn.cursor(pymysql.cursors.DictCursor) as cur:
-            cur.execute("""
-              SELECT media_id, m.path AS media_path
-                FROM lifeapp.push_notification_campaigns p
-                LEFT JOIN media m ON p.media_id=m.id
-               WHERE p.id=%s
-            """, (cid,))
-            row = cur.fetchone()
-
-        # delete campaign
-        with conn.cursor() as cur:
-            cur.execute("DELETE FROM lifeapp.push_notification_campaigns WHERE id=%s", (cid,))
-
-        # delete media if present
-        if row and row['media_id']:
-            with conn.cursor() as cur:
-                cur.execute("DELETE FROM media WHERE id=%s", (row['media_id'],))
-            delete_s3_object(row['media_path'])
-
-        conn.commit()
-        return jsonify({"message":"Campaign deleted","campaign_id":cid}), 200
-
-    except Exception as e:
-        conn.rollback()
-        return jsonify({'error':str(e)}), 500
+        with conn.cursor() as cursor:
+            cursor.execute(sql, params)
+            conn.commit()
+            return jsonify({'id': cursor.lastrowid}), 201
     finally:
-        conn.close()   
+        conn.close()
+
+@app.route('/api/campaigns/<int:id>', methods=['PUT'])
+def update_campaign(id):
+    data = request.get_json() or {}
+    sql = """
+      UPDATE la_campaigns
+         SET game_type=%s,
+             reference_id=%s,
+             title=%s,
+             description=%s,
+             scheduled_for=%s,
+             updated_at=NOW()
+       WHERE id=%s
+    """
+    params = (
+        data['game_type'],
+        data['reference_id'],
+        data['title'],
+        data['description'],
+        data['scheduled_for'],
+        id
+    )
+    conn = get_db_connection()
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute(sql, params)
+            conn.commit()
+        return jsonify({'success': True}), 200
+    finally:
+        conn.close()
+
+@app.route('/api/campaigns/<int:id>', methods=['DELETE'])
+def delete_campaign(id):
+    conn = get_db_connection()
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute("DELETE FROM la_campaigns WHERE id=%s", (id,))
+            conn.commit()
+        return jsonify({'success': True}), 200
+    finally:
+        conn.close()
+
+# ————— Reference Lists —————
+
+@app.route('/api/mission_list', methods=['POST'])
+def mission_list():
+    data       = request.get_json() or {}
+    subject_id = data.get('subject_id')
+    level_id   = data.get('level_id')
+    conn = get_db_connection()
+    try:
+        with conn.cursor() as cursor:
+            sql = "SELECT id, JSON_UNQUOTE(JSON_EXTRACT(title, '$.en')) as title FROM lifeapp.la_missions WHERE status=1"
+            params = []
+            if subject_id:
+                sql += " AND la_subject_id=%s"; params.append(subject_id)
+            if level_id:
+                sql += " AND la_level_id=%s";   params.append(level_id)
+            cursor.execute(sql, params)
+            items = cursor.fetchall()
+        return jsonify(items), 200
+    finally:
+        conn.close()
+
+
+@app.route('/api/quiz_list', methods=['POST'])
+def quiz_list():
+    data       = request.get_json() or {}
+    subject_id = data.get('subject_id')
+    level_id   = data.get('level_id')
+    topic_id   = data.get('topic_id')
+    conn = get_db_connection()
+    try:
+        with conn.cursor() as cursor:
+            sql = "SELECT id, JSON_UNQUOTE(JSON_EXTRACT(title, '$.en')) AS title FROM lifeapp.la_questions WHERE status=1"
+            params = []
+            if subject_id:
+                sql += " AND la_subject_id=%s"; params.append(subject_id)
+            if level_id:
+                sql += " AND la_level_id=%s";   params.append(level_id)
+            if topic_id:
+                sql += " AND la_topic_id=%s";   params.append(topic_id)
+            cursor.execute(sql, params)
+            items = cursor.fetchall()
+        return jsonify(items), 200
+    finally:
+        conn.close()
 
 if __name__ == '__main__':
     app.run(debug=True,  use_reloader=True)
