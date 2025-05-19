@@ -2842,30 +2842,33 @@ def update_mission_status():
 # 5. Fetch Vision Session Answers with Pagination & Filters
 @app.route('/api/vision_sessions', methods=['GET'])
 def fetch_vision_sessions():
-    # Query params
     qs          = request.args
     page        = int(qs.get('page', 1))
     per_page    = int(qs.get('per_page', 25))
     offset      = (page - 1) * per_page
-    qtype       = qs.get('question_type')       # mcq|reflection|image
-    assigned_by = qs.get('assigned_by')         # 'teacher'|'self'
-    date_start  = qs.get('date_start')          # YYYY-MM-DD
-    date_end    = qs.get('date_end')            # YYYY-MM-DD
-    school_codes = qs.getlist('school_codes')   # gets ?school_codes=123&school_codes=456
+    qtype       = qs.get('question_type')
+    assigned_by = qs.get('assigned_by')
+    date_start  = qs.get('date_start')
+    date_end    = qs.get('date_end')
+    school_codes = qs.getlist('school_codes')
+    status_filt = qs.get('status')   # NEW: 'requested'|'accepted'|'rejected'
 
     base_sql = '''
     SELECT
-      a.id AS answer_id,
-      v.title AS vision_title,
+      a.id           AS answer_id,
+      v.title        AS vision_title,
       JSON_UNQUOTE(JSON_EXTRACT(q.question, '$.en')) AS question_title,
-      u.name    AS user_name,
-      COALESCE(t.name, 'self') AS teacher_name,
+      u.name         AS user_name,
+      COALESCE(t.name,'self') AS teacher_name,
       a.answer_text,
       a.answer_option,
-      m.id      AS media_id,
-      m.path    AS media_path,
+      m.id           AS media_id,
+      m.path         AS media_path,
       a.score,
       a.answer_type,
+      a.status,             -- NEW
+      a.approved_at,        -- NEW
+      a.rejected_at,        -- NEW
       a.created_at
     FROM vision_question_answers a
     JOIN visions v          ON v.id = a.vision_id
@@ -2881,34 +2884,26 @@ def fetch_vision_sessions():
     '''
     params = []
 
-    # question type filter
     if qtype:
-        base_sql += ' AND a.answer_type = %s'
-        params.append(qtype)
-
-    # assigned_by filter
-    if assigned_by == 'teacher':
+        base_sql += ' AND a.answer_type = %s';    params.append(qtype)
+    if assigned_by=='teacher':
         base_sql += ' AND vs.teacher_id IS NOT NULL'
-    elif assigned_by == 'self':
+    elif assigned_by=='self':
         base_sql += ' AND vs.teacher_id IS NULL'
-
-    # date filters
     if date_start:
-        base_sql += ' AND DATE(a.created_at) >= %s'
-        params.append(date_start)
+        base_sql += ' AND DATE(a.created_at) >= %s'; params.append(date_start)
     if date_end:
-        base_sql += ' AND DATE(a.created_at) <= %s'
-        params.append(date_end)
-
-    # school_codes IN-clause
+        base_sql += ' AND DATE(a.created_at) <= %s'; params.append(date_end)
     if school_codes:
-        placeholders = ','.join(['%s'] * len(school_codes))
-        base_sql += f' AND u.school_code IN ({placeholders})'
-        params.extend(school_codes)
+        ph = ','.join(['%s']*len(school_codes))
+        base_sql += f' AND u.school_code IN ({ph})'; params += school_codes
 
-    # pagination
+    # NEW: filter by status column
+    if status_filt in ('requested','accepted','rejected'):
+        base_sql += ' AND a.status = %s'; params.append(status_filt)
+
     base_sql += ' ORDER BY a.created_at DESC LIMIT %s OFFSET %s'
-    params.extend([per_page, offset])
+    params += [per_page, offset]
 
     conn = get_db_connection()
     try:
@@ -2916,8 +2911,7 @@ def fetch_vision_sessions():
             cursor.execute(base_sql, params)
             rows = cursor.fetchall()
 
-        # build full media_url
-        base_url = os.getenv('BASE_URL', '').rstrip('/')
+        base_url = os.getenv('BASE_URL','').rstrip('/')
         for r in rows:
             r['media_url'] = f"{base_url}/{r['media_path']}" if r.get('media_path') else None
 
@@ -2929,7 +2923,6 @@ def fetch_vision_sessions():
 
     except Exception as e:
         return jsonify({'error': str(e)}), 500
-
     finally:
         conn.close()
 
@@ -2948,6 +2941,32 @@ def update_vision_session_score(answer_id):
                 "UPDATE vision_question_answers SET score = %s, updated_at = NOW() WHERE id = %s",
                 (score, answer_id)
             )
+            conn.commit()
+        return jsonify({'success': True}), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        conn.close()
+
+@app.route('/api/vision_sessions/<int:answer_id>/status', methods=['PUT'])
+def update_vision_session_status(answer_id):
+    data = request.get_json() or {}
+    new_status = data.get('status')
+    if new_status not in ('accepted','rejected'):
+        return jsonify({'error':'Invalid status'}), 400
+
+    now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    if new_status == 'accepted':
+        sql = "UPDATE vision_question_answers SET status=%s, approved_at=%s WHERE id=%s"
+        params = (new_status, now, answer_id)
+    else:  # rejected
+        sql = "UPDATE vision_question_answers SET status=%s, rejected_at=%s WHERE id=%s"
+        params = (new_status, now, answer_id)
+
+    conn = get_db_connection()
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute(sql, params)
             conn.commit()
         return jsonify({'success': True}), 200
     except Exception as e:

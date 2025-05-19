@@ -39,6 +39,7 @@ export default function VisionSessionsPage() {
     const [loading, setLoading] = useState(false);
     const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
     const [inputCode, setInputCode] = useState("");
+    const [filterStatus, setFilterStatus] = useState('');  // '', 'requested','accepted','rejected'
     // Update existing state declaration
     const [selectedSchoolCode, setSelectedSchoolCode] = useState<string[]>([]);
 
@@ -51,6 +52,8 @@ export default function VisionSessionsPage() {
         if (assignedBy) params.set('assigned_by', assignedBy);
         if (dateStart) params.set('date_start', dateStart);
         if (dateEnd) params.set('date_end', dateEnd);
+        if (filterStatus) params.set('status', filterStatus);
+
         // append each code separately
         selectedSchoolCode.forEach(code => params.append('school_codes', code));
   
@@ -65,7 +68,7 @@ export default function VisionSessionsPage() {
     // Trigger fetch on filters change
     useEffect(() => {
         fetchSessions();
-    }, [page, qtype, assignedBy, dateStart, dateEnd, selectedSchoolCode]);
+    }, [filterStatus, page, qtype, assignedBy, dateStart, dateEnd, selectedSchoolCode]);
 
     // Called when "Search" button clicked
     const handleSearch = () => {
@@ -172,6 +175,18 @@ export default function VisionSessionsPage() {
                                         </select>
                                     </div>
                                     <div className="col-12 col-md-6 col-lg-3">
+                                        <select
+                                            value={filterStatus}
+                                            onChange={e => setFilterStatus(e.target.value)}
+                                            className="border p-2 rounded"
+                                        >
+                                            <option value="">All Status</option>
+                                            <option value="requested">Requested</option>
+                                            <option value="accepted">Accepted</option>
+                                            <option value="rejected">Rejected</option>
+                                        </select>
+                                    </div>
+                                    <div className="col-12 col-md-6 col-lg-3">
                                         <input type="date" value={dateStart} onChange={e=>setDateStart(e.target.value)}
                                             className="border p-2 rounded" />
                                     </div>
@@ -244,11 +259,15 @@ export default function VisionSessionsPage() {
                                 <th className="p-2 border">Vision</th>
                                 <th className="p-2 border">Question</th>
                                 <th className="p-2 border">User</th>
-                                <th className="p-2 border">Teacher</th>
+                                <th className="p-2 border">Assigned By</th>
                                 <th className="p-2 border">Answer Text</th>
                                 <th className="p-2 border">Answer Option</th>
                                 <th className="p-2 border">Image Answer</th>
-                                <th className="p-2 border">Score</th>
+                                <th className="p-2 border">Total Points</th>
+                                <th className="p-2 border">Status</th>
+                                {filterStatus === 'requested' && (
+                                <th className="p-2 border">Actions</th>
+                                )}
                                 <th className="p-2 border">Date</th>
                             </tr>
                             </thead>
@@ -279,6 +298,45 @@ export default function VisionSessionsPage() {
                                     className="w-16 border p-1 rounded"
                                     />
                                 </td>
+                                <td className="p-2 border">{r.status}</td>
+
+                                {filterStatus === 'requested' && (
+                                    <td className="p-2 border space-x-2">
+                                    <button
+                                        className="btn btn-sm btn-success"
+                                        onClick={async () => {
+                                        await fetch(
+                                            `${api_startpoint}/api/vision_sessions/${r.answer_id}/status`,
+                                            {
+                                            method: 'PUT',
+                                            headers: { 'Content-Type': 'application/json' },
+                                            body: JSON.stringify({ status: 'accepted' })
+                                            }
+                                        );
+                                        fetchSessions();
+                                        }}
+                                    >
+                                        Accept
+                                    </button>
+
+                                    <button
+                                        className="btn btn-sm btn-danger"
+                                        onClick={async () => {
+                                        await fetch(
+                                            `${api_startpoint}/api/vision_sessions/${r.answer_id}/status`,
+                                            {
+                                            method: 'PUT',
+                                            headers: { 'Content-Type': 'application/json' },
+                                            body: JSON.stringify({ status: 'rejected' })
+                                            }
+                                        );
+                                        fetchSessions();
+                                        }}
+                                    >
+                                        Reject
+                                    </button>
+                                    </td>
+                                )}
                                 <td className="p-2 border">{new Date(r.created_at).toLocaleDateString()}</td>
                                 </tr>
                             ))}
