@@ -236,9 +236,8 @@ function AddEditModal({
           <option value="image">Image</option>
         </select>
 
- {questionType === 'mcq' && (
+{questionType === 'mcq' && (
   <div className="border p-3 rounded mb-4">
-    {/* Input Mode Selector */}
     <select
       value={mcqInputMode}
       onChange={e => setMcqInputMode(e.target.value as 'manual' | 'csv')}
@@ -248,11 +247,10 @@ function AddEditModal({
       <option value="csv">Upload via CSV</option>
     </select>
 
-    {/* Manual Mode */}
     {mcqInputMode === 'manual' && (
       <>
         {mcqList.map((q, idx) => (
-          <div key={idx} className="mcq-entry border p-3 rounded mb-4 bg-white">
+          <div key={idx} className="mcq-entry">
             <textarea
               value={q.question}
               onChange={e => {
@@ -287,25 +285,26 @@ function AddEditModal({
             >
               <option value="">Select Correct</option>
               {['a', 'b', 'c', 'd'].map(opt => (
-                <option key={opt} value={opt}>{opt.toUpperCase()}</option>
+                <option key={opt} value={opt}>
+                  {opt.toUpperCase()}
+                </option>
               ))}
             </select>
             {mcqList.length > 1 && (
-              <button onClick={() => removeMcq(idx)} className="mt-2 text-red-600">
+              <button onClick={() => removeMcq(idx)}>
                 <IconTrash />
               </button>
             )}
           </div>
         ))}
         {mcqList.length < 5 && (
-          <button onClick={addMcq} className="add-btn flex items-center gap-1 text-blue-600 font-medium">
+          <button onClick={addMcq} className="add-btn">
             <IconPlus /> Add another question
           </button>
         )}
       </>
     )}
 
-    {/* CSV Upload Mode */}
     {mcqInputMode === 'csv' && (
       <div className="border p-3 rounded bg-gray-50">
         <input
@@ -314,40 +313,22 @@ function AddEditModal({
           onChange={handleCsvUpload}
           className="mb-2"
         />
-        <p className="text-sm text-gray-600 mb-4">
-          Format: <code>question,option_a,option_b,option_c,option_d,correct_answer</code>
-        </p>
 
-        {/* Preview parsed MCQs from CSV */}
-        {mcqList.length > 0 && (
-          <div className="space-y-4">
-            {mcqList.map((q, idx) => (
-              <div key={idx} className="border p-3 rounded bg-white">
-                <p className="font-semibold mb-2">
-                  <strong>[MCQ {idx + 1}]</strong> {q.question}
-                </p>
-                <ul className="list-disc pl-6">
-                  {(['a', 'b', 'c', 'd'] as const).map(opt => (
-                    <li key={opt}>
-                      <span className="font-semibold">{opt.toUpperCase()}:</span>{' '}
-                      {q.options[opt]}
-                      {q.correct_answer === opt && (
-                        <span className="text-green-600 font-bold"> (Correct)</span>
-                      )}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ))}
-          </div>
-        )}
+        {/* Download Template Button */}
+        <div>
+  <a
+    href="/MCQtemplate.csv"
+    download="MCQtemplate.csv"
+    className="btn btn-outline-secondary"
+  >
+    Download CSV Template
+  </a>
+</div>
+
       </div>
     )}
   </div>
 )}
-
-
-
 
         {questionType === 'reflection' && (
           <textarea
