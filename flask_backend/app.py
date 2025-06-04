@@ -57,7 +57,7 @@ def get_db_connection():
     host=os.getenv('DB_HOST', '139.59.84.157')
     port=int(os.getenv('DB_PORT', 3306))
     user=os.getenv('DB_USERNAME', 'root')
-    password=os.getenv('DB_PASSWORD', 'LIFELAB@1server')
+    password=os.getenv('DB_PASSWORD', '')
     database=os.getenv('DB_DATABASE', 'lifeapp')
     # print(host,port,user,password,database)
     return pymysql.connect(
